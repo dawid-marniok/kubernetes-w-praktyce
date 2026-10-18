@@ -1,0 +1,10 @@
+# Dostęp do klastra — nigdy do repo
+*.kubeconfig
+# Śmieci
+.DS_Store
+node_modules/
+__pycache__/
+*.pyc
+bin/
+obj/
+.venv/

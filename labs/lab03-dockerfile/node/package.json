@@ -1,0 +1,13 @@
+{
+  "name": "lab03-node",
+  "version": "1.0.0",
+  "description": "Prosta aplikacja Express do labu z Dockerfile",
+  "main": "app.js",
+  "private": true,
+  "scripts": {
+    "start": "node app.js"
+  },
+  "dependencies": {
+    "express": "5.3.0"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "docker-node-app",
+  "version": "1.0.0",
+  "description": "Prosta aplikacja Node.js w kontenerze",
+  "main": "app.js",
+  "private": true,
+  "scripts": {
+    "start": "node app.js"
+  }
+}

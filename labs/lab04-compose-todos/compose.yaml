@@ -1,0 +1,30 @@
+# lab04 — ToDos w Compose. Plik startowy: uzupełniasz go w kolejnych krokach labu.
+# Kod aplikacji: ../../app/todos (backend = api, frontend = web).
+# Hasła to atrapy, tylko do zajęć.
+name: lab04
+
+services:
+  web:
+    build: ../../app/todos/frontend
+    ports:
+      - "3000:8080"            # host 3000 -> nginx w kontenerze na 8080
+    depends_on:
+      - api
+
+  api:
+    build: ../../app/todos/backend
+    environment:
+      PORT: "3001"
+      MONGODB_URI: mongodb://root:changeme-mongo@mongo:27017/todos?authSource=admin
+    depends_on:
+      - mongo
+
+  mongo:
+    image: mongo:7.0
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: changeme-mongo
+    # krok 3: wolumen na dane
+    # krok 4: healthcheck
+
+# krok 5: usługa mongo-express w profilu debug

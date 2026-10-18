@@ -1,0 +1,15 @@
+# Wariant jednoetapowy — do porównania rozmiaru z Dockerfile (multi-stage).
+# Obraz końcowy zawiera całe SDK, kod źródłowy i pliki pośrednie buildu.
+FROM mcr.microsoft.com/dotnet/sdk:10.0
+WORKDIR /src
+
+COPY *.csproj ./
+RUN dotnet restore
+
+COPY . .
+RUN dotnet publish -c Release -o /app/publish --no-restore
+
+WORKDIR /app/publish
+USER $APP_UID
+EXPOSE 8080
+ENTRYPOINT ["dotnet", "sample.dll"]

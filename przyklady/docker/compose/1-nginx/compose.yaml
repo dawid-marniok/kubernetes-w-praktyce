@@ -1,0 +1,16 @@
+# Najprostszy compose: jeden nginx, strona z katalogu ./html
+# Start: docker compose up -d   ->   http://localhost:8888
+
+services:
+  nginx:
+    image: nginx:1.29
+    ports:
+      - "8888:80"
+    volumes:
+      - ./html:/usr/share/nginx/html:ro   # bind mount: zmiany w html/ widać od razu
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost/"]   # curl jest w obrazie nginx (Debian)
+      interval: 10s
+      timeout: 3s
+      retries: 3

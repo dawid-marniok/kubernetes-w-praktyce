@@ -1,0 +1,66 @@
+# nginx (load balancer, port hosta 8080) -> web (Flask, N replik) -> db (PostgreSQL 18)
+# Demo skalowania:
+#   docker compose up -d --build --scale web=3
+#   for i in 1 2 3 4 5 6; do curl -s localhost:8080/whoami; done
+# Hasła to atrapy — tylko do zajęć.
+
+services:
+  web:
+    build: ./app
+    # bez "ports:" — repliki nie walczą o port hosta, ruch idzie przez nginx
+    expose:
+      - "5000"
+    environment:
+      DATABASE_URL: postgresql://shop:changeme-postgres@db:5432/shoppingdb
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  nginx:
+    image: nginx:1.29-alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      web:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: shop
+      POSTGRES_PASSWORD: changeme-postgres
+      POSTGRES_DB: shoppingdb
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shop -d shoppingdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4:9.18
+    profiles: ["debug"]
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: changeme-pgadmin
+    ports:
+      - "5050:80"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

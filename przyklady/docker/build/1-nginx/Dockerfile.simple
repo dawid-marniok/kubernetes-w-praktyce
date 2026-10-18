@@ -1,0 +1,8 @@
+# Najprostszy wariant: obraz nginx + doinstalowane narzędzia, bez własnej strony
+FROM nginx:1.29
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends vim curl \
+    && rm -rf /var/lib/apt/lists/*
+
+EXPOSE 80

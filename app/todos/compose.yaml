@@ -1,0 +1,96 @@
+# ToDos: web (React + nginx) -> api (Node/Express) -> mongo (MongoDB)
+# Start:          docker compose up -d --build
+# Z panelem bazy: docker compose --profile debug up -d
+# Tryb dev:       docker compose watch
+#
+# Hasła to atrapy. Własne wartości wpisz do pliku .env (wzór: .env.example).
+
+services:
+  web:
+    build: ./frontend
+    ports:
+      - "3000:8080"            # host 3000 -> nginx w kontenerze na 8080
+    environment:
+      API_HOST: api            # nazwa usługi = nazwa DNS w sieci compose
+      API_PORT: "3001"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  api:
+    build: ./backend
+    ports:
+      - "3001:3001"            # opublikowany tylko do podglądu API z hosta
+    environment:
+      PORT: "3001"
+      MONGODB_URI: mongodb://${MONGO_USER:-root}:${MONGO_PASSWORD:-changeme-mongo}@mongo:27017/todos?authSource=admin
+    depends_on:
+      mongo:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3001/api/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    develop:
+      watch:
+        # zmiana kodu -> skopiuj plik do kontenera i zrestartuj proces
+        - action: sync+restart
+          path: ./backend
+          target: /usr/src/app
+          ignore:
+            - node_modules/
+            - package.json
+            - package-lock.json
+        # zmiana zależności -> przebuduj obraz
+        - action: rebuild
+          path: ./backend/package.json
+        - action: rebuild
+          path: ./backend/package-lock.json
+
+  mongo:
+    # mongo:7.0 domyślnie, bo MongoDB 8.x nie startuje na jądrze Linuksa 6.19–7.0.13
+    # (aktualny Docker Desktop: "MongoDB cannot start: Linux kernel versions 6.19 and newer...",
+    # https://jira.mongodb.org/browse/SERVER-121912). Na AKS (starsze jądro) działa mongo:8.0:
+    #   MONGO_IMAGE=mongo:8.0 docker compose up -d
+    image: ${MONGO_IMAGE:-mongo:7.0}
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-root}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-changeme-mongo}
+    volumes:
+      - mongodb_data:/data/db
+      - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # Panel WWW do podglądu bazy — startuje tylko z --profile debug
+  mongo-express:
+    image: mongo-express:1.0.2-20-alpine3.19
+    profiles: ["debug"]
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://${MONGO_USER:-root}:${MONGO_PASSWORD:-changeme-mongo}@mongo:27017/?authSource=admin
+      ME_CONFIG_BASICAUTH: "true"
+      ME_CONFIG_BASICAUTH_USERNAME: admin
+      ME_CONFIG_BASICAUTH_PASSWORD: changeme-panel
+    depends_on:
+      mongo:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  mongodb_data:
