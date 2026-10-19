@@ -230,7 +230,7 @@ W `przyklady/docker/compose/4-nginx-skalowanie` uruchom `docker compose up -d --
 | `mongo` na `mongo:8.0` kończy się `MongoDB cannot start: Linux kernel versions 6.19 and newer…` | Aktualne jądro Docker Desktop nie jest wspierane przez MongoDB 8.x. Zostań przy `mongo:7.0` |
 | Strona `localhost:3000` działa, ale dodawanie zadań zwraca 502 | `web` nie widzi `api`: usługa `api` nie działa albo ma inną nazwę. Nazwa usługi musi być `api` |
 | `trivy`: `Cannot connect to the Docker daemon` na Macu | Trivy szuka gniazda w `/var/run/docker.sock`. `export DOCKER_HOST=$(docker context inspect --format '{{.Endpoints.docker.Host}}')` albo `docker scout quickview` |
-| `denied` / `no basic auth credentials` / `authorization token has expired` przy `docker push` | Zaloguj się ponownie do ECR (karta, punkt 3; hasło ważne 12 h), sprawdź nazwę (`<REJESTR>` z karty) |
+| `denied` / `no basic auth credentials` / `authorization token has expired` przy `docker push` | Zaloguj się ponownie do ECR (karta, punkty 3–4; hasło ważne 12 h), sprawdź nazwę (`<REJESTR>` z karty) |
 | `ScanNotFoundException` / brak wyników skanu | Skan jeszcze trwa: odczekaj minutę i powtórz |
 | `toomanyrequests` przy pobieraniu obrazów | Limit anonimowych pobrań z Docker Hub: `docker login` darmowym kontem |
 | `no space left on device` | `docker system df`; usuń swoje stare obrazy (`docker image prune`) albo powiększ dysk w Settings → Resources |

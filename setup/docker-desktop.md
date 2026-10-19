@@ -72,19 +72,19 @@ docker run --rm busybox:1.37 echo "działa"
 ```
 
 ✅ `docker version` pokazuje **Client** i **Server** (wersja 28 albo nowsza).
-✅ `docker compose version` → `Docker Compose version v2.x` (stare `docker-compose` z myślnikiem nie jest potrzebne).
+✅ `docker compose version` → `Docker Compose version` v2 albo nowszy (stare `docker-compose` z myślnikiem nie jest potrzebne).
 ✅ `hello-world` wypisuje „Hello from Docker!”, `busybox` wypisuje „działa”.
 
 Na koniec pobierz obrazy z dnia 1, żeby na szkoleniu nie czekać na sieć (opcjonalnie, ok. 4 GB):
 
 ```bash
-for i in nginx:1.29 nginx:1.29-alpine ubuntu:24.04 postgres:18 redis:8.2-alpine busybox:1.37 nicolaka/netshoot:v0.14 node:22-alpine python:3.13-slim golang:1.25 alpine:3.22 mcr.microsoft.com/dotnet/sdk:10.0 mcr.microsoft.com/dotnet/aspnet:10.0 mongo:7.0 mongo-express:1.0.2-20-alpine3.19 nginxinc/nginx-unprivileged:1.29-alpine; do docker pull $i; done
+for i in nginx:1.29 nginx:1.29-alpine ubuntu:24.04 gcr.io/distroless/static-debian12:nonroot postgres:18 redis:8.2-alpine busybox:1.37 nicolaka/netshoot:v0.14 node:22-alpine python:3.13-slim golang:1.25 alpine:3.22 mcr.microsoft.com/dotnet/sdk:10.0 mcr.microsoft.com/dotnet/aspnet:10.0 mongo:7.0 mongo-express:1.0.2-20-alpine3.19 nginxinc/nginx-unprivileged:1.29-alpine; do docker pull $i; done
 ```
 
 PowerShell:
 
 ```powershell
-"nginx:1.29","nginx:1.29-alpine","ubuntu:24.04","postgres:18","redis:8.2-alpine","busybox:1.37","nicolaka/netshoot:v0.14","node:22-alpine","python:3.13-slim","golang:1.25","alpine:3.22","mcr.microsoft.com/dotnet/sdk:10.0","mcr.microsoft.com/dotnet/aspnet:10.0","mongo:7.0","mongo-express:1.0.2-20-alpine3.19","nginxinc/nginx-unprivileged:1.29-alpine" | ForEach-Object { docker pull $_ }
+"nginx:1.29","nginx:1.29-alpine","ubuntu:24.04","gcr.io/distroless/static-debian12:nonroot","postgres:18","redis:8.2-alpine","busybox:1.37","nicolaka/netshoot:v0.14","node:22-alpine","python:3.13-slim","golang:1.25","alpine:3.22","mcr.microsoft.com/dotnet/sdk:10.0","mcr.microsoft.com/dotnet/aspnet:10.0","mongo:7.0","mongo-express:1.0.2-20-alpine3.19","nginxinc/nginx-unprivileged:1.29-alpine" | ForEach-Object { docker pull $_ }
 ```
 
 ## Proxy

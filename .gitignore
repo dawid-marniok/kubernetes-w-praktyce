@@ -1,5 +1,7 @@
 # Dostęp do klastra — nigdy do repo
 *.kubeconfig
+# Karta dostępowa z hasłem (zapisujesz ją w katalogu repo)
+karta.md
 # Śmieci
 .DS_Store
 node_modules/

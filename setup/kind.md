@@ -1,7 +1,7 @@
 # Lokalny klaster kind
 
-kind (Kubernetes IN Docker) uruchamia węzły klastra jako kontenery Dockera. Na wspólnym klastrze AKS nie możesz dotykać węzłów, więc ćwiczenia z taintami, `cordon`/`drain`, etykietami węzłów, CRD i StorageClass robisz tutaj: masz pełne uprawnienia administratora.
-Nasz klaster: **1 control plane + 2 workery**, Kubernetes 1.35 (jak na AKS). Potrzebuje ok. 3 GB RAM i 5 GB dysku w Docker Desktop.
+kind (Kubernetes IN Docker) uruchamia węzły klastra jako kontenery Dockera. Na wspólnym klastrze szkoleniowym (EKS) nie możesz dotykać węzłów, więc ćwiczenia z taintami, `cordon`/`drain`, etykietami węzłów, CRD i StorageClass robisz tutaj: masz pełne uprawnienia administratora.
+Nasz klaster: **1 control plane + 2 workery**, Kubernetes 1.35. Potrzebuje ok. 3 GB RAM i 5 GB dysku w Docker Desktop.
 
 ## 1. Instalacja kind
 
@@ -27,12 +27,13 @@ kubectl get nodes        # szkolenie-control-plane, szkolenie-worker, szkolenie-
 ```
 
 `kind create cluster` dopisuje kontekst `kind-szkolenie` do domyślnego kubeconfigu (`~/.kube/config`) i ustawia go jako bieżący.
-Jeśli w tym terminalu masz `KUBECONFIG` wskazujący plik z AKS, kind dopisze kontekst do **tego** pliku. Najprościej: osobny terminal dla kind albo przełączanie kontekstów:
+Kontekst klastra szkoleniowego (`szkolenie`) też jest w `~/.kube/config`, więc po `kind create cluster` Twoje polecenia trafiają do kind. Przełączasz się tak:
 
 ```bash
-kubectl config get-contexts                 # aks-szkolenie i kind-szkolenie
+kubectl config get-contexts                 # szkolenie i kind-szkolenie
 kubectl config use-context kind-szkolenie   # lokalnie
 kubectl --context kind-szkolenie get nodes  # jednorazowo, bez przełączania
+kubectl config use-context szkolenie        # z powrotem na wspólny klaster
 ```
 
 Konfiguracja (`setup/kind/kind-szkolenie.yaml`) przekierowuje porty z laptopa: `localhost:8088` → 80 i `localhost:8443` → 443 w klastrze (pod kontroler Ingress/Gateway), `localhost:30000`–`30002` → NodePorty o tych samych numerach.
@@ -52,7 +53,7 @@ kubectl -n kube-system rollout status deploy/metrics-server
 kubectl top nodes        # po ok. minucie liczby zamiast „metrics not available yet”
 ```
 
-Na AKS metrics-server jest wbudowany, tego kroku tam nie robisz.
+Na klastrze szkoleniowym tego kroku nie robisz: metrics-server instaluje tam prowadzący.
 
 ## 4. Własny obraz bez rejestru
 
@@ -81,4 +82,4 @@ kind delete cluster --name szkolenie       # usuwa kontenery węzłów i konteks
 | węzeł `NotReady` przez kilka minut | mało RAM-u dla Dockera — daj co najmniej 6 GB |
 | `kind load` → `image not present locally` | inna nazwa/tag niż przy `docker build`; sprawdź `docker images` |
 | pody w `ImagePullBackOff` dla obrazu z `kind load` | brak `imagePullPolicy: IfNotPresent` przy tagu `latest`; używaj tagu z wersją |
-| `kubectl` łączy się z AKS zamiast z kind | zły kontekst: `kubectl config use-context kind-szkolenie` |
+| `kubectl` łączy się z klastrem szkoleniowym zamiast z kind (albo odwrotnie) | zły kontekst: `kubectl config use-context kind-szkolenie` (wspólny: `szkolenie`) |

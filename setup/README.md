@@ -1,11 +1,23 @@
 # Przygotowanie stanowiska
 
-| Kiedy | Co |
-|---|---|
-| przed szkoleniem | Docker Desktop, git, klon repo (część „Dzień 1”) — ok. 30 min, najlepiej dzień wcześniej |
-| dzień 1, przed labem 3 | rejestr obrazów Amazon ECR: AWS CLI i logowanie z karty dostępowej (część „Rejestr obrazów”) |
-| rano w dniu 2 | kubectl i kubeconfig od prowadzącego (część „Dni 2–5”) |
-| dzień 3–4, opcjonalnie | lokalny klaster kind do ćwiczeń z węzłami: [`kind.md`](kind.md) |
+Nie musisz instalować wszystkiego od razu. Przed szkoleniem wystarczy Docker i git, resztę doinstalujesz w dniu, w którym jest potrzebna.
+
+| Kiedy | Co instalujesz / ustawiasz | Po co | Instrukcja |
+|---|---|---|---|
+| **przed szkoleniem** (ok. 30 min, najlepiej dzień wcześniej) | Docker Desktop (4 CPU, 6 GB RAM), git, klon repo, darmowe konto Docker Hub + `docker login`; na koniec `bash setup/sprawdz-dzien-1.sh` | wszystkie laby dnia 1; limit pobrań z Docker Hub | punkty 1–2, [`docker-desktop.md`](docker-desktop.md) |
+| **dzień 1, przed lab03** (ok. 13:45) | AWS CLI v2 (≥ 2.32), logowanie z karty dostępowej (`karta.md` w katalogu repo), `docker login` do Amazon ECR | wypychasz własny obraz do rejestru (lab03, lab04, projekt w dniu 5) | punkt 3, [`rejestr.md`](rejestr.md) |
+| dzień 1, lab04, opcjonalnie | Trivy | lokalny skan obrazu; bez niego skan zrobi ECR | lab04, sekcja o skanowaniu |
+| **dzień 2, rano** | kubectl, potem `aws login` i `aws eks update-kubeconfig` (nazwa klastra rano na czacie) | wszystkie laby dni 2–5 na wspólnym klastrze | punkty 4–5, karta dostępowa punkt 5 |
+| dzień 2, opcjonalnie | k9s, Headlamp albo rozszerzenie VS Code | podgląd klastra w oknie | punkt 6 |
+| **dzień 3, przed lab12** (najlepiej w przerwie 15:00) | kind ≥ 0.33 i lokalny klaster `szkolenie` (ok. 3 GB RAM, 5 GB dysku) | taint, `cordon`, `drain`, etykiety węzłów — na wspólnym klastrze węzłów nie zmieniasz | [`kind.md`](kind.md) |
+| dzień 3, lab11 na kind, opcjonalnie | metrics-server na kind | `kubectl top` i HPA lokalnie | [`kind.md`](kind.md), punkt 3 |
+| **dzień 4, przed lab14** | Trivy i Kubescape, potem `trivy image --download-db-only` (kilkaset MB) | skanowanie obrazów i manifestów | lab14, sekcja „Zanim zaczniesz” |
+| dzień 4, zadania „na kind” | ten sam klaster kind z dnia 3 | RBAC klastrowy, NetworkPolicy między namespace'ami, CRD | [`kind.md`](kind.md) |
+| **dzień 5, przed lab17** | Helm (v3 lub v4) | lab17, projekt końcowy (poziom ambitny) | punkt 7 |
+| dzień 5, lab19 | tylko przeglądarka: adres Grafany i hasło od prowadzącego | metryki, logi, alerty | — |
+| dzień 5, lab18, opcjonalnie | krew + plugin `kubectl cnpg` | switchover bazy jedną komendą | lab18, zadanie D |
+
+Pogrubione wiersze są obowiązkowe, reszta to dodatki.
 
 Windows: Docker Desktop z backendem WSL2. Komendy z labów uruchamiaj w terminalu **WSL (Ubuntu) albo Git Bash**: laby używają `grep`, `head`, `wc`, `time`, `2>/dev/null`, których PowerShell nie ma.
 
@@ -23,7 +35,7 @@ Sprawdzenie:
 
 ```bash
 docker version                 # Client i Server, wersja 28 albo nowsza
-docker compose version         # Docker Compose version v2.x
+docker compose version         # Docker Compose version v2 albo nowszy
 docker run --rm hello-world    # „Hello from Docker!”
 ```
 
@@ -33,15 +45,26 @@ docker run --rm hello-world    # „Hello from Docker!”
 
 ```bash
 git --version                  # brak? macOS: xcode-select --install · Windows/WSL: sudo apt install git
-git clone <adres repo z czatu>
+git clone https://github.com/dawid-marniok/kubernetes-w-praktyce.git
 cd kubernetes-w-praktyce
 ```
 
 Edytor: dowolny. Polecamy Visual Studio Code z rozszerzeniami Docker i Kubernetes (podpowiedzi w YAML-u).
 
+### Sprawdzenie przed dniem 1
+
+Jedna komenda sprawdza wszystko z punktów 1–2: Docker i jego zasoby, Compose, buildx, logowanie do Docker Hub, git, wolne porty z labów i AWS CLI (na później). Niczego nie instaluje i nie zmienia.
+
+```bash
+bash setup/sprawdz-dzien-1.sh           # ok. 1 min
+bash setup/sprawdz-dzien-1.sh --pull    # dodatkowo pobiera obrazy z labów dnia 1 (ok. 4 GB) — zrób to w domu, nie na szkoleniu
+```
+
+✅ `SUKCES: stanowisko gotowe do dnia 1` albo 🟡 z uwagami (⚠️) — możesz przyjść. ❌ — popraw przed szkoleniem; jeśli utkniesz, wyślij prowadzącemu wynik skryptu.
+
 ### 3. Rejestr obrazów (lab 3 i projekt w dniu 5)
 
-Obraz, który zbudujesz, wysyłasz do rejestru Amazon ECR, z którego potem pobierze go klaster. W labach adres rejestru to **`<REJESTR>`**: Twój jest w punkcie 1 karty dostępowej (`<login>.html`, od prowadzącego prywatnie). Instalacja AWS CLI i logowanie: karta, punkty 2–3, oraz [`rejestr.md`](rejestr.md).
+Obraz, który zbudujesz, wysyłasz do rejestru Amazon ECR, z którego potem pobierze go klaster. W labach adres rejestru to **`<REJESTR>`**: Twój jest w punkcie 1 karty dostępowej (`<login>.md` od prowadzącego prywatnie). Instalacja AWS CLI i logowanie: karta, punkty 2–4, oraz [`rejestr.md`](rejestr.md).
 
 ```bash
 docker build --platform linux/amd64 -t <REJESTR>/todos-api:1.0.0 .
@@ -66,55 +89,49 @@ Dodatkowo zaloguj się darmowym kontem do Docker Hub (`docker login`): podnosi l
 | Linux / WSL | `curl -LO "https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && sudo install kubectl /usr/local/bin/` |
 
 ```bash
-kubectl version --client       # 1.34 albo nowszy (klaster ma 1.35; kubectl może różnić się o ±1 wersję)
+kubectl version --client       # kubectl może różnić się od klastra o ±1 wersję; klaster ma [UZUPEŁNIJ: wersja EKS]
 ```
 
 ### 5. Dostęp do klastra
 
-Rano w dniu 2 dostajesz od prowadzącego prywatnie plik `<login>.kubeconfig` (np. `user07.kubeconfig`). Login to jednocześnie nazwa Twojego namespace.
+Do klastra logujesz się tym samym kontem AWS co do rejestru w dniu 1 — prowadzący nie wysyła żadnych plików. Login to jednocześnie nazwa Twojego namespace. Nazwę klastra (`<KLASTER>`) podamy rano w dniu 2; wpisz ją w punkcie 1 swojej karty dostępowej.
 
-macOS / Linux / WSL:
+Raz, po porannym `aws login --profile szkolenie` (karta, punkt 3):
 
 ```bash
-mkdir -p ~/.kube
-cp ~/Downloads/user07.kubeconfig ~/.kube/szkolenie.kubeconfig
-chmod 600 ~/.kube/szkolenie.kubeconfig
-export KUBECONFIG=~/.kube/szkolenie.kubeconfig     # dopisz do ~/.zshrc albo ~/.bashrc, żeby działało w nowym terminalu
+aws eks update-kubeconfig --name <KLASTER> --region eu-central-1 --profile szkolenie --alias szkolenie
+kubectl config set-context szkolenie --namespace=<login>
+kubectl config use-context szkolenie
 ```
 
-Windows (PowerShell):
-
-```powershell
-mkdir $HOME\.kube -Force
-copy $HOME\Downloads\user07.kubeconfig $HOME\.kube\szkolenie.kubeconfig
-$env:KUBECONFIG = "$HOME\.kube\szkolenie.kubeconfig"
-```
-
-Masz już własny `~/.kube/config` z pracy? Nie nadpisuj go — osobny plik i `KUBECONFIG` wystarczą, a po szkoleniu po prostu go usuwasz.
+`update-kubeconfig` dopisuje kontekst `szkolenie` do `~/.kube/config`. Twoje konteksty z pracy zostają, a po szkoleniu usuwasz tylko ten jeden: `kubectl config delete-context szkolenie`.
+W kubeconfigu nie ma tokenu: `kubectl` przy każdym poleceniu prosi `aws` o krótki token, dlatego **`aws` i `kubectl` muszą działać w tym samym terminalu** (Windows: oba w PowerShellu albo oba w WSL), a sesja AWS musi być ważna.
 
 Sprawdzenie:
 
 ```bash
-kubectl config current-context                     # aks-szkolenie
-kubectl config set-context --current --namespace=user07   # w pliku już jest; po tej komendzie na pewno
-kubectl config view --minify | grep namespace      # namespace: user07
-kubectl auth whoami                                # system:serviceaccount:user07:user07
-kubectl get nodes                                  # 3 węzły, STATUS Ready
-kubectl get pods                                   # No resources found in user07 namespace.
+kubectl config current-context                     # szkolenie
+kubectl config view --minify | grep namespace      # namespace: <login>
+kubectl auth whoami                                # Username: <login>
+kubectl get nodes                                  # [UZUPEŁNIJ: liczba] węzłów, STATUS Ready
+kubectl get pods                                   # No resources found in <login> namespace.
 kubectl auth can-i create deployments              # yes
 kubectl auth can-i create pods -n kube-system      # no — i tak ma być
 ```
 
 | Objaw | Co zrobić |
 |---|---|
-| `error: You must be logged in` / `Unauthorized` | zły plik albo token unieważniony — napisz do prowadzącego |
-| `The connection to the server localhost:8080 was refused` | `KUBECONFIG` nie ustawiony w tym terminalu |
-| `can-i create deployments` → `no` | zły namespace w kontekście: `kubectl config set-context --current --namespace=<login>` |
+| `You must be logged in to the server (Unauthorized)` / `getting credentials: exec: executable aws failed` | sesja AWS wygasła: `aws login --profile szkolenie` i ponów polecenie |
+| `exec: "aws": executable file not found` | `kubectl` nie widzi `aws`: zainstaluj AWS CLI w tym samym środowisku co `kubectl` |
+| `AccessDeniedException … eks:DescribeCluster` przy `update-kubeconfig` | literówka w nazwie klastra albo brak `--profile szkolenie` |
+| `The connection to the server localhost:8080 was refused` | brak kontekstu: powtórz `aws eks update-kubeconfig …` |
+| `can-i create deployments` → `no` | zły namespace w kontekście: `kubectl config set-context szkolenie --namespace=<login>` |
+| polecenia trafiają do kind albo do klastra z pracy | zły kontekst: `kubectl config use-context szkolenie` |
 | `Unable to connect … i/o timeout` | firmowy VPN/proxy blokuje adres klastra — spróbuj bez VPN i daj znać na czacie |
 
 ### 6. Narzędzia graficzne (opcjonalnie)
 
-Korzystają z tego samego kubeconfigu i mają te same uprawnienia co `kubectl`.
+Korzystają z tego samego kubeconfigu i mają te same uprawnienia co `kubectl`. Też wołają `aws` po token: aplikacje okienkowe (Headlamp) uruchomione z menu mogą go nie widzieć w PATH — wtedy uruchom je z terminala.
 
 | Narzędzie | Co to | Instalacja |
 |---|---|---|
@@ -133,4 +150,4 @@ helm version             # v3.x albo v4.x
 
 ## Po szkoleniu
 
-Dostęp do klastra wygasa po ostatnim dniu (namespace'y są usuwane razem z zawartością). Repo zostaje Twoje. Do dalszej nauki: lokalny klaster z [`kind.md`](kind.md) — laby działają na nim tak samo (namespace tworzysz sam: `kubectl create namespace <login>`).
+Konto AWS i dostęp do klastra wygasają po ostatnim dniu (namespace'y są usuwane razem z zawartością); kontekst usuniesz poleceniem `kubectl config delete-context szkolenie`. Repo zostaje Twoje. Do dalszej nauki: lokalny klaster z [`kind.md`](kind.md) — laby działają na nim tak samo (namespace tworzysz sam: `kubectl create namespace <login>`).

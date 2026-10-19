@@ -6,11 +6,11 @@ W lab03 wypychasz własny obraz do rejestru, a w dniach 2–5 klaster pobiera go
 <REJESTR>/<nazwa-obrazu>:<wersja>        np. <REJESTR>/node-app:1.0.0
 ```
 
-`<REJESTR>` masz w punkcie 1 swojej karty dostępowej (`<login>.html`, dostajesz ją od prowadzącego prywatnie), np. `123456789012.dkr.ecr.eu-central-1.amazonaws.com/jkowalski`.
+`<REJESTR>` masz w punkcie 1 swojej karty dostępowej (`<login>.md` od prowadzącego, prywatnie — zapisz ją w katalogu repo jako `karta.md`, jest w `.gitignore`), np. `123456789012.dkr.ecr.eu-central-1.amazonaws.com/jkowalski`.
 
 ## Logowanie (Amazon ECR)
 
-Wszystko jest opisane na karcie (punkty 2 i 3). W skrócie:
+Wszystko jest opisane na karcie (punkty 2–4). W skrócie:
 
 1. AWS CLI v2 w wersji 2.32 lub nowszej: `aws --version`.
 2. Logowanie do AWS (rano każdego dnia):

@@ -1,12 +1,12 @@
 # Od Dockera do Kubernetesa — repo ćwiczeniowe
 
-Szkolenie Sages „Docker i Kubernetes”, 5 dni. Dzień 1 pracujemy z Dockerem na Twoim laptopie, dni 2–4 na wspólnym klastrze Kubernetes (AKS), dzień 5 kończymy projektem: aplikacja ToDos z dnia 1 wdrożona na Kubernetesa tak, jak na produkcję.
+Szkolenie Sages „Docker i Kubernetes”, 5 dni. Dzień 1 pracujemy z Dockerem na Twoim laptopie, dni 2–4 na wspólnym klastrze Kubernetes (Amazon EKS), dzień 5 kończymy projektem: aplikacja ToDos z dnia 1 wdrożona na Kubernetesa tak, jak na produkcję.
 Każdy temat to krótka teoria, pokaz prowadzącego i lab, który robisz samodzielnie.
 
 ## Jak zacząć
 
 1. Przed szkoleniem: Docker Desktop, git i klon tego repo — [`setup/README.md`](setup/README.md), część „Dzień 1”.
-2. Rano w dniu 2: `kubectl` i plik kubeconfig od prowadzącego — [`setup/README.md`](setup/README.md), część „Dni 2–5”.
+2. Rano w dniu 2: `kubectl` i logowanie do klastra kontem AWS z karty dostępowej — [`setup/README.md`](setup/README.md), część „Dni 2–5”.
 3. Ćwiczenia z węzłami (taint, drain, etykiety węzłów) robisz na lokalnym klastrze kind — [`setup/kind.md`](setup/kind.md).
 
 Laby z danego dnia pojawiają się w repo rano. Na start każdego dnia:

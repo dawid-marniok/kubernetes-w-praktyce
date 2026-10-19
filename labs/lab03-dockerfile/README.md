@@ -14,7 +14,7 @@
   cd labs/lab03-dockerfile
   ```
   Kod aplikacji już tu jest (`nginx/`, `node/`, `go/`, `python/`). **Dockerfile piszesz sam**, w katalogu danej aplikacji, pod nazwą `Dockerfile` (wielka litera D: wtedy `docker build` znajdzie go bez `-f`).
-- Rejestr: do kroku 4 potrzebujesz swojego `<REJESTR>` (punkt 1 karty dostępowej od prowadzącego) i zalogowania do Amazon ECR (punkt 3 karty). Opis: [`setup/rejestr.md`](../../setup/rejestr.md).
+- Rejestr: do kroku 4 potrzebujesz swojego `<REJESTR>` (punkt 1 karty dostępowej od prowadzącego) i zalogowania do Amazon ECR (punkty 3–4 karty). Opis: [`setup/rejestr.md`](../../setup/rejestr.md).
 - Mac z procesorem M (arm64): klaster w dniach 2–5 ma węzły amd64. Obraz do rejestru budujesz z `--platform linux/amd64` (krok 4).
 - Ściąga instrukcji: `FROM`, `WORKDIR`, `COPY`, `RUN`, `ENV`, `ARG`, `EXPOSE`, `USER`, `HEALTHCHECK`, `LABEL`, `CMD` / `ENTRYPOINT`. Dokumentacja: <https://docs.docker.com/reference/dockerfile/>.
 
@@ -140,7 +140,7 @@ Odpowiedz sobie: czego brakuje w obrazie `sample:multi`, co jest w `sample:singl
 
 Obraz w rejestrze ma pełną nazwę: `<REJESTR>/<nazwa>:<wersja>`, np. `<REJESTR>/node-app:1.0.0`, gdzie `<REJESTR>` to adres rejestru ECR razem z Twoją przestrzenią (karta dostępowa, punkt 1). Szczegóły w [`setup/rejestr.md`](../../setup/rejestr.md).
 
-Najpierw zaloguj się do rejestru (karta, punkt 3; adres w `docker login` to `<REJESTR>` bez `/<login>`):
+Najpierw zaloguj się do rejestru (karta, punkty 3–4; adres w `docker login` to `<REJESTR>` bez `/<login>`):
 
 ```bash
 aws login --profile szkolenie
