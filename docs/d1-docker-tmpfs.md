@@ -19,13 +19,13 @@ Restart nie czyści kontenera. Tylko tmpfs jest czyszczony już przy zatrzymaniu
 ## Przykład 1: dane znikają po restarcie
 
 ```bash
-docker run -d --name t --tmpfs /cache alpine:3.22 sleep 1d
-docker exec t sh -c 'echo w-ram > /cache/a; echo na-dysku > /root/b'
-docker restart t
-docker exec t ls /cache /root
+docker run -d --name tmp --tmpfs /cache alpine:3.22 sleep 1d
+docker exec tmp sh -c 'echo w-ram > /cache/a; echo na-dysku > /root/b'
+docker restart tmp
+docker exec tmp ls /cache /root
 # /cache -> pusto
 # /root  -> plik b nadal jest (warstwa zapisu przeżyła restart)
-docker rm -f t
+docker rm -f tmp
 ```
 
 ## Przykład 2: --read-only + tmpfs

@@ -12,7 +12,7 @@ Aplikację ToDos opisuje [`app/todos/README.md`](../../app/todos/README.md): `we
 
 - Docker Desktop działa (`docker version` pokazuje Client i Server), repo kursantów po `git pull`
 - Wolne porty 3000 i 8081 na laptopie (`docker ps` — usuń kontenery z poprzednich labów)
-- Rejestr i logowanie z lab03 ([`setup/rejestr.md`](../../setup/rejestr.md)); `<REJESTR>` to adres razem z Twoją przestrzenią, np. `docker.io/<login>`
+- Rejestr i logowanie z lab03 ([`setup/rejestr.md`](../../setup/rejestr.md)); `<REJESTR>` to adres z karty dostępowej (punkt 1). Hasło Dockera do ECR jest ważne 12 h, rano zaloguj się ponownie
 - Pracujesz w katalogu labu:
   ```bash
   cd labs/lab04-compose-todos
@@ -31,7 +31,7 @@ docker compose logs api
 
 Pierwszy build trwa kilka minut (`npm ci` dla frontendu i backendu), kolejne idą z cache.
 
-✅ `docker compose ps` pokazuje trzy usługi `web`, `api`, `mongo` w stanie `Up`. W logach `api` często zobaczysz najpierw `Brak połączenia z MongoDB … ponawiam za 5 s`, potem `Połączono z MongoDB`.
+✅ `docker compose ps` pokazuje trzy usługi `web`, `api`, `mongo` w stanie `Up`. W logach `api` jest `Połączono z MongoDB` (czasem poprzedzone `Brak połączenia z MongoDB … ponawiam za 5 s`).
 
 Otwórz `http://localhost:3000` i dodaj dwa zadania. To samo z terminala:
 
@@ -40,7 +40,16 @@ curl -s -X POST -H 'Content-Type: application/json' -d '{"title":"kupić mleko"}
 curl -s localhost:3000/api/todos
 ```
 
-Pytanie do siebie: dlaczego `api` musiało ponawiać połączenie? (Odpowiedź pojawi się w kroku 4).
+Sprawdź, co się dzieje, gdy baza zniknie na chwilę:
+
+```bash
+docker compose stop mongo
+curl -s localhost:3000/api/todos; echo
+docker compose start mongo
+docker compose logs api | tail -n 5
+```
+
+✅ Bez bazy `curl` po kilku sekundach zwraca błąd, a po `start` api znów odpowiada listą zadań. Pytanie do siebie: kto tu chroni aplikację, Compose czy kod `api`? (Odpowiedź w kroku 4).
 
 ### 2. Zajrzyj do środka
 
@@ -80,12 +89,12 @@ docker volume ls | grep lab04
 
 ### 4. Kolejność startu: healthcheck i `service_healthy`
 
-`depends_on: [mongo]` czeka tylko, aż kontener `mongo` **powstanie**, a nie aż baza przyjmuje połączenia. Dlatego `api` w kroku 1 ponawiało połączenie.
+`depends_on: [mongo]` czeka tylko, aż kontener `mongo` **powstanie**, a nie aż baza przyjmuje połączenia. Przed wolną bazą chroni nas tylko pętla ponawiania w kodzie `api` (krok 1); tu Compose dostaje informację o gotowości bazy.
 
 Dopisz:
 
 1. W `mongo` — `healthcheck` z testem `["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]`, `interval: 10s`, `timeout: 5s`, `retries: 5`, `start_period: 20s`.
-2. W `api` — `depends_on` w formie długiej z `condition: service_healthy` dla `mongo`, `restart: unless-stopped` oraz własny `healthcheck`: `["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3001/api/health"]` (endpoint zwraca 200, gdy API ma połączenie z bazą).
+2. W `api` — `depends_on` w formie długiej z `condition: service_healthy` dla `mongo`, `restart: unless-stopped` oraz własny `healthcheck`: `["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3001/api/health"]` z `interval: 10s`, `timeout: 3s`, `retries: 3`, `start_period: 10s` (endpoint zwraca 200, gdy API ma połączenie z bazą). Bez `interval` pierwszy test odbywa się po 30 s i `up` wygląda na zawieszone.
 3. W `web` — `depends_on` z `condition: service_healthy` dla `api`.
 
 ```bash
@@ -125,10 +134,11 @@ Sprawdź, co jest w obrazach, które zbudował Compose:
 docker images | grep lab04
 docker inspect lab04-api --format 'USER={{.Config.User}}'
 docker inspect lab04-web --format 'USER={{.Config.User}}'
-trivy image --severity HIGH,CRITICAL lab04-api     # albo: docker scout quickview lab04-api
 ```
 
-✅ Obrazy mają ustawionego użytkownika (`node`, `101`), skaner pokazuje listę podatności z podziałem na HIGH i CRITICAL.
+✅ Obrazy mają ustawionego użytkownika (`node`, `101`).
+
+Skan lokalny (jeśli masz narzędzie): `trivy image --severity HIGH,CRITICAL lab04-api` albo `docker scout quickview lab04-api` (wymaga `docker login` do Docker Hub). Bez narzędzi skan zrobi za Ciebie ECR przy pushu (niżej).
 
 Otaguj i wypchnij oba obrazy z wersją:
 
@@ -146,7 +156,13 @@ docker buildx build --platform linux/amd64 -t <REJESTR>/todos-api:1.0.0 --push .
 docker buildx build --platform linux/amd64 -t <REJESTR>/todos-web:1.0.0 --push ../../app/todos/frontend
 ```
 
-✅ Oba obrazy są w rejestrze z tagiem `1.0.0`. Wklej na czat pełną nazwę `todos-api`.
+Skan przy pushu (ECR robi go sam, wynik po ok. minucie; to samo w konsoli AWS → ECR → repozytorium → obraz):
+
+```bash
+aws ecr describe-image-scan-findings --profile szkolenie --region eu-central-1 --repository-name <login>/todos-api --image-id imageTag=1.0.0 --query 'imageScanFindings.findingSeverityCounts'
+```
+
+✅ Oba obrazy są w rejestrze z tagiem `1.0.0`, skan pokazuje liczby podatności według ważności. Wklej na czat pełną nazwę `todos-api`.
 
 ### Sprzątanie
 
@@ -170,7 +186,7 @@ docker compose watch
 W drugim terminalu zmień tekst `main page!` w `backend/routes/index.js` i zapisz. Po kilku sekundach:
 
 ```bash
-curl -s localhost:3000/api
+curl -s localhost:3000/api/
 ```
 
 ✅ W terminalu z `watch` widać synchronizację i restart `api`, a `curl` zwraca nowy tekst. Zastanów się: którą akcję (`sync+restart` czy `rebuild`) wywoła zmiana w `package.json`? Na koniec przywróć tekst, `Ctrl+C` i `docker compose down`.
@@ -214,6 +230,7 @@ W `przyklady/docker/compose/4-nginx-skalowanie` uruchom `docker compose up -d --
 | `mongo` na `mongo:8.0` kończy się `MongoDB cannot start: Linux kernel versions 6.19 and newer…` | Aktualne jądro Docker Desktop nie jest wspierane przez MongoDB 8.x. Zostań przy `mongo:7.0` |
 | Strona `localhost:3000` działa, ale dodawanie zadań zwraca 502 | `web` nie widzi `api`: usługa `api` nie działa albo ma inną nazwę. Nazwa usługi musi być `api` |
 | `trivy`: `Cannot connect to the Docker daemon` na Macu | Trivy szuka gniazda w `/var/run/docker.sock`. `export DOCKER_HOST=$(docker context inspect --format '{{.Endpoints.docker.Host}}')` albo `docker scout quickview` |
-| `denied` / `unauthorized` przy `docker push` | Zaloguj się ponownie do rejestru, sprawdź nazwę (`<REJESTR>` z [`setup/rejestr.md`](../../setup/rejestr.md)) |
+| `denied` / `no basic auth credentials` / `authorization token has expired` przy `docker push` | Zaloguj się ponownie do ECR (karta, punkt 3; hasło ważne 12 h), sprawdź nazwę (`<REJESTR>` z karty) |
+| `ScanNotFoundException` / brak wyników skanu | Skan jeszcze trwa: odczekaj minutę i powtórz |
 | `toomanyrequests` przy pobieraniu obrazów | Limit anonimowych pobrań z Docker Hub: `docker login` darmowym kontem |
 | `no space left on device` | `docker system df`; usuń swoje stare obrazy (`docker image prune`) albo powiększ dysk w Settings → Resources |

@@ -14,7 +14,7 @@
   cd labs/lab01-docker-podstawy
   ```
 - Windows: komendy działają w PowerShellu i w Git Bash. W PowerShellu zamiast `curl` pisz `curl.exe` albo otwórz adres w przeglądarce.
-- Wszystkie obrazy mają przypięty tag (`nginx:1.29`, `postgres:18`). Tag `latest` w labach nie występuje: za tydzień może oznaczać inny obraz.
+- Wszystkie obrazy mają przypięty tag (`nginx:1.29`, `postgres:18`). Tag `latest` w labach nie występuje (wyjątek: testowy `hello-world`): za tydzień może oznaczać inny obraz.
 
 Komendy wpisuj po kolei. Gdy coś pójdzie inaczej niż w opisie, zajrzyj do tabeli [Gdy coś nie działa](#gdy-coś-nie-działa).
 
@@ -282,11 +282,11 @@ docker images --filter reference='*nginx*'
 docker run -d --name zmiany nginx:1.29
 docker exec zmiany sh -c 'echo test > /tmp/nowy.txt'
 docker diff zmiany
-docker cp zmiany:/etc/nginx/nginx.conf ./nginx.conf
+docker cp zmiany:/etc/nginx/nginx.conf /tmp/nginx.conf
 docker rm -f zmiany
 ```
 
-✅ `docker diff` pokazuje `A /tmp/nowy.txt` (A = dodany, C = zmieniony, D = usunięty), a `nginx.conf` leży w bieżącym katalogu.
+✅ `docker diff` pokazuje `A /tmp/nowy.txt` (A = dodany, C = zmieniony, D = usunięty), a `nginx.conf` leży w `/tmp` na Twoim laptopie.
 
 ### E. Ile miejsca zajmuje Docker
 

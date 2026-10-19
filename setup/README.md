@@ -3,11 +3,11 @@
 | Kiedy | Co |
 |---|---|
 | przed szkoleniem | Docker Desktop, git, klon repo (część „Dzień 1”) — ok. 30 min, najlepiej dzień wcześniej |
-| dzień 1, przy labie 3 | rejestr obrazów: Docker Hub albo GHCR (część „Rejestr obrazów”) |
+| dzień 1, przed labem 3 | rejestr obrazów Amazon ECR: AWS CLI i logowanie z karty dostępowej (część „Rejestr obrazów”) |
 | rano w dniu 2 | kubectl i kubeconfig od prowadzącego (część „Dni 2–5”) |
 | dzień 3–4, opcjonalnie | lokalny klaster kind do ćwiczeń z węzłami: [`kind.md`](kind.md) |
 
-Windows: Docker Desktop z backendem WSL2. Komendy z labów uruchamiasz w terminalu WSL (Ubuntu) albo w PowerShellu — gdzie składnia się różni, lab to mówi.
+Windows: Docker Desktop z backendem WSL2. Komendy z labów uruchamiaj w terminalu **WSL (Ubuntu) albo Git Bash**: laby używają `grep`, `head`, `wc`, `time`, `2>/dev/null`, których PowerShell nie ma.
 
 ---
 
@@ -41,16 +41,7 @@ Edytor: dowolny. Polecamy Visual Studio Code z rozszerzeniami Docker i Kubernete
 
 ### 3. Rejestr obrazów (lab 3 i projekt w dniu 5)
 
-Obraz, który zbudujesz, wysyłasz do rejestru, z którego potem pobierze go klaster. W labach adres rejestru to **`<REJESTR>`** — wstawiasz swój:
-
-| | Docker Hub | GitHub Container Registry (GHCR) |
-|---|---|---|
-| `<REJESTR>` | `docker.io/<login-docker-hub>` | `ghcr.io/<login-github>` (małymi literami) |
-| Konto | https://hub.docker.com/signup | konto GitHub |
-| Logowanie | `docker login` (login + hasło albo Personal Access Token) | `docker login ghcr.io -u <login-github>`, hasło = token GitHub (classic) z uprawnieniem `write:packages` |
-| Widoczność | repo publiczne domyślnie | nowy pakiet jest **prywatny** — ustaw Public (Package settings → Change visibility), inaczej klaster go nie pobierze |
-
-Przykład:
+Obraz, który zbudujesz, wysyłasz do rejestru Amazon ECR, z którego potem pobierze go klaster. W labach adres rejestru to **`<REJESTR>`**: Twój jest w punkcie 1 karty dostępowej (`<login>.html`, od prowadzącego prywatnie). Instalacja AWS CLI i logowanie: karta, punkty 2–3, oraz [`rejestr.md`](rejestr.md).
 
 ```bash
 docker build --platform linux/amd64 -t <REJESTR>/todos-api:1.0.0 .
@@ -59,6 +50,8 @@ docker push <REJESTR>/todos-api:1.0.0
 
 `--platform linux/amd64` jest ważne na Macach z procesorem M: węzły klastra mają procesory x86, a obraz zbudowany dla arm64 skończy się na nich błędem `exec format error`.
 Tag zawsze z wersją (`1.0.0`, `1.0.1`), nie `latest` — inaczej nie wiesz, co naprawdę działa w klastrze.
+
+Dodatkowo zaloguj się darmowym kontem do Docker Hub (`docker login`): podnosi limit pobrań obrazów bazowych, który na szkoleniu potrafi się skończyć.
 
 ---
 

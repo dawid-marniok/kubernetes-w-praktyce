@@ -10,7 +10,7 @@ Gotowe pliki z zajęć: `przyklady/docker/build/` (Dockerfile: nginx, Node, .NET
 | **Kontener** | uruchomiony obraz: izolowany proces na wspólnym kernelu hosta + cienka warstwa zapisu. Żyje tyle, co jego proces PID 1 |
 | **Wolumen** | dane poza kontenerem; przeżywa `docker rm` |
 | **Sieć** | własna sieć (`docker network create`) daje DNS: kontenery widzą się po nazwie |
-| **Rejestr** | magazyn obrazów: Docker Hub, GHCR, ACR; `docker push` / `docker pull` |
+| **Rejestr** | magazyn obrazów: Docker Hub, GHCR, Amazon ECR (nasz); `docker push` / `docker pull` |
 
 Kontener to nie mała maszyna wirtualna: nie ma własnego systemu ani kernela. Pod spodem: `docker` (CLI) → `dockerd` → `containerd` → `containerd-shim` → `runc`.
 
@@ -126,7 +126,7 @@ Zasady:
 - `.dockerignore` (`node_modules`, `.git`, `.env`, `bin/`, `obj/`): mniejszy kontekst, brak sekretów w obrazie.
 - Multi-stage: kompilator w etapie `build`, do obrazu końcowego tylko wynik (`COPY --from=build …`). Przykład: `przyklady/docker/build/3-dotnet-multistage/` (ok. 262 MB zamiast 975 MB).
 - Sekret przy budowaniu: `RUN --mount=type=secret,id=token …` + `docker build --secret id=token,src=token.txt`, nie `ARG` ani `ENV`.
-- Obraz na Macu M jest `arm64`; klaster AKS jest `amd64` → `--platform linux/amd64`, inaczej `exec format error`.
+- Obraz na Macu M jest `arm64`; klaster EKS jest `amd64` → `--platform linux/amd64`, inaczej `exec format error`.
 
 ## Sieci
 
@@ -218,7 +218,7 @@ services:
   web:
     build: ./frontend
     ports:
-      - "3000:80"
+      - "3000:8080"                                # nginx-unprivileged słucha na 8080
     depends_on: [api]
   mongo:
     image: mongo:7.0

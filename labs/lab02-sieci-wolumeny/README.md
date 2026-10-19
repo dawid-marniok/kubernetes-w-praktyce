@@ -101,7 +101,7 @@ cat strona/z-kontenera.txt
 ```bash
 docker run -d --name tymczasowy --tmpfs /cache busybox:1.37 sleep 3600
 docker exec tymczasowy sh -c 'echo "w pamięci" > /cache/plik.txt && ls /cache && df -h /cache'
-docker restart tymczasowy      # trwa kilka sekund: sleep jako PID 1 nie reaguje na SIGTERM
+docker restart tymczasowy      # trwa kilka sekund: sleep jako główny proces nie reaguje na SIGTERM
 docker exec tymczasowy ls -la /cache
 ```
 
@@ -128,10 +128,10 @@ docker logs --since 5m strona 2>&1 | grep GET
 docker info -f '{{.LoggingDriver}}'
 ```
 
-Domyślnie (sterownik `json-file`) logi rosną bez limitu. Kontener, który dużo pisze, może zapełnić dysk. Uruchom „gadułę” z limitem: 2 pliki po 10 KB.
+Ostatnia komenda pokazuje domyślny sterownik logów: `json-file` (klasyczny, **bez limitu**: kontener, który dużo pisze, może zapełnić dysk) albo `local` (nowsze Docker Desktop, sam rotuje pliki). Uruchom „gadułę” na `json-file` z limitem: 2 pliki po 10 KB.
 
 ```bash
-docker run -d --name gadula --log-opt max-size=10k --log-opt max-file=2 busybox:1.37 sh -c 'i=0; while true; do i=$((i+1)); echo "linia $i"; done'
+docker run -d --name gadula --log-driver json-file --log-opt max-size=10k --log-opt max-file=2 busybox:1.37 sh -c 'i=0; while true; do i=$((i+1)); echo "linia $i"; done'
 ```
 
 Odczekaj kilka sekund i sprawdź:

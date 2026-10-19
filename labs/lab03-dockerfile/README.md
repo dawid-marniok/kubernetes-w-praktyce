@@ -14,7 +14,7 @@
   cd labs/lab03-dockerfile
   ```
   Kod aplikacji już tu jest (`nginx/`, `node/`, `go/`, `python/`). **Dockerfile piszesz sam**, w katalogu danej aplikacji, pod nazwą `Dockerfile` (wielka litera D: wtedy `docker build` znajdzie go bez `-f`).
-- Rejestr: do kroku 4 potrzebujesz swojego `<REJESTR>` (np. `docker.io/<login-docker-hub>` albo `ghcr.io/<login-github>`) i zalogowania. Którego rejestru używa grupa, mówi prowadzący; warianty i logowanie: [`setup/rejestr.md`](../../setup/rejestr.md).
+- Rejestr: do kroku 4 potrzebujesz swojego `<REJESTR>` (punkt 1 karty dostępowej od prowadzącego) i zalogowania do Amazon ECR (punkt 3 karty). Opis: [`setup/rejestr.md`](../../setup/rejestr.md).
 - Mac z procesorem M (arm64): klaster w dniach 2–5 ma węzły amd64. Obraz do rejestru budujesz z `--platform linux/amd64` (krok 4).
 - Ściąga instrukcji: `FROM`, `WORKDIR`, `COPY`, `RUN`, `ENV`, `ARG`, `EXPOSE`, `USER`, `HEALTHCHECK`, `LABEL`, `CMD` / `ENTRYPOINT`. Dokumentacja: <https://docs.docker.com/reference/dockerfile/>.
 
@@ -138,15 +138,16 @@ Odpowiedz sobie: czego brakuje w obrazie `sample:multi`, co jest w `sample:singl
 
 ### 4. Tag z wersją i push do rejestru
 
-Obraz w rejestrze ma pełną nazwę: `<REJESTR>/<nazwa>:<wersja>`, np. `<REJESTR>/node-app:1.0.0`, gdzie `<REJESTR>` to adres rejestru razem z Twoją przestrzenią: `docker.io/<login-docker-hub>`, `ghcr.io/<login-github>` albo adres od prowadzącego. Szczegóły w [`setup/rejestr.md`](../../setup/rejestr.md).
+Obraz w rejestrze ma pełną nazwę: `<REJESTR>/<nazwa>:<wersja>`, np. `<REJESTR>/node-app:1.0.0`, gdzie `<REJESTR>` to adres rejestru ECR razem z Twoją przestrzenią (karta dostępowa, punkt 1). Szczegóły w [`setup/rejestr.md`](../../setup/rejestr.md).
 
-Najpierw zaloguj się do rejestru (raz):
+Najpierw zaloguj się do rejestru (karta, punkt 3; adres w `docker login` to `<REJESTR>` bez `/<login>`):
 
 ```bash
-docker login                              # Docker Hub
-docker login ghcr.io -u <login-github>    # GHCR, hasło = token z write:packages
-az acr login -n <nazwa-rejestru>          # Azure Container Registry (dane od prowadzącego)
+aws login --profile szkolenie
+aws ecr get-login-password --profile szkolenie --region eu-central-1 | docker login --username AWS --password-stdin <konto>.dkr.ecr.eu-central-1.amazonaws.com
 ```
+
+Repozytorium `<login>/node-app` powstanie samo przy pierwszym `docker push`.
 
 **Linux, Windows, Mac Intel (amd64):**
 
@@ -192,7 +193,7 @@ curl http://localhost:8090
 docker stop go-app
 ```
 
-✅ `go-app:1.0.0` ma kilkanaście MB, `go-app:single` kilkaset razy więcej. Odpowiedź z `curl` zawiera `uid` różny od 0.
+✅ `go-app:1.0.0` ma kilkanaście MB, `go-app:single` kilkadziesiąt razy więcej (ok. 950 MB). Odpowiedź z `curl` zawiera `uid` różny od 0.
 
 ### B. Python: `ARG`, `ENV` i `USER`
 
@@ -328,7 +329,7 @@ Obraz w rejestrze zostaw: przyda się w kolejnych dniach.
 | Mac: `curl localhost:5000` zwraca `403` z nagłówkiem `AirTunes` | Port 5000 zajmuje AirPlay Receiver. Mapuj `-p 5001:5000` albo wyłącz AirPlay Receiver w Ustawieniach systemowych |
 | `WARNING: The requested image's platform (linux/amd64) does not match the detected host platform (linux/arm64/v8)` | Uruchamiasz na Macu M obraz zbudowany dla amd64. Lokalnie działa w emulacji (wolniej), dla klastra to właściwa platforma |
 | Pod w Kubernetesie (później): `exec format error` | Obraz jest arm64, a węzeł amd64. Zbuduj ponownie z `--platform linux/amd64` |
-| `denied: requested access to the resource is denied` / `unauthorized` przy `docker push` | Nie jesteś zalogowany do tego rejestru, zła ścieżka (login w nazwie obrazu nie Twój) albo token bez prawa zapisu. Zaloguj się ponownie (`docker login …` / `az acr login …`), sprawdź nazwę w [`setup/rejestr.md`](../../setup/rejestr.md) |
+| `denied` / `no basic auth credentials` / `authorization token has expired` przy `docker push` | Nie jesteś zalogowany do ECR, hasło wygasło (12 h) albo nazwa obrazu nie zaczyna się od Twojego `<REJESTR>`. Powtórz logowanie z karty (punkt 3), sprawdź nazwę w [`setup/rejestr.md`](../../setup/rejestr.md) |
 | `An image does not exist locally with the tag` | Najpierw `docker tag`, potem `docker push`, i ta sama nazwa w obu komendach |
 | `Multi-platform build is not supported for the docker driver` | Domyślny builder nie zbuduje kilku platform naraz. Włącz containerd image store w Docker Desktop albo `docker buildx create --name multi --driver docker-container --use` (krok F). Jedna platforma (`--platform linux/amd64`) działa bez tego |
 | `429 Too Many Requests` z `registry-1.docker.io` (często w builderze `docker-container`) | Limit anonimowych pobrań z Docker Hub. `docker login` (darmowe konto) i powtórz; builder `docker-container` korzysta z tego samego logowania |

@@ -1,55 +1,29 @@
 # Rejestr obrazów
 
-W lab03 wypychasz własny obraz do rejestru, a w dniach 2–5 klaster pobiera go stamtąd. W labach adres rejestru razem z Twoją przestrzenią to **`<REJESTR>`**, a pełna nazwa obrazu:
+W lab03 wypychasz własny obraz do rejestru, a w dniach 2–5 klaster pobiera go stamtąd. Na szkoleniu rejestrem jest **Amazon ECR**. W labach adres rejestru razem z Twoją przestrzenią to **`<REJESTR>`**, a pełna nazwa obrazu:
 
 ```text
 <REJESTR>/<nazwa-obrazu>:<wersja>        np. <REJESTR>/node-app:1.0.0
 ```
 
-Którego wariantu używa grupa, mówi prowadzący na początku lab03. Jeśli nic nie ustalono, weź Docker Hub.
+`<REJESTR>` masz w punkcie 1 swojej karty dostępowej (`<login>.html`, dostajesz ją od prowadzącego prywatnie), np. `123456789012.dkr.ecr.eu-central-1.amazonaws.com/jkowalski`.
 
-| Wariant | `<REJESTR>` | Przykład pełnej nazwy |
-|---|---|---|
-| Docker Hub, własne konto | `docker.io/<login-docker-hub>` | `docker.io/jkowalski/node-app:1.0.0` |
-| GitHub Container Registry | `ghcr.io/<login-github>` (małymi literami) | `ghcr.io/jkowalski/node-app:1.0.0` |
-| Rejestr szkoleniowy (Azure Container Registry) | `<nazwa>.azurecr.io/<login>` | `<nazwa>.azurecr.io/user07/node-app:1.0.0` |
+## Logowanie (Amazon ECR)
 
-## Docker Hub
+Wszystko jest opisane na karcie (punkty 2 i 3). W skrócie:
 
-1. Załóż konto: <https://hub.docker.com/signup> (darmowe).
-2. Zamiast hasła lepiej użyć tokenu: Account settings → Personal access tokens → Generate, uprawnienia **Read & Write**.
-3. Zaloguj się:
+1. AWS CLI v2 w wersji 2.32 lub nowszej: `aws --version`.
+2. Logowanie do AWS (rano każdego dnia):
    ```bash
-   docker login -u <login-docker-hub>     # hasło = token
+   aws login --profile szkolenie                 # bez przeglądarki (WSL, SSH): dodaj --remote
    ```
-4. Repozytorium tworzy się samo przy pierwszym `docker push` i jest **publiczne**. Nie wypychaj obrazów z hasłami ani kodem, którego nie wolno publikować.
-
-Zalogowanie do Docker Hub podnosi też limit pobrań obrazów, który na szkoleniu (wiele osób z jednego adresu IP) potrafi się skończyć.
-
-## GitHub Container Registry (GHCR)
-
-1. GitHub → Settings → Developer settings → Personal access tokens → **Tokens (classic)** → Generate new token, zaznacz `write:packages` (doda się `read:packages`). Skopiuj token.
-2. Zaloguj się:
+3. Logowanie Dockera do rejestru (hasło jest ważne 12 h, więc też każdego dnia rano). Adres to `<REJESTR>` bez końcówki `/<login>`:
    ```bash
-   docker login ghcr.io -u <login-github>     # hasło = token
+   aws ecr get-login-password --profile szkolenie --region eu-central-1 | docker login --username AWS --password-stdin <konto>.dkr.ecr.eu-central-1.amazonaws.com
    ```
-   PowerShell, bez pokazywania tokenu w historii: `$env:GHCR_TOKEN | docker login ghcr.io -u <login-github> --password-stdin`.
-3. Po pierwszym `docker push` pakiet jest **prywatny**. Żeby klaster mógł go pobrać bez dodatkowej konfiguracji: github.com → Twój profil → Packages → pakiet → Package settings → Change visibility → Public.
+   ✅ `Login Succeeded`.
 
-## Rejestr szkoleniowy (Azure Container Registry)
-
-Jeśli prowadzący udostępnia rejestr szkoleniowy, nazwę rejestru i Twój login podaje w czacie (dane edycji nie są w repo).
-
-```bash
-az login                              # jeśli prowadzący dał konto Azure
-az acr login -n <nazwa>               # <nazwa> = część adresu przed .azurecr.io
-```
-
-Bez Azure CLI prowadzący może dać login i hasło (token) do rejestru:
-
-```bash
-docker login <nazwa>.azurecr.io -u <login-rejestru>
-```
+Repozytorium (np. `<login>/node-app`) tworzy się samo przy pierwszym `docker push`. Wysyłać i pobierać możesz tylko w swojej przestrzeni `<login>/…`. W konsoli AWS (Elastic Container Registry, region Frankfurt) zobaczysz swoje obrazy i wynik skanu podatności.
 
 ## Tag i push
 
@@ -69,14 +43,21 @@ Obraz arm64 na węźle amd64 kończy się w Kubernetesie błędem `exec format e
 
 **Tag zawsze z wersją** (`1.0.0`, `1.0.1`, `a1b2c3d` = skrót commita), nigdy `latest`. Z `latest` nie wiesz, która wersja działa w klastrze, a rollback „do poprzedniego latest” nie istnieje. Każda zmiana obrazu = nowy tag.
 
+## Docker Hub: tylko logowanie na limit pobrań
+
+Obrazy bazowe (`nginx`, `node`, `postgres`…) pobierasz z Docker Hub. Anonimowo jest limit pobrań, który na szkoleniu (wiele osób z jednego adresu IP) potrafi się skończyć (`429 Too Many Requests`). Darmowe konto go podnosi: <https://hub.docker.com/signup>, potem `docker login` (zamiast hasła lepiej token: Account settings → Personal access tokens). Logowanie do Docker Hub i do ECR działają obok siebie.
+
+Po szkoleniu, na własnym koncie, ten sam schemat działa z Docker Hub (`<REJESTR>` = `docker.io/<login>`, repozytorium publiczne) albo z GitHub Container Registry (`ghcr.io/<login-github>`, `docker login ghcr.io`, token z `write:packages`).
+
 ## Gdy coś nie działa
 
 | Objaw | Co zrobić |
 |---|---|
-| `denied: requested access to the resource is denied` | Nazwa obrazu nie zaczyna się od Twojej przestrzeni (`docker.io/<Twój-login>/…`) albo nie jesteś zalogowany. `docker login …` jeszcze raz |
-| `unauthorized: authentication required` | Wygasłe logowanie albo token bez prawa zapisu (GHCR: `write:packages`, Docker Hub: Read & Write) |
+| `Unable to locate credentials` / `expired` przy `aws ecr …` | Brak `--profile szkolenie` w poleceniu albo sesja wygasła: `aws login --profile szkolenie` |
+| `no basic auth credentials` / `authorization token has expired` przy `docker push` | Hasło Dockera wygasło (12 h): powtórz `aws ecr get-login-password … \| docker login …` |
+| `denied` / `not authorized to perform: ecr:…` | Nazwa obrazu nie zaczyna się od Twojego `<REJESTR>` (cudza przestrzeń albo brak `/<login>`). Sprawdź nazwę z kartą |
 | `An image does not exist locally with the tag` | Najpierw `docker tag`, potem `docker push`, ta sama nazwa w obu |
-| `invalid reference format: repository name must be lowercase` | W nazwie są wielkie litery (częste przy loginie GitHub). Wszystko małymi literami |
-| `az: command not found` | Brak Azure CLI: <https://learn.microsoft.com/cli/azure/install-azure-cli> albo poproś prowadzącego o login i token do `docker login` |
+| `invalid reference format: repository name must be lowercase` | W nazwie są wielkie litery. Wszystko małymi literami |
+| `aws: unknown command 'login'` | Za stare AWS CLI: zaktualizuj do 2.32+ (karta, punkt 2) |
 | `x509: certificate signed by unknown authority` | Proxy firmowe z inspekcją TLS, patrz [`docker-desktop.md`](docker-desktop.md#proxy) |
-| Klaster: `ImagePullBackOff`, w `kubectl describe pod` `401 Unauthorized` / `not found` | Obraz prywatny (GHCR: zmień na Public) albo literówka w nazwie lub tagu |
+| Klaster: `ImagePullBackOff`, w `kubectl describe pod` `not found` | Literówka w nazwie lub tagu, albo obraz zbudowany dla złej architektury (Mac M bez `--platform linux/amd64`) |
