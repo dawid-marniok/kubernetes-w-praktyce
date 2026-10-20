@@ -53,8 +53,10 @@ kubectl logs lab06-web
 kubectl apply -f pod-failed.yaml
 kubectl get pod lab06-failed
 kubectl describe pod lab06-failed
+kubectl logs lab06-failed
 ```
 - Jaki jest status i co mówią Events na dole `describe`?
+- Co zwróciło `kubectl logs`? Dlaczego nie ma tu logów aplikacji? Kiedy przyczynę znajdziesz w logach, a kiedy tylko w zdarzeniach?
 - Popraw `pod-failed.yaml` i zastosuj ponownie. Pod ma przejść w `Running`. Nie tak są dwie rzeczy: jedna blokuje start poda (znajdziesz ją w Events), druga go nie blokuje, ale łamie zasady wspólnego klastra z początku labu.
 
 ### Krok 4. Gotowość: readinessProbe
