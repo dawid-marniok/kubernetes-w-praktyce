@@ -1,0 +1,35 @@
+# Lab08, krok 1: aplikacja, do której piszesz Service. Port kontenera ma nazwę „http”.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lab08-web
+  labels:
+    app: lab08-web
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: lab08-web
+  template:
+    metadata:
+      labels:
+        app: lab08-web
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.29
+        ports:
+        - name: http
+          containerPort: 80
+        readinessProbe:
+          httpGet:
+            path: /
+            port: http
+          periodSeconds: 5
+        resources:
+          requests:
+            cpu: 20m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 64Mi

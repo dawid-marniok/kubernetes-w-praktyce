@@ -1,0 +1,13 @@
+# Service ClusterIP (domyślny): stała nazwa i adres wewnątrz klastra. Selektor = etykiety podów z ../03-deployment/deployment-rolling.yaml.
+apiVersion: v1
+kind: Service
+metadata:
+  name: przyklad-deploy
+spec:
+  type: ClusterIP
+  selector:
+    app: przyklad-deploy
+  ports:
+  - name: http
+    port: 80            # port Service
+    targetPort: http    # port (albo nazwa portu) w kontenerze

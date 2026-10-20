@@ -1,0 +1,15 @@
+# Goły pod z etykietą pasującą do przyklad-rs. Utwórz go PRZED rs-nginx.yaml:
+# ReplicaSet „adoptuje” go (ownerReferences) i dołoży tylko 2 pody. Utworzony PO — zostanie usunięty jako nadmiarowy.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: przyklad-rs-sierota
+  labels:
+    app: przyklad-rs
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.29
+    resources:
+      requests: {cpu: 20m, memory: 32Mi}
+      limits: {cpu: 100m, memory: 64Mi}

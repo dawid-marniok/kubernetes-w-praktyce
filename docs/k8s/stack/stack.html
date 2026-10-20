@@ -1,0 +1,1039 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nasz stack</title>
+<meta name="description" content="Ściąga: cały stack szkolenia na jednej mapie — AWS, klaster EKS k8s-sages i aplikacja ToDos po dniu 5, z podziałem na dni, opisem każdego obiektu, drogą żądania i drogą obrazu.">
+<style>
+:root {
+  --navy: #012438;
+  --acc: #41C0F0;
+  --light: #EBF8FD;
+  --light2: #E1EDF8;
+
+  --bg: #ffffff;
+  --ink: #0f2535;
+  --muted: #557080;
+  --panel: var(--light);
+  --card: #ffffff;
+  --card-line: #b9d3e2;
+  --strong: var(--navy);
+  --on-strong: #ffffff;
+  --strong-title: var(--acc);
+  --head: #0a7aa8;
+  --line: #34505f;
+  --code-bg: var(--light2);
+  --row-alt: #f4fafd;
+  --border: #d5e4ed;
+  --pod-ink: var(--navy);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #08151e;
+    --ink: #e3eef4;
+    --muted: #9cb4c3;
+    --panel: #0f2532;
+    --card: #142f3f;
+    --card-line: #2c5065;
+    --strong: #0d4b70;
+    --on-strong: #ffffff;
+    --strong-title: #7fd6f7;
+    --head: #41C0F0;
+    --line: #a8c3d2;
+    --code-bg: #12293a;
+    --row-alt: #0d1f2b;
+    --border: #23404f;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  overflow-x: hidden;
+}
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px 64px; }
+header.hero {
+  background: var(--navy);
+  color: #fff;
+  padding: 40px 0 32px;
+  border-bottom: 6px solid var(--acc);
+}
+header.hero .wrap { padding-bottom: 0; }
+.kicker { color: var(--acc); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; font-size: 13px; margin: 0 0 6px; }
+h1 { font-size: clamp(28px, 6vw, 44px); line-height: 1.15; margin: 0 0 12px; }
+.hero p.lead { max-width: 720px; margin: 0; color: #d6e9f3; font-size: 17px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0 0; padding: 0; list-style: none; }
+.chips li { background: rgba(65,192,240,.14); border: 1px solid rgba(65,192,240,.45); color: #e6f6fd; border-radius: 999px; padding: 3px 12px; font-size: 14px; }
+nav.toc { margin: 28px 0 8px; }
+nav.toc ol { display: flex; flex-wrap: wrap; gap: 6px 8px; padding: 0; margin: 0; list-style: none; counter-reset: toc; }
+nav.toc li { counter-increment: toc; }
+nav.toc a { display: inline-block; text-decoration: none; color: var(--ink); background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 4px 10px; font-size: 14px; }
+nav.toc a::before { content: counter(toc) ". "; color: var(--head); font-weight: 700; }
+nav.toc a:hover, nav.toc a:focus-visible { border-color: var(--acc); }
+section { margin-top: 48px; scroll-margin-top: 16px; }
+h2 { font-size: clamp(22px, 4.5vw, 28px); line-height: 1.25; margin: 0 0 10px; display: flex; gap: 12px; align-items: baseline; }
+h2 .n { color: var(--acc); font-weight: 800; font-size: 1.25em; line-height: 1; }
+h3 { font-size: 18px; margin: 24px 0 8px; }
+p { margin: 0 0 12px; }
+a { color: var(--head); }
+code, kbd, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: .9em; }
+:not(pre) > code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+pre { background: var(--code-bg); padding: 12px 14px; border-radius: 8px; overflow-x: auto; margin: 0 0 12px; }
+.key { border-left: 5px solid var(--acc); background: var(--panel); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; }
+.key strong { color: var(--ink); }
+
+figure { margin: 20px 0; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
+figure .scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+figure svg { display: block; width: 100%; height: auto; }
+figcaption { font-size: 14px; color: var(--muted); margin-top: 8px; }
+figcaption .hint { display: none; }
+/* główna mapa: szersza niż kolumna tekstu na dużych ekranach */
+figure.big { position: relative; left: 50%; transform: translateX(-50%); width: min(1240px, calc(100vw - 48px)); }
+@media (max-width: 1100px) { figure.big { left: auto; transform: none; width: auto; } }
+@media (max-width: 760px) {
+  figure { padding: 8px; margin-left: -4px; margin-right: -4px; }
+  figure .scroll svg.wide { min-width: 900px; }
+  figcaption .hint { display: inline; }
+}
+
+/* --- SVG --- */
+svg text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; fill: var(--ink); font-size: 14px; }
+svg .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+svg .b { font-weight: 700; }
+svg .s { font-size: 12px; fill: var(--muted); }
+svg .h { font-size: 12.5px; font-weight: 800; letter-spacing: .06em; fill: var(--head); }
+svg .ttl { font-weight: 800; fill: var(--strong-title); }
+svg .on { fill: var(--on-strong); }
+svg .on.s { fill: var(--on-strong); opacity: .88; }
+svg .pod-t { fill: var(--pod-ink); font-weight: 700; }
+svg .pod-s { fill: var(--pod-ink); font-size: 12px; }
+svg .panel { fill: var(--bg); stroke: var(--card-line); stroke-width: 1; }
+svg .panel2 { fill: var(--panel); stroke: var(--card-line); stroke-width: 1; }
+svg .box { fill: var(--card); stroke: var(--card-line); stroke-width: 1.2; }
+svg .strong { fill: var(--strong); }
+svg .pod { fill: var(--acc); }
+svg .ns { fill: none; stroke: var(--head); stroke-width: 1.6; stroke-dasharray: 8 6; }
+svg .ln { fill: none; stroke: var(--line); stroke-width: 1.8; }
+svg .ln.dash { stroke-dasharray: 6 5; }
+svg .mk { fill: var(--line); }
+svg .mk-acc { fill: var(--acc); }
+svg .lbl { font-size: 11.5px; fill: var(--muted); font-style: italic; }
+svg .ring { fill: none; stroke: var(--acc); stroke-width: 3; display: none; }
+svg .hit { fill: transparent; }
+svg .badge circle { fill: var(--strong); stroke: var(--acc); stroke-width: 2; }
+svg .badge text { fill: #fff; font-size: 13px; font-weight: 800; }
+svg .num circle { fill: var(--strong); stroke: var(--acc); stroke-width: 2; }
+svg .num text { fill: #fff; font-weight: 800; font-size: 12px; }
+svg .leg-t { font-size: 12.5px; fill: var(--ink); }
+
+/* klikalne obiekty */
+.cnode, .cgrp .hit { cursor: pointer; outline: none; }
+.cnode:hover .nb { stroke: var(--acc); stroke-width: 2.2; }
+.cnode:focus-visible .ring, .cnode.sel .ring, .cgrp.sel > .ring, .cgrp .hit:focus-visible + .ring { display: block; }
+.cnode, .cgrp, .edge { transition: opacity .25s; }
+.cnode .badge { display: none; }
+.cnode.new .badge { display: block; }
+/* stan „po dniu N” */
+.cnode.fut { opacity: .2; }
+.cnode.fut .nb { stroke: var(--muted); stroke-dasharray: 5 4; stroke-width: 1.4; }
+.cgrp.fut { opacity: .35; }
+.edge.fut { opacity: .08; }
+/* tryb drogi (sekcje 3 i 4) */
+.pathmode .cnode { cursor: default; }
+.pathmode.has-active .cnode, .pathmode.has-active .cgrp { opacity: .2; }
+.pathmode.has-active .edge { opacity: .1; }
+.pathmode.has-active .cnode.on, .pathmode.has-active .edge.on { opacity: 1; }
+.pathmode.has-active .cgrp.on { opacity: 1; }
+.pathmode .cnode.on .nb { stroke: var(--acc); stroke-width: 3; }
+.pathmode .edge.on .ln { stroke: var(--acc); stroke-width: 3; stroke-dasharray: 9 6; animation: run .9s linear infinite; }
+.pathmode .edge.on .mk { fill: var(--acc); }
+@keyframes run { to { stroke-dashoffset: -15; } }
+@media (prefers-reduced-motion: reduce) {
+  .pathmode .edge.on .ln { animation: none; }
+  .cnode, .cgrp, .edge { transition: none; }
+}
+
+/* przełącznik dni */
+.seg { display: inline-flex; flex-wrap: wrap; gap: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin: 4px 0 8px; }
+.seg button { font: inherit; font-size: 15px; padding: 7px 14px; border: 0; background: var(--panel); color: var(--ink); cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button[aria-pressed="true"] { background: var(--navy); color: #fff; box-shadow: inset 0 -3px 0 var(--acc); }
+.seg button:focus-visible { outline: 3px solid var(--acc); outline-offset: -3px; }
+.seg button small { display: block; font-size: 12px; opacity: .8; line-height: 1.2; }
+@media (max-width: 520px) { .seg { display: grid; grid-template-columns: repeat(5, 1fr); width: 100%; } .seg button { padding: 6px 4px; font-size: 14px; } .seg button small { display: none; } }
+.legend { font-size: 14px; color: var(--muted); margin: 0 0 8px; display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.legend .sw { display: inline-block; width: 14px; height: 14px; border-radius: 4px; vertical-align: -2px; margin-right: 5px; border: 1px solid var(--card-line); }
+.legend .sw.aws { background: var(--strong); }
+.legend .sw.plat { background: var(--card); }
+.legend .sw.ty { background: var(--acc); }
+.legend .sw.fut { background: transparent; border: 1.5px dashed var(--muted); }
+.legend .sw.new { background: var(--strong); border: 2px solid var(--acc); border-radius: 50%; }
+
+.grid2 { display: grid; gap: 16px; grid-template-columns: 1fr; align-items: start; margin-top: 12px; }
+@media (min-width: 860px) { .grid2 { grid-template-columns: 1fr 1fr; } }
+.daybox { border: 1px solid var(--border); border-radius: 10px; background: var(--panel); padding: 12px 16px; min-width: 0; }
+.daybox h3 { margin: 0 0 4px; }
+.daybox p { font-size: 15px; }
+.daybox ul { margin: 0 0 8px; padding-left: 0; list-style: none; display: grid; gap: 6px; }
+.daybox li { font-size: 15px; padding-left: 18px; position: relative; }
+.daybox li::before { content: ""; position: absolute; left: 2px; top: 9px; width: 8px; height: 8px; border-radius: 50%; background: var(--acc); }
+.daybox li.plat::before { background: var(--card); border: 1.5px solid var(--muted); }
+.daybox h4 { margin: 10px 0 6px; font-size: 13px; letter-spacing: .05em; text-transform: uppercase; color: var(--head); }
+button.lnk { font: inherit; color: var(--head); background: none; border: 0; padding: 0; text-decoration: underline; cursor: pointer; text-align: left; }
+button.lnk:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; border-radius: 3px; }
+.detail { border: 1px solid var(--border); border-left: 5px solid var(--acc); border-radius: 0 10px 10px 0; background: var(--bg); padding: 12px 16px; min-height: 120px; min-width: 0; scroll-margin-top: 12px; }
+.detail h3 { margin: 0 0 6px; }
+.detail .tag { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--navy); background: var(--acc); border-radius: 999px; padding: 1px 9px; margin-left: 6px; vertical-align: 2px; }
+.detail p { font-size: 15px; }
+.detail dl { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 0 0 10px; font-size: 15px; }
+.detail dt { font-weight: 700; color: var(--head); }
+.detail dd { margin: 0; min-width: 0; }
+.detail pre { margin: 8px 0 0; font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.detail .note { font-size: 14px; color: var(--muted); margin: 8px 0 0; }
+@media (max-width: 420px) { .detail dl { grid-template-columns: 1fr; } .detail dd { margin-bottom: 4px; } }
+
+ol.steps { list-style: none; padding: 0; margin: 12px 0 0; counter-reset: st; display: grid; gap: 8px; }
+ol.steps li { counter-increment: st; position: relative; padding: 10px 14px 10px 52px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); }
+ol.steps li::before { content: counter(st); position: absolute; left: 12px; top: 10px; width: 28px; height: 28px; border-radius: 50%; background: var(--strong); color: #fff; font-weight: 800; display: grid; place-items: center; font-size: 15px; border: 2px solid var(--acc); }
+.js ol.steps li { cursor: pointer; }
+ol.steps li.on { border-color: var(--acc); box-shadow: 0 0 0 2px var(--acc) inset; }
+ol.steps li.on::before { background: var(--acc); color: var(--navy); }
+ol.steps li:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; }
+ol.steps li pre { margin: 8px 0 2px; font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.js ol.steps li pre { display: none; }
+.js ol.steps li.on pre { display: block; }
+.stepnav { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 0; }
+.stepnav button { font: inherit; font-size: 14px; padding: 6px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--ink); cursor: pointer; }
+.stepnav button:hover, .stepnav button:focus-visible { border-color: var(--acc); }
+.stepnav[hidden] { display: none; }
+
+.tablewrap { overflow-x: auto; margin: 16px 0; border: 1px solid var(--border); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; }
+th, td { text-align: left; vertical-align: top; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+thead th { background: var(--navy); color: #fff; font-size: 14px; }
+tbody tr:nth-child(even) { background: var(--row-alt); }
+tbody tr:last-child td { border-bottom: 0; }
+td:first-child { font-weight: 700; }
+td.d { white-space: nowrap; }
+@media (max-width: 640px) {
+  table.stack thead { display: none; }
+  table.stack, table.stack tbody, table.stack tr, table.stack td { display: block; width: 100%; }
+  table.stack tr { border-bottom: 1px solid var(--border); padding: 6px 0; }
+  table.stack td { border: 0; padding: 3px 12px; }
+  table.stack td[data-h]::before { content: attr(data-h); display: block; font-size: 12px; font-weight: 700; color: var(--head); text-transform: uppercase; letter-spacing: .05em; }
+}
+.noscript { font-size: 15px; padding: 8px; }
+footer { margin-top: 56px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--border); padding-top: 16px; }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="kicker">Dni 1–5 · ściąga</p>
+    <h1>Nasz stack: od laptopa do dysku w AWS</h1>
+    <p class="lead">Jedna mapa całego szkolenia: Twój laptop, konto AWS, klaster EKS i aplikacja ToDos tak, jak wygląda po dniu 5. Przełączasz dni i widzisz, co już stoi. Klikasz obiekt i dowiadujesz się, kto go stworzył, po co jest ToDos i jak go podejrzysz.</p>
+    <ul class="chips" aria-label="Nasze środowisko">
+      <li>AWS eu-central-1</li>
+      <li>EKS 1.35 · k8s-sages</li>
+      <li>3 × m6i.xlarge</li>
+      <li>Traefik za jednym NLB</li>
+      <li>cert-manager · letsencrypt-prod</li>
+      <li>Amazon ECR · &lt;login&gt;/todos-*</li>
+      <li>Twój namespace = Twój login</li>
+    </ul>
+  </div>
+</header>
+
+<main class="wrap">
+<nav class="toc" aria-label="Spis treści">
+  <ol>
+    <li><a href="#mapa">Mapa po dniach</a></li>
+    <li><a href="#zadanie">Droga żądania</a></li>
+    <li><a href="#obraz">Droga obrazu</a></li>
+    <li><a href="#kto">Kto co tworzy</a></li>
+    <li><a href="#tabela">Wszystkie obiekty</a></li>
+  </ol>
+</nav>
+
+<!-- 1 ============================================================ -->
+<section id="mapa">
+  <h2><span class="n">1</span> Mapa: co stoi po którym dniu</h2>
+  <p>Dzień 1 pracujesz tylko na laptopie: ToDos w Docker Compose, a obrazy lądują w Amazon ECR. Od dnia 2 ToDos żyje w Twoim namespace na klastrze i każdego dnia dokładasz do niego to, co poznałeś. Platformę (sieć, klaster, Traefik, cert-manager, namespace z limitami) przygotował trener przed szkoleniem. <span class="js-only" hidden>Wybierz dzień. Obiektów z kolejnych dni jeszcze nie ma (wyszarzone), a znaczek <strong>+</strong> oznacza obiekt nowy albo zmieniony tego dnia. Kliknij obiekt albo przejdź do niego klawiszem Tab i naciśnij Enter.</span></p>
+
+  <div class="seg" role="group" aria-label="Stan po dniu" id="daySeg" hidden>
+    <button type="button" data-day="1" aria-pressed="false">Dzień 1<small>Docker</small></button>
+    <button type="button" data-day="2" aria-pressed="false">Dzień 2<small>na klaster</small></button>
+    <button type="button" data-day="3" aria-pressed="false">Dzień 3<small>dane, zasoby</small></button>
+    <button type="button" data-day="4" aria-pressed="false">Dzień 4<small>bezpieczeństwo</small></button>
+    <button type="button" data-day="5" aria-pressed="true">Dzień 5<small>Helm, monitoring</small></button>
+  </div>
+  <p class="legend">
+    <span><span class="sw aws"></span>zasób AWS</span>
+    <span><span class="sw plat"></span>platforma: trener, dodatki, usługi zewnętrzne</span>
+    <span><span class="sw ty"></span>tworzysz Ty</span>
+    <span class="js-only" hidden><span class="sw new"></span>nowe tego dnia</span>
+    <span class="js-only" hidden><span class="sw fut"></span>jeszcze nie ma</span>
+  </p>
+
+  <figure class="big">
+    <div class="scroll"><svg id="mapSvg" class="wide" role="group" aria-label="Mapa stacku szkolenia"></svg></div>
+    <noscript>
+      <div class="noscript">Bez JavaScriptu mapa się nie rysuje. W skrócie: laptop (Docker, compose web/api/mongo, docker push) → Amazon ECR; przeglądarka → DNS <code>*.k8s.marniok.dev</code> → NLB → Traefik (ns <code>traefik</code>) → Ingress <code>todos</code> → Service <code>web</code> → pody web → Service <code>api</code> → pody api (HPA) → Service <code>mongo</code> (headless) → StatefulSet <code>mongo</code> → PVC → wolumen EBS gp3.</div>
+    </noscript>
+    <figcaption>Strzałki pokazują, kto do kogo się zwraca, nie każdy skok sieciowy. Traefik łączy się z adresem poda web prosto z EndpointSlice Service. Na mapie nazwy z manifestów; chart Helm z dnia 5 dokłada przedrostek z nazwy release'u (<code>todos-web</code>, <code>todos-api</code>, <code>todos-mongo</code>). <span class="hint">Na telefonie przesuń mapę w bok.</span></figcaption>
+  </figure>
+
+  <div class="grid2">
+    <div class="daybox" id="dayBox" aria-live="polite">
+      <h3>Po dniu 5</h3>
+      <p>Pełny stack: ToDos w Twoim namespace z dyskiem, autoskalowaniem, NetworkPolicy i chartem Helm.</p>
+    </div>
+    <div class="detail" id="detail" aria-live="polite" tabindex="-1">
+      <h3>Wybierz obiekt na mapie</h3>
+      <p>Każdy obiekt ma opis: co to jest, po co jest w ToDos, kto go tworzy, w który dzień i jaką komendą go zobaczysz.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 2 ============================================================ -->
+<section id="zadanie">
+  <h2><span class="n">2</span> Droga żądania „dodaj zadanie”</h2>
+  <p>Klikasz „Dodaj” w ToDos pod <code>https://todos-&lt;login&gt;.k8s.marniok.dev</code>. Przeglądarka wysyła <code>POST /api/todos</code> z JSON-em. Tak to żądanie idzie aż do dysku bazy i z powrotem (stan po dniu 5). <span class="js-only" hidden>Kliknij krok albo użyj przycisków.</span></p>
+  <figure>
+    <div class="scroll"><svg id="reqSvg" class="wide" role="img" aria-label="Droga żądania na mapie stacku"></svg></div>
+    <figcaption>Podświetlone są obiekty z bieżącego kroku. <span class="hint">Na telefonie przesuń mapę w bok.</span></figcaption>
+  </figure>
+  <ol class="steps" id="reqSteps"></ol>
+  <div class="stepnav" id="reqNav" hidden>
+    <button type="button" data-act="prev">← poprzedni</button>
+    <button type="button" data-act="next">następny →</button>
+    <button type="button" data-act="all">pokaż całą mapę</button>
+  </div>
+</section>
+
+<!-- 3 ============================================================ -->
+<section id="obraz">
+  <h2><span class="n">3</span> Droga obrazu: z laptopa do poda</h2>
+  <p>Kod ToDos jest w <code>app/todos/</code> na Twoim laptopie. Na klaster trafia tylko jako obraz w rejestrze. Węzły nie widzą Twojego dysku ani lokalnego Dockera.</p>
+  <figure>
+    <div class="scroll"><svg id="imgSvg" class="wide" role="img" aria-label="Droga obrazu na mapie stacku"></svg></div>
+    <figcaption>Rola węzłów EKS ma uprawnienie do odczytu z ECR na tym samym koncie, dlatego Deployment nie potrzebuje <code>imagePullSecrets</code>. <span class="hint">Na telefonie przesuń mapę w bok.</span></figcaption>
+  </figure>
+  <ol class="steps" id="imgSteps"></ol>
+  <div class="stepnav" id="imgNav" hidden>
+    <button type="button" data-act="prev">← poprzedni</button>
+    <button type="button" data-act="next">następny →</button>
+    <button type="button" data-act="all">pokaż całą mapę</button>
+  </div>
+</section>
+
+<!-- 4 ============================================================ -->
+<section id="kto">
+  <h2><span class="n">4</span> Kto co tworzy</h2>
+  <div class="tablewrap">
+    <table class="stack">
+      <thead><tr><th>Kto</th><th>Czym</th><th>Co powstaje</th></tr></thead>
+      <tbody>
+        <tr><td data-h="Kto">AWS</td><td data-h="Czym">usługi zarządzane</td><td data-h="Co powstaje">control plane EKS (kube-apiserver, etcd, scheduler), NLB na prośbę klastra, wolumeny EBS na prośbę sterownika EBS CSI, instancje EC2 węzłów</td></tr>
+        <tr><td data-h="Kto">trener · Terraform</td><td data-h="Czym">dwa osobne stany: rejestr i konta (dzień 1), klaster (dni 2–5)</td><td data-h="Co powstaje">użytkownicy IAM, szablon repozytoriów ECR ze skanem przy push, VPC z podsieciami i NAT, klaster EKS z dodatkami (vpc-cni, kube-proxy, CoreDNS, Pod Identity, metrics-server, EBS CSI), grupa węzłów</td></tr>
+        <tr><td data-h="Kto">trener · skrypty klastra</td><td data-h="Czym">Helm i <code>kubectl apply</code> z kontem administratora</td><td data-h="Co powstaje">StorageClass <code>gp3</code>, Traefik z Service LoadBalancer, cert-manager i ClusterIssuer, KEDA, monitoring (dzień 5); dla każdego kursanta namespace, ResourceQuota, LimitRange, RBAC i wpis dostępu EKS</td></tr>
+        <tr><td data-h="Kto">Ty w labie</td><td data-h="Czym"><code>docker</code>, <code>kubectl apply</code>, <code>helm</code></td><td data-h="Co powstaje">obrazy w ECR i wszystko w namespace <code>&lt;login&gt;</code>: Secret, ConfigMap, Deploymenty, Service, Ingress, StatefulSet, HPA, NetworkPolicy, ServiceAccount, release Helm</td></tr>
+        <tr><td data-h="Kto">kontrolery w klastrze</td><td data-h="Czym">reagują na Twoje obiekty</td><td data-h="Co powstaje">cert-manager: Certificate i Secret <code>todos-tls</code>; StatefulSet: PVC <code>data-mongo-0</code>; Deployment: ReplicaSet i pody; HPA: zmiana liczby replik</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="key"><strong>Login łączy wszystko.</strong> Użytkownik IAM = użytkownik w Kubernetesie (<code>kubectl auth whoami</code>) = namespace = przestrzeń w ECR = część hosta <code>todos-&lt;login&gt;</code>. Tego, czego nie tworzysz Ty, nie zmienisz: RBAC pozwala Ci tylko podglądać obiekty całego klastra i cudze namespace'y (bez Secretów).</div>
+</section>
+
+<!-- 5 ============================================================ -->
+<section id="tabela">
+  <h2><span class="n">5</span> Wszystkie obiekty</h2>
+  <p>Ta sama lista co na mapie, w kolejności dni. <span class="js-only" hidden>Kliknij nazwę, żeby zobaczyć opis.</span> „Dzień” to dzień, w którym obiekt powstaje albo pierwszy raz go używasz.</p>
+  <div class="tablewrap">
+    <table class="stack" id="objTable">
+      <thead><tr><th>Obiekt</th><th>Rodzaj</th><th>Gdzie</th><th>Dzień</th><th>Kto tworzy</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <p>Ściągi do tematów: <a href="../../docker/podstawy.md">Docker: podstawy</a> · <a href="../podstawy/README.md">kubectl</a> · <a href="../podstawy/jak-dziala-kubernetes.html">jak działa Kubernetes</a> · <a href="../deployment/README.md">Deployment</a> · <a href="../ingress-gateway/README.md">Service i Ingress</a> · <a href="../ingress-gateway/cert-manager.md">cert-manager</a> · <a href="../bezpieczenstwo/README.md">bezpieczeństwo (dzień 4)</a> · <a href="../helm/skladnia.md">Helm (dzień 5)</a>. Ściągi z kolejnych dni pojawiają się w repo razem z labami.</p>
+</section>
+
+<footer>Kubernetes w praktyce · stan na październik 2026 (EKS 1.35 w eu-central-1, Traefik za NLB, cert-manager z Let's Encrypt, ECR). Mapa pokazuje stan docelowy po dniu 5; Twój ToDos może się różnić nazwami i wartościami, jeśli spełnia wymagania labów.</footer>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  var NS = 'http://www.w3.org/2000/svg';
+  document.documentElement.classList.add('js');
+  Array.prototype.forEach.call(document.querySelectorAll('.js-only'), function (e) { e.hidden = false; });
+
+  /* ---------- ściągi ---------- */
+  var DOC = {
+    docker: ['../../docker/podstawy.md', 'Docker: podstawy'],
+    pod: ['../podstawy/README.md', 'kubectl: podstawy'],
+    jak: ['../podstawy/jak-dziala-kubernetes.html', 'Jak działa Kubernetes'],
+    dep: ['../deployment/README.md', 'Deployment od środka'],
+    sondy: ['../deployment/sondy.md', 'Sondy'],
+    ing: ['../ingress-gateway/README.md', 'Service, Ingress, Gateway API'],
+    ingd: ['../ingress-gateway/diagram.html', 'Ruch z zewnątrz (diagram)'],
+    cert: ['../ingress-gateway/cert-manager.md', 'cert-manager i TLS'],
+    bez: ['../bezpieczenstwo/README.md', 'Bezpieczeństwo i sieć (dzień 4)'],
+    helm: ['../helm/skladnia.md', 'Składnia Helma (dzień 5)'],
+    app: ['../../../app/todos/README.md', 'Aplikacja ToDos']
+  };
+  var WHO = {
+    aws: 'AWS',
+    tf: 'trener · Terraform',
+    adm: 'trener · skrypty klastra',
+    ty: 'Ty w labie',
+    ctl: 'kontroler w klastrze',
+    zew: 'usługa zewnętrzna'
+  };
+
+  /* ---------- obiekty na mapie ----------
+     k: wygląd (aws | plat | ty), d: dzień, w którym obiekt pojawia się na mapie,
+     v: warianty opisu od danego dnia, i: opis do panelu */
+  var NODES = [
+    /* Internet */
+    { id: 'hub', x: 28, y: 46, w: 208, h: 50, k: 'plat', d: 1, t: 'Docker Hub', s: ['obrazy bazowe, mongo'], kind: 'rejestr publiczny', where: 'internet', who: 'zew',
+      i: { co: 'Publiczny rejestr obrazów. Stąd pochodzą obrazy bazowe ToDos (<code>node:22-alpine</code>, <code>nginxinc/nginx-unprivileged:1.29-alpine</code>) i gotowe obrazy <code>mongo:7.0</code>/<code>mongo:8.0</code> oraz <code>busybox</code> z labów.',
+        poco: 'W dniu 1 <code>docker build</code> pobiera obrazy bazowe na laptop. Na klastrze węzły pobierają z Docker Huba obraz <code>mongo</code> przez NAT gateway. Pobrania anonimowe mają limit, a cały klaster wychodzi do internetu jednym adresem, więc przy kłopotach zobaczysz <code>429 Too Many Requests</code>.',
+        whoTxt: 'Docker, Inc. (usługa zewnętrzna).', cmd: 'docker pull mongo:7.0\nkubectl get pods -o jsonpath=\'{..image}\'', links: ['docker'] } },
+    { id: 'le', x: 28, y: 104, w: 208, h: 50, k: 'plat', d: 2, t: "Let's Encrypt", s: ['certyfikaty TLS (ACME)'], kind: 'urząd certyfikacji', where: 'internet', who: 'zew',
+      i: { co: 'Bezpłatny urząd certyfikacji. Rozmawia protokołem ACME z cert-managerem w klastrze.',
+        poco: 'Wystawia certyfikat dla <code>todos-&lt;login&gt;.k8s.marniok.dev</code>. Sprawdza, że domena jest „nasza” metodą HTTP-01: łączy się z <code>http://&lt;host&gt;/.well-known/acme-challenge/…</code> przez DNS, NLB i Traefika do poda solvera cert-managera (port 8089) w Twoim namespace. Limit: 50 nowych certyfikatów tygodniowo na domenę, więc nie usuwaj w kółko Ingressu i Secretu <code>todos-tls</code>.',
+        whoTxt: 'Internet Security Research Group (usługa zewnętrzna).', cmd: 'kubectl describe certificate todos-tls\nkubectl get challenge          # tylko w trakcie wystawiania', links: ['cert'] } },
+    { id: 'dns', x: 28, y: 162, w: 208, h: 50, k: 'plat', d: 2, t: 'DNS *.k8s.marniok.dev', s: ['CNAME → NLB (zenbox)'], kind: 'rekord DNS', where: 'u rejestratora domeny', who: 'tf', whoLbl: 'trener (raz, u rejestratora)',
+      i: { co: 'Jeden rekord wildcard u rejestratora domeny (zenbox): <code>*.k8s</code> CNAME → nazwa NLB.',
+        poco: 'Każdy host jeden poziom pod domeną (<code>todos-&lt;login&gt;.k8s.marniok.dev</code>, <code>&lt;login&gt;.k8s.marniok.dev</code>) trafia w ten sam NLB, a dopiero Traefik rozróżnia hosty. Dwa poziomy (<code>todos.&lt;login&gt;.k8s…</code>) do wildcardu nie pasują.',
+        whoTxt: 'Trener, raz przed dniem 2, w panelu rejestratora domeny.', cmd: 'dig +short todos-<login>.k8s.marniok.dev', links: ['ingd'] } },
+
+    /* Laptop */
+    { id: 'browser', x: 28, y: 268, w: 208, h: 52, k: 'plat', d: 1, t: 'Przeglądarka', s: ['http://localhost:3000'], v: { 2: { s: ['https://todos-<login>.k8s…'] } }, kind: 'klient', where: 'laptop', who: 'ty', whoLbl: 'Ty',
+      i: { co: 'Klient aplikacji. Pobiera z <code>web</code> zbudowanego Reacta, a potem woła <code>/api/todos</code> tym samym adresem.',
+        poco: 'W dniu 1 <code>http://localhost:3000</code> (Compose). Od dnia 2 <code>https://todos-&lt;login&gt;.k8s.marniok.dev</code>. Domena <code>.dev</code> jest na liście HSTS preload, więc przeglądarka zawsze idzie po HTTPS: Ingress bez <code>tls</code> kończy się ostrzeżeniem o certyfikacie.',
+        whoTxt: 'Ty.', cmd: 'curl -s https://todos-<login>.k8s.marniok.dev/api/health\n# {"status":"ok","db":"connected"}', links: ['app', 'ingd'] } },
+    { id: 'cweb', x: 44, y: 392, w: 176, h: 44, k: 'ty', d: 1, t: 'web', s: ['nginx + React · 3000→8080'], kind: 'kontener (Compose)', where: 'laptop, Docker', who: 'ty',
+      i: { co: 'Kontener z nginx i zbudowanym Reactem. W kontenerze słucha na 8080, na laptopie pod portem 3000. Ścieżkę <code>/api/</code> przekazuje do <code>http://api:3001</code>.',
+        poco: 'Ten sam obraz <code>todos-web:1.0.0</code> wypychasz do ECR i od dnia 2 uruchamiasz w Deploymencie <code>web</code>.',
+        whoTxt: 'Ty, w lab04 (<code>compose.yaml</code>).', cmd: 'docker compose ps\ndocker compose exec web grep proxy_pass /etc/nginx/conf.d/default.conf', links: ['docker', 'app'] } },
+    { id: 'capi', x: 44, y: 448, w: 176, h: 44, k: 'ty', d: 1, t: 'api', s: ['Node.js · 3001'], kind: 'kontener (Compose)', where: 'laptop, Docker', who: 'ty',
+      i: { co: 'REST API w Node.js i Express. Adres bazy bierze ze zmiennej <code>MONGODB_URI</code>, a <code>GET /api/health</code> mówi, czy ma połączenie z bazą.',
+        poco: 'Ten sam obraz <code>todos-api:1.0.0</code> działa od dnia 2 w Deploymencie <code>api</code>.',
+        whoTxt: 'Ty, w lab04.', cmd: 'docker compose logs api\ncurl -s localhost:3001/api/health', links: ['docker', 'app'] } },
+    { id: 'cmongo', x: 44, y: 504, w: 176, h: 44, k: 'ty', d: 1, t: 'mongo', s: ['mongo:7.0 · 27017'], kind: 'kontener (Compose)', where: 'laptop, Docker', who: 'ty',
+      i: { co: 'Baza MongoDB z oficjalnego obrazu. Na laptopie <code>mongo:7.0</code>, bo MongoDB 8 nie startuje na jądrze obecnego Docker Desktop.',
+        poco: 'Na klastrze baza dostaje własne obiekty: w dniu 2 Deployment bez dysku, od dnia 3 StatefulSet z dyskiem.',
+        whoTxt: 'Ty, w lab04.', cmd: 'docker compose exec mongo mongosh --quiet --eval "db.adminCommand(\'ping\')"', links: ['docker', 'app'] } },
+    { id: 'cvol', x: 44, y: 560, w: 176, h: 44, k: 'ty', d: 1, t: 'wolumen mongodb_data', s: ['/data/db'], kind: 'wolumen Dockera', where: 'laptop, Docker', who: 'ty',
+      i: { co: 'Nazwany wolumen zamontowany w <code>/data/db</code> kontenera mongo. Dane przeżywają <code>docker compose down</code>, ale nie <code>down -v</code>.',
+        poco: 'Na klastrze ten sam problem rozwiązuje PVC z dyskiem EBS (dzień 3).',
+        whoTxt: 'Ty, w lab04 (sekcja <code>volumes:</code>).', cmd: 'docker volume ls\ndocker volume inspect lab04_mongodb_data', links: ['docker'] } },
+    { id: 'cnet', x: 44, y: 616, w: 176, h: 44, k: 'ty', d: 1, t: 'sieć lab04_default', s: ['DNS po nazwie usługi'], kind: 'sieć Dockera', where: 'laptop, Docker', who: 'ty', whoLbl: 'Compose (z Twojego pliku)',
+      i: { co: 'Sieć, którą Compose tworzy dla projektu. Wbudowany DNS rozwiązuje nazwy usług: <code>api</code>, <code>mongo</code>.',
+        poco: 'Na klastrze tę rolę przejmują Service i CoreDNS: nazwy <code>api</code> i <code>mongo</code> zostają te same.',
+        whoTxt: 'Docker Compose, z Twojego <code>compose.yaml</code>.', cmd: 'docker network ls | grep lab04', links: ['docker'] } },
+    { id: 'build', x: 32, y: 690, w: 200, h: 52, k: 'plat', d: 1, t: 'docker build / push', s: ['todos-api, todos-web :1.0.0'], kind: 'polecenia Dockera', where: 'laptop', who: 'ty', whoLbl: 'Ty',
+      i: { co: 'Budujesz obrazy z <code>app/todos/backend</code> i <code>app/todos/frontend</code> z tagiem wersji i platformą <code>linux/amd64</code>. Węzły EKS mają procesory x86_64, a Mac z procesorem M buduje domyślnie arm64.',
+        poco: 'Obraz w ECR to jedyna droga kodu z laptopa na klaster. Tag zawsze z wersją (<code>1.0.0</code>, <code>1.0.1</code>), nigdy <code>latest</code>.',
+        whoTxt: 'Ty, w lab03 i lab04 (powtórka w projekcie, etap 1).', cmd: 'cd app/todos\ndocker build --platform linux/amd64 -t <REJESTR>/todos-api:1.0.0 backend\ndocker push <REJESTR>/todos-api:1.0.0', links: ['docker'] } },
+    { id: 'awscli', x: 28, y: 764, w: 100, h: 52, k: 'plat', d: 1, t: 'aws CLI', s: ['aws login'], kind: 'narzędzie', where: 'laptop', who: 'ty', whoLbl: 'Ty (instalacja z karty)',
+      i: { co: 'AWS CLI 2.32 lub nowsze z profilem <code>szkolenie</code>. <code>aws login</code> otwiera przeglądarkę i daje tymczasowe poświadczenia. Z nich korzystają <code>docker login</code> (hasło do ECR ważne 12 h) i <code>kubectl</code> (token do API EKS).',
+        poco: 'Bez sesji AWS nie wypchniesz obrazu ani nie połączysz się z klastrem. Rano każdego dnia logujesz się od nowa.',
+        whoTxt: 'Ty, według karty dostępowej.', cmd: 'aws login --profile szkolenie\naws sts get-caller-identity --profile szkolenie', links: ['docker'] } },
+    { id: 'kubectl', x: 136, y: 764, w: 100, h: 52, k: 'plat', d: 2, t: 'kubectl', s: ['ctx szkolenie'], kind: 'narzędzie', where: 'laptop', who: 'ty', whoLbl: 'Ty',
+      i: { co: 'Klient API Kubernetesa. Kontekst <code>szkolenie</code> dopisuje <code>aws eks update-kubeconfig</code>. Przy każdym poleceniu kubectl prosi aws CLI o token (<code>aws eks get-token</code>), więc nie ma tu żadnego hasła ani pliku z kluczem.',
+        poco: 'Wszystkie obiekty ToDos tworzysz przez <code>kubectl apply</code>, a w dniu 5 przez <code>helm</code>. Domyślny namespace to Twój login, więc nie piszesz <code>-n</code>.',
+        whoTxt: 'Ty, rano w dniu 2.', cmd: 'aws eks update-kubeconfig --name k8s-sages --region eu-central-1 --profile szkolenie --alias szkolenie\nkubectl config current-context\nkubectl auth whoami', links: ['pod', 'jak'] } },
+
+    /* AWS: usługi poza VPC */
+    { id: 'ecr', x: 296, y: 52, w: 180, h: 64, k: 'aws', d: 1, t: 'Amazon ECR', s: ['<login>/todos-api', '<login>/todos-web'], kind: 'rejestr obrazów', where: 'konto AWS, eu-central-1', who: 'tf', whoLbl: 'trener (szablon), Ty (repozytoria)',
+      i: { co: 'Prywatny rejestr obrazów na koncie szkoleniowym. Każdy kursant ma przestrzeń <code>&lt;login&gt;/…</code>. Repozytorium powstaje samo przy pierwszym <code>docker push</code>, skan podatności rusza przy każdym push, a zostaje 10 ostatnich obrazów. <code>&lt;REJESTR&gt;</code> z karty dostępowej kończy się na <code>/&lt;login&gt;</code>.',
+        poco: 'Repozytoria <code>&lt;login&gt;/todos-api</code> i <code>&lt;login&gt;/todos-web</code>. Z nich węzły EKS pobierają obrazy Twoich Deploymentów.',
+        whoTxt: 'Szablon repozytoriów, skan i uprawnienia: trener (Terraform, przed dniem 1). Same repozytoria: Ty, pierwszym <code>docker push</code>.', cmd: "aws ecr describe-images --profile szkolenie --region eu-central-1 \\\n  --repository-name <login>/todos-api --query 'imageDetails[].imageTags'", links: ['docker'] } },
+    { id: 'iam', x: 496, y: 52, w: 140, h: 64, k: 'aws', d: 1, t: 'IAM', s: ['użytkownik <login>'], kind: 'użytkownik IAM', where: 'konto AWS', who: 'tf',
+      i: { co: 'Konto w AWS IAM z hasłem do konsoli. Może wysyłać i pobierać obrazy tylko w <code>&lt;login&gt;/*</code> i odczytać opis klastra <code>k8s-sages</code>.',
+        poco: 'Jedna tożsamość do wszystkiego: login = użytkownik IAM = użytkownik w Kubernetesie = namespace = przestrzeń w ECR.',
+        whoTxt: 'Trener (Terraform, przed dniem 1). Hasło startowe jest na Twojej karcie dostępowej.', cmd: 'aws sts get-caller-identity --profile szkolenie\n# Arn kończy się na :user/szkolenie/<login>', links: ['jak'] } },
+    { id: 'access', x: 656, y: 52, w: 190, h: 64, k: 'aws', d: 2, t: 'Wpis dostępu EKS', s: ['IAM <login> → User <login>'], kind: 'access entry (EKS)', where: 'klaster EKS', who: 'adm',
+      i: { co: 'Mapowanie w EKS: użytkownik IAM <code>&lt;login&gt;</code> → użytkownik Kubernetesa <code>&lt;login&gt;</code>. Klaster używa tylko wpisów dostępu, bez ConfigMapy <code>aws-auth</code>.',
+        poco: 'Dzięki niemu kube-apiserver wie, kim jesteś. Co możesz, decyduje dopiero RBAC w Twoim namespace.',
+        whoTxt: 'Trener (<code>create-participants.sh --dostep iam</code>, przed dniem 2).', cmd: 'kubectl auth whoami\nkubectl auth can-i create deployments', links: ['jak'] } },
+    { id: 'cp', x: 866, y: 52, w: 302, h: 64, k: 'aws', d: 2, t: 'EKS control plane', s: ['kube-apiserver, etcd, scheduler', 'Kubernetes 1.35 · zarządza AWS'], kind: 'control plane', where: 'konto AWS (poza naszym VPC)', who: 'aws', whoLbl: 'AWS (klaster: trener, Terraform)',
+      i: { co: 'kube-apiserver, etcd, scheduler, controller-manager i cloud-controller-manager. Działa na koncie AWS, nie w naszym VPC: widzisz tylko publiczny adres API. Uwierzytelnienie przez IAM.',
+        poco: 'Każdy <code>kubectl apply</code> ToDos trafia tutaj. Scheduler przydziela pody do węzłów, a cloud-controller-manager na prośbę Service <code>traefik</code> typu LoadBalancer założył NLB.',
+        whoTxt: 'Utrzymuje AWS. Klaster założył trener (Terraform, przed dniem 2).', cmd: 'kubectl cluster-info\naws eks describe-cluster --name k8s-sages --region eu-central-1 \\\n  --profile szkolenie --query cluster.version', links: ['jak'] } },
+
+    /* VPC: podsieci publiczne */
+    { id: 'nlb', x: 340, y: 172, w: 168, h: 58, k: 'aws', d: 2, t: 'NLB', s: ['jeden na cały klaster', 'TCP 80 i 443'], kind: 'Network Load Balancer', where: 'VPC, podsieci publiczne', who: 'aws', whoLbl: 'AWS, na prośbę klastra',
+      i: { co: 'Jeden Network Load Balancer w podsieciach publicznych. Przyjmuje TCP 80 i 443 i przekazuje na porty NodePort Service <code>traefik</code> na węzłach. Powstał, bo ten Service ma adnotację <code>service.beta.kubernetes.io/aws-load-balancer-type: nlb</code>. Bez adnotacji AWS założyłby starszy Classic Load Balancer, którego nie używamy.',
+        poco: 'Wspólne wejście z internetu dla ToDos wszystkich kursantów. Nie zakładaj własnego Service typu LoadBalancer: każdy to osobny, płatny load balancer.',
+        whoTxt: 'AWS (cloud-controller-manager), na prośbę Service od trenera.', cmd: 'kubectl -n traefik get svc traefik     # EXTERNAL-IP = nazwa NLB', links: ['ingd', 'ing'] } },
+    { id: 'nat', x: 528, y: 172, w: 180, h: 58, k: 'aws', d: 2, t: 'NAT gateway', s: ['wyjście węzłów', 'do internetu'], kind: 'brama NAT', where: 'VPC, podsieć publiczna', who: 'tf',
+      i: { co: 'Jedna brama NAT w podsieci publicznej. Węzły są w podsieciach prywatnych bez publicznych adresów, więc cały ruch wychodzący (ECR, Docker Hub, API Let\'s Encrypt) idzie przez nią.',
+        poco: 'Przez nią kubelet pobiera obrazy <code>todos-api</code>, <code>todos-web</code> (ECR) i <code>mongo</code> (Docker Hub). Cały klaster wychodzi do internetu jednym adresem IP.',
+        whoTxt: 'Trener (Terraform, moduł VPC).', cmd: '# Przez kubectl jej nie zobaczysz. Trener:\naws ec2 describe-nat-gateways --region eu-central-1', links: ['ingd'] } },
+    { id: 'nodes', x: 952, y: 262, w: 188, h: 52, k: 'aws', d: 2, t: '3 węzły EC2', s: ['m6i.xlarge · kubelet'], kind: 'managed node group', where: 'VPC, podsieci prywatne', who: 'tf', whoLbl: 'trener (Terraform), EC2 od AWS',
+      i: { co: 'Managed node group: 3 × <code>m6i.xlarge</code> (4 vCPU, 16 GiB, x86_64), Amazon Linux 2023, dysk gp3 50 GiB, po jednym w strefie. Na każdym kubelet, containerd, kube-proxy i agent vpc-cni.',
+        poco: 'Tu działają wszystkie pody ToDos. kubelet pobiera obrazy z ECR uprawnieniem roli węzła, bez <code>imagePullSecrets</code>. Na noc trener zdejmuje węzły do zera, rano pody wracają same.',
+        whoTxt: 'Trener (Terraform, przed dniem 2). Instancje uruchamia i wymienia AWS.', cmd: 'kubectl get nodes -o wide\nkubectl top nodes\nkubectl get pods -o wide       # na którym węźle stoją Twoje pody', links: ['jak'] } },
+
+    /* ns traefik */
+    { id: 'svct', x: 340, y: 358, w: 168, h: 54, k: 'plat', d: 2, t: 'Service traefik', s: ['LoadBalancer → NLB'], kind: 'Service (LoadBalancer)', where: 'ns traefik', who: 'adm',
+      i: { co: 'Service typu LoadBalancer z adnotacją <code>nlb</code>. Dostaje NodePorty na każdym węźle, a AWS zakłada dla niego NLB i wpisuje jego nazwę w <code>EXTERNAL-IP</code>.',
+        poco: 'Jedyny Service LoadBalancer, którego potrzebuje ToDos wszystkich kursantów.',
+        whoTxt: 'Trener (<code>install-addons.sh</code>, chart Helm Traefika).', cmd: 'kubectl -n traefik get svc traefik', links: ['ing', 'ingd'] } },
+    { id: 'traefik', x: 340, y: 426, w: 168, h: 54, k: 'plat', d: 2, t: 'Traefik', s: ['IngressClass traefik'], kind: 'kontroler Ingress', where: 'ns traefik', who: 'adm',
+      i: { co: 'Kontroler Ingress (IngressClass <code>traefik</code>, domyślna). Obserwuje Ingressy w całym klastrze, kończy TLS certyfikatem z Secretu i wysyła żądanie prosto na adres poda z EndpointSlice Service.',
+        poco: 'Twój Ingress <code>todos</code> jest dla niego regułą: host <code>todos-&lt;login&gt;.k8s.marniok.dev</code> → Service <code>web</code>:80. W NetworkPolicy wpuszczasz ruch właśnie z namespace <code>traefik</code>.',
+        whoTxt: 'Trener (<code>install-addons.sh</code>, przed dniem 2).', cmd: 'kubectl -n traefik get pods\nkubectl get ingressclass', links: ['ing', 'ingd'] } },
+
+    /* ns cert-manager */
+    { id: 'certmgr', x: 556, y: 358, w: 188, h: 54, k: 'plat', d: 2, t: 'cert-manager', s: ['wystawia i odnawia certyfikaty'], kind: 'kontroler', where: 'ns cert-manager', who: 'adm',
+      i: { co: 'Kontroler certyfikatów. Widzi adnotację <code>cert-manager.io/cluster-issuer</code> na Ingressie, tworzy obiekt Certificate, zamawia certyfikat w Let\'s Encrypt i zapisuje go w Secrecie. Na czas weryfikacji HTTP-01 stawia w Twoim namespace pod solvera i tymczasowy Ingress. Odnawia certyfikat przed wygaśnięciem.',
+        poco: 'HTTPS bez ostrzeżenia dla ToDos. W dniu 4 pamiętaj o regule NetworkPolicy dla solvera (port 8089), inaczej odnowienie się zatnie.',
+        whoTxt: 'Trener (<code>install-addons.sh</code>).', cmd: 'kubectl get certificate\nkubectl describe certificate todos-tls', links: ['cert'] } },
+    { id: 'issuer', x: 556, y: 426, w: 188, h: 54, k: 'plat', d: 2, t: 'ClusterIssuer', s: ['letsencrypt-prod'], kind: 'ClusterIssuer', where: 'cały klaster', who: 'adm',
+      i: { co: 'Obiekt całego klastra: konto ACME w produkcyjnym Let\'s Encrypt i metoda HTTP-01 przez IngressClass <code>traefik</code>.',
+        poco: 'Jego nazwę wpisujesz w adnotacji Ingressu <code>todos</code>. Sam go nie zmienisz (obiekt całego klastra).',
+        whoTxt: 'Trener (<code>install-addons.sh</code>).', cmd: "kubectl describe certificate todos-tls | grep -A3 'Issuer Ref'", links: ['cert'] } },
+
+    /* kube-system */
+    { id: 'coredns', x: 788, y: 358, w: 108, h: 54, k: 'plat', d: 2, t: 'CoreDNS', s: ['nazwy Service'], kind: 'dodatek EKS (Deployment)', where: 'ns kube-system', who: 'tf', whoLbl: 'dodatek EKS (Terraform)',
+      i: { co: 'Serwer DNS klastra. Rozwiązuje nazwy Service: <code>api</code> → <code>api.&lt;login&gt;.svc.cluster.local</code> → adres ClusterIP.',
+        poco: 'nginx w web szuka <code>api</code>, a api szuka <code>mongo</code>. Bez DNS żadne nie znajdzie drugiego. W NetworkPolicy ruch wychodzący zostaje wolny, więc DNS działa bez dodatkowej reguły.',
+        whoTxt: 'Dodatek EKS, włączony przez trenera w Terraformie.', cmd: 'kubectl run dns --rm -it --restart=Never --image=busybox:1.37 -- nslookup api', links: ['ing', 'jak'] } },
+    { id: 'kproxy', x: 906, y: 358, w: 108, h: 54, k: 'plat', d: 2, t: 'kube-proxy', s: ['ClusterIP → pod'], kind: 'dodatek EKS (DaemonSet)', where: 'ns kube-system', who: 'tf', whoLbl: 'dodatek EKS (Terraform)',
+      i: { co: 'DaemonSet. Na każdym węźle zapisuje reguły iptables: adres ClusterIP Service → adresy gotowych podów.',
+        poco: 'Ruch web → <code>api:3001</code> idzie przez te reguły. Headless Service <code>mongo</code> (od dnia 3) ich nie potrzebuje: DNS od razu zwraca adres poda <code>mongo-0</code>.',
+        whoTxt: 'Dodatek EKS (Terraform).', cmd: 'kubectl -n kube-system get ds kube-proxy', links: ['ing'] } },
+    { id: 'vpccni', x: 1024, y: 358, w: 104, h: 54, k: 'plat', d: 2, t: 'vpc-cni', s: ['IP podów', 'NetworkPolicy'], kind: 'dodatek EKS (DaemonSet)', where: 'ns kube-system', who: 'tf', whoLbl: 'dodatek EKS (Terraform)',
+      i: { co: 'Amazon VPC CNI (DaemonSet <code>aws-node</code>). Daje każdemu podowi adres IP z podsieci VPC. Ma włączone <code>enableNetworkPolicy</code>: agent na węźle egzekwuje NetworkPolicy. Bez tej opcji polityki byłyby przyjmowane, ale nic by nie blokowały.',
+        poco: 'Pody ToDos mają adresy z VPC. Od dnia 4 vpc-cni pilnuje Twojego łańcucha traefik → web → api → mongo.',
+        whoTxt: 'Dodatek EKS, konfiguracja trenera w Terraformie.', cmd: 'kubectl -n kube-system get ds aws-node\nkubectl -n kube-system get cm amazon-vpc-cni -o yaml | grep network-policy', links: ['bez'] } },
+    { id: 'metrics', x: 788, y: 426, w: 166, h: 54, k: 'plat', d: 2, t: 'metrics-server', s: ['kubectl top, HPA'], kind: 'dodatek EKS', where: 'ns kube-system', who: 'tf', whoLbl: 'dodatek EKS (Terraform)',
+      i: { co: 'Zbiera z kubeletów bieżące zużycie CPU i pamięci przez pody i węzły. Działa od dnia 2, używasz go od dnia 3.',
+        poco: '<code>kubectl top pods</code> i HPA dla api: HPA liczy procent CPU od <code>requests.cpu</code> kontenera.',
+        whoTxt: 'Dodatek EKS (Terraform).', cmd: 'kubectl top pods', links: ['dep'] } },
+    { id: 'ebscsi', x: 966, y: 426, w: 162, h: 54, k: 'plat', d: 2, t: 'EBS CSI', s: ['PVC → wolumen EBS'], kind: 'dodatek EKS (sterownik CSI)', where: 'ns kube-system', who: 'tf', whoLbl: 'dodatek EKS (Terraform)',
+      i: { co: 'Sterownik dysków EBS: kontroler i DaemonSet. Uprawnienia w AWS dostaje przez EKS Pod Identity (rola IAM przypięta do ServiceAccount <code>ebs-csi-controller-sa</code>), bez kluczy. Na każdy nowy PVC zakłada wolumen EBS i podłącza go do węzła z podem.',
+        poco: 'Dysk dla <code>mongo-0</code> od dnia 3. Działa od dnia 2, używasz go od dnia 3.',
+        whoTxt: 'Dodatek EKS (Terraform).', cmd: 'kubectl get csidriver\nkubectl -n kube-system get pods -l app.kubernetes.io/name=aws-ebs-csi-driver', links: ['jak'] } },
+
+    /* rząd 2: obiekty całego klastra, KEDA, monitoring */
+    { id: 'sc', x: 456, y: 526, w: 176, h: 54, k: 'plat', d: 2, t: 'StorageClass gp3', s: ['domyślna · dyski EBS'], kind: 'StorageClass', where: 'cały klaster', who: 'adm',
+      i: { co: 'Domyślna klasa dysków: provisioner <code>ebs.csi.aws.com</code>, typ gp3, ext4, <code>WaitForFirstConsumer</code> (dysk powstaje w strefie, w której scheduler postawił pod), powiększanie dozwolone, <code>reclaimPolicy: Delete</code>. Działa od dnia 2, używasz jej od dnia 3.',
+        poco: 'PVC <code>data-mongo-0</code> bez <code>storageClassName</code> dostaje gp3. Uwaga na <code>Delete</code>: usunięcie PVC usuwa też dysk z zadaniami.',
+        whoTxt: 'Trener (<code>install-addons.sh</code>).', cmd: 'kubectl get storageclass', links: ['jak'] } },
+    { id: 'keda', x: 660, y: 534, w: 126, h: 48, k: 'plat', d: 2, t: 'KEDA', s: ['autoskalowanie'], kind: 'operator', where: 'ns keda', who: 'adm',
+      i: { co: 'Autoskalowanie na podstawie zdarzeń (kolejka, metryka, harmonogram), także do zera replik.',
+        poco: 'ToDos go nie używa: api skaluje zwykły HPA. Przykład dla chętnych jest przy HPA w <code>przyklady/k8s/14-hpa</code> (dzień 3).',
+        whoTxt: 'Trener (<code>install-addons.sh</code>).', cmd: 'kubectl -n keda get pods', links: ['dep'] } },
+    { id: 'prom', x: 824, y: 534, w: 180, h: 48, k: 'plat', d: 5, t: 'Prometheus, Loki', s: ['Tempo · Alloy'], kind: 'stos observability', where: 'ns monitoring', who: 'adm',
+      i: { co: 'Stos observability: kube-prometheus-stack (Prometheus), Loki (logi), Tempo (ślady) i Grafana Alloy (DaemonSet, który czyta logi podów z węzłów i wysyła je do Loki).',
+        poco: 'W dniu 5 widzisz CPU, pamięć, restarty i logi podów web, api i mongo, także tych, których już nie ma.',
+        whoTxt: 'Trener, przed dniem 5. Ty możesz dokładać w swoim namespace reguły <code>PrometheusRule</code> i <code>ServiceMonitor</code>.', cmd: 'kubectl -n monitoring get pods', links: [] } },
+    { id: 'grafana', x: 1016, y: 534, w: 112, h: 48, k: 'plat', d: 5, t: 'Grafana', s: ['dashboardy'], kind: 'interfejs WWW', where: 'ns monitoring', who: 'adm',
+      i: { co: 'Interfejs do metryk i logów. Każdy kursant ma konto Editor (login = Twój login), adres i hasło podaje prowadzący.',
+        poco: 'Dashboard „Kubernetes / Compute Resources / Namespace (Pods)” z <code>namespace</code> = Twój login, zapytania PromQL i LogQL dla ToDos (lab19).',
+        whoTxt: 'Trener, przed dniem 5.', cmd: 'sum by (pod) (rate(container_cpu_usage_seconds_total{namespace="<login>", container!=""}[5m]))', links: [] } },
+
+    /* namespace kursanta: rząd A */
+    { id: 'ing', x: 340, y: 650, w: 124, h: 58, k: 'ty', d: 2, t: 'Ingress todos', s: ['host + TLS'], kind: 'Ingress', where: 'ns <login>', who: 'ty',
+      i: { co: 'Reguła dla Traefika: host <code>todos-&lt;login&gt;.k8s.marniok.dev</code>, ścieżka <code>/</code> → Service <code>web</code>:80. Sekcja <code>tls</code> z Secretem <code>todos-tls</code> i adnotacja <code>cert-manager.io/cluster-issuer: letsencrypt-prod</code>.',
+        poco: 'Adres ToDos z internetu. Ścieżka <code>/api</code> nie jest potrzebna: nginx w web sam przekazuje ją do api. W dniu 5 ten sam host.',
+        whoTxt: 'Ty (ToDos · dzień 2, projekt etap 5).', cmd: 'kubectl get ingress todos\ncurl -sI https://todos-<login>.k8s.marniok.dev', links: ['ing', 'cert'] } },
+    { id: 'svcweb', x: 488, y: 650, w: 124, h: 58, k: 'ty', d: 2, t: 'Service web', s: ['ClusterIP :80'], kind: 'Service (ClusterIP)', where: 'ns <login>', who: 'ty',
+      i: { co: 'Service ClusterIP: port 80 → port <code>http</code> (8080) podów web, wybieranych po etykiecie.',
+        poco: 'Stała nazwa przed zmieniającymi się podami. Ingress wskazuje <code>web:80</code>, a Traefik bierze adresy podów z jego EndpointSlice.',
+        whoTxt: 'Ty (dzień 2).', cmd: 'kubectl get svc web\nkubectl get endpointslices -l kubernetes.io/service-name=web', links: ['ing'] } },
+    { id: 'depweb', x: 636, y: 650, w: 150, h: 58, k: 'ty', d: 2, t: 'Deployment web', s: ['2 × nginx + React', 'port 8080'], v: { 4: { s: ['2 × nginx + React', '8080 · bez roota'] } }, kind: 'Deployment', where: 'ns <login>', who: 'ty',
+      i: { co: 'Dwie repliki z obrazu <code>&lt;REJESTR&gt;/todos-web:1.0.0</code>, port 8080, konfiguracja z ConfigMapy (<code>envFrom</code>), sonda gotowości na <code>/</code>, requests i limits. Od dnia 4 <code>securityContext</code>: bez roota (nginx-unprivileged, UID 101), <code>drop: [ALL]</code>, seccomp <code>RuntimeDefault</code>, czyli poziom Pod Security <code>restricted</code>.',
+        poco: 'Serwuje Reacta i przekazuje <code>/api/</code> do <code>http://api:3001</code>. Nowa wersja = nowy tag obrazu i rollout.',
+        whoTxt: 'Ty (dzień 2; sondy i securityContext dopracowujesz w dniach 4–5).', cmd: 'kubectl get deploy web\nkubectl rollout status deploy/web\nkubectl rollout history deploy/web', links: ['dep', 'sondy'] } },
+    { id: 'svcapi', x: 810, y: 650, w: 124, h: 58, k: 'ty', d: 2, t: 'Service api', s: ['ClusterIP :3001'], kind: 'Service (ClusterIP)', where: 'ns <login>', who: 'ty',
+      i: { co: 'Service ClusterIP na porcie 3001. Nazwa jest narzucona: nginx w obrazie web szuka backendu pod nazwą z <code>API_HOST</code> (domyślnie <code>api</code>).',
+        poco: 'Łączy web z api. W chartcie z dnia 5 Service nazywa się <code>todos-api</code>, więc chart ustawia <code>API_HOST</code> z nazwy release\'u.',
+        whoTxt: 'Ty (dzień 2).', cmd: 'kubectl get svc api\nkubectl get endpointslices -l kubernetes.io/service-name=api', links: ['ing'] } },
+    { id: 'depapi', x: 958, y: 650, w: 166, h: 58, k: 'ty', d: 2, t: 'Deployment api', s: ['2 × Node.js :3001'], v: { 3: { s: ['2–5 × Node.js :3001'] } }, kind: 'Deployment', where: 'ns <login>', who: 'ty',
+      i: { co: 'Obraz <code>&lt;REJESTR&gt;/todos-api:1.0.0</code>, port 3001. <code>MONGODB_URI</code> z Secretu, <code>PORT</code> z ConfigMapy. <code>readinessProbe</code> na <code>/api/health</code> (503 bez bazy: pod wypada z Service), <code>livenessProbe</code> na <code>/api</code> (awaria bazy nie restartuje api). Od dnia 3 liczbą replik steruje HPA.',
+        poco: 'Logika ToDos: lista, dodawanie i oznaczanie zadań. Bez sensownego <code>requests.cpu</code> HPA nie policzy procentu.',
+        whoTxt: 'Ty (dzień 2; sondy, zasoby i securityContext dopracowujesz w dniach 3–5).', cmd: 'kubectl get deploy api\nkubectl logs deploy/api          # „Połączono z MongoDB”', links: ['dep', 'sondy'] } },
+
+    /* rząd B */
+    { id: 'tls', x: 340, y: 744, w: 124, h: 58, k: 'ty', d: 2, t: 'Secret todos-tls', s: ['certyfikat'], kind: 'Secret (TLS) + Certificate', where: 'ns <login>', who: 'ctl', whoLbl: 'cert-manager (z Twojego Ingressu)',
+      i: { co: 'Secret typu <code>kubernetes.io/tls</code> z certyfikatem i kluczem. Tworzy go cert-manager na podstawie Twojego Ingressu, razem z obiektem Certificate o tej samej nazwie.',
+        poco: 'Traefik pokazuje ten certyfikat przeglądarce. W dniu 5 masz ten sam host i ten sam Secret, więc cert-manager nie zamawia nowego certyfikatu.',
+        whoTxt: 'cert-manager, z adnotacji i sekcji <code>tls</code> Twojego Ingressu.', cmd: 'kubectl get certificate todos-tls     # READY True\nkubectl get secret todos-tls', links: ['cert'] } },
+    { id: 'pvc', x: 488, y: 744, w: 124, h: 58, k: 'ty', d: 3, t: 'PVC', s: ['data-mongo-0 · 1Gi'], kind: 'PersistentVolumeClaim', where: 'ns <login>', who: 'ctl', whoLbl: 'StatefulSet (z Twojego szablonu)',
+      i: { co: 'Żądanie dysku: 1Gi, <code>ReadWriteOnce</code>, StorageClass gp3. Tworzy go StatefulSet z <code>volumeClaimTemplates</code> (nazwa: szablon-pod). Zostaje po usunięciu StatefulSetu i po <code>helm uninstall</code>.',
+        poco: 'Katalog <code>/data/db</code> bazy. Zadania przeżywają <code>kubectl delete pod mongo-0</code>. Usunięcie PVC kasuje dysk razem z danymi.',
+        whoTxt: 'StatefulSet, z Twojego szablonu (dzień 3).', cmd: 'kubectl get pvc\nkubectl get pv', links: ['jak'] } },
+    { id: 'sts', x: 636, y: 744, w: 150, h: 58, k: 'ty', d: 2, t: 'Deployment mongo', s: ['1 replika · bez dysku'], v: { 3: { t: 'StatefulSet mongo', s: ['pod mongo-0 + PVC'] } }, kind: 'Deployment (dzień 2) → StatefulSet (od dnia 3)', where: 'ns <login>', who: 'ty',
+      i: { co: 'Dzień 2: Deployment <code>mongo</code> z jedną repliką, <code>strategy: Recreate</code> (nigdy dwa pody bazy naraz) i celowo bez dysku: nowy pod = pusta baza. Od dnia 3: StatefulSet <code>mongo</code>, pod <code>mongo-0</code> ze stałą nazwą i własnym PVC. W projekcie <code>mongo:8.0</code>, bez roota (<code>runAsUser: 999</code>, <code>fsGroup: 999</code>), readiness <code>mongosh ping</code>, liveness <code>tcpSocket</code>.',
+        poco: 'Dane ToDos. Użytkownika root tworzą zmienne <code>MONGO_INITDB_ROOT_*</code> z Secretu, tylko przy pierwszym starcie na pustym dysku.',
+        whoTxt: 'Ty (dzień 2, przeróbka na StatefulSet w dniu 3).', cmd: 'kubectl get sts mongo\nkubectl delete pod mongo-0     # odśwież stronę: zadania zostały', links: ['dep', 'jak'] } },
+    { id: 'svcmongo', x: 810, y: 744, w: 124, h: 58, k: 'ty', d: 2, t: 'Service mongo', s: ['ClusterIP :27017'], v: { 3: { s: ['headless :27017'] } }, kind: 'Service (ClusterIP → headless)', where: 'ns <login>', who: 'ty',
+      i: { co: 'Dzień 2: zwykły ClusterIP na 27017. Od dnia 3 headless (<code>clusterIP: None</code>): DNS zwraca od razu adres poda, a <code>mongo-0</code> dostaje stałą nazwę <code>mongo-0.mongo</code>.',
+        poco: 'Nazwa <code>mongo</code> jest w adresie bazy w Secrecie (<code>mongodb://root:…@mongo:27017/todos?authSource=admin</code>).',
+        whoTxt: 'Ty (dzień 2, zmiana w dniu 3).', cmd: 'kubectl get svc mongo\nkubectl get endpointslices -l kubernetes.io/service-name=mongo', links: ['ing'] } },
+    { id: 'hpa', x: 972, y: 744, w: 152, h: 58, k: 'ty', d: 3, t: 'HPA api', s: ['2–5 replik · CPU 70%'], kind: 'HorizontalPodAutoscaler', where: 'ns <login>', who: 'ty',
+      i: { co: '<code>autoscaling/v2</code>: średnie CPU 70% od <code>requests.cpu</code>, od 2 do 5 replik Deploymentu <code>api</code>. Dane bierze z metrics-server.',
+        poco: 'Przy ruchu dokłada pody api. Dodatkowe repliki liczą się do ResourceQuota namespace\'u.',
+        whoTxt: 'Ty (dzień 3; w projekcie etap 7, w chartcie w <code>values-prod.yaml</code>).', cmd: 'kubectl get hpa api -w        # TARGETS w procentach, nie <unknown>', links: ['dep'] } },
+
+    /* rząd C */
+    { id: 'secret', x: 340, y: 830, w: 150, h: 54, k: 'ty', d: 2, t: 'Secret todos-mongo', s: ['hasło i adres bazy'], kind: 'Secret', where: 'ns <login>', who: 'ty',
+      i: { co: 'Użytkownik, hasło i pełny adres bazy. W dniu 2 <code>todos-mongo</code> (klucze <code>username</code>, <code>password</code>, <code>uri</code>), w projekcie <code>mongodb-secret</code>, w chartcie tworzy go Helm. Tworzysz go z linii poleceń, nie z pliku w repo. Wartości są tylko zakodowane w base64, nie zaszyfrowane.',
+        poco: 'api czyta z niego <code>MONGODB_URI</code>, mongo zakłada z niego użytkownika root.',
+        whoTxt: 'Ty (dzień 2).', cmd: "kubectl get secret todos-mongo -o jsonpath='{.data.username}' | base64 -d", links: ['dep', 'bez'] } },
+    { id: 'cm', x: 566, y: 830, w: 150, h: 54, k: 'ty', d: 2, t: 'ConfigMap', s: ['todos-config'], kind: 'ConfigMap', where: 'ns <login>', who: 'ty',
+      i: { co: '<code>API_HOST=api</code> i <code>API_PORT=3001</code> dla web, <code>PORT=3001</code> dla api. Kontenery biorą całą mapę przez <code>envFrom</code>.',
+        poco: 'Konfiguracja poza obrazem: zmiana wartości nie wymaga przebudowy, tylko restartu podów.',
+        whoTxt: 'Ty (dzień 2).', cmd: 'kubectl get cm todos-config -o yaml', links: ['dep'] } },
+    { id: 'np', x: 730, y: 830, w: 140, h: 54, k: 'ty', d: 4, t: 'NetworkPolicy', s: ['deny + łańcuch'], kind: 'NetworkPolicy (5 obiektów)', where: 'ns <login>', who: 'ty',
+      i: { co: '<code>default-deny-ingress</code> (nic nie wchodzi), <code>web-from-ingress</code> (z ns <code>traefik</code> na 8080), <code>api-from-web</code> (3001), <code>mongo-from-api</code> (27017) i <code>acme-solver-from-ingress</code> (z ns <code>traefik</code> do solvera cert-managera na 8089). Port w polityce to port poda, nie Service. Ruch wychodzący zostaje wolny.',
+        poco: 'Z innego poda w Twoim namespace nie połączysz się z bazą, a certyfikat dalej się odnawia.',
+        whoTxt: 'Ty (dzień 4; w projekcie etap 6).', cmd: "kubectl get networkpolicy\nkubectl run nptest --rm -it --restart=Never --image=busybox:1.37 -- \\\n  sh -c 'nc -z -w 3 mongo 27017 && echo OTWARTE || echo zablokowane'", links: ['bez'] } },
+    { id: 'sa', x: 884, y: 830, w: 120, h: 54, k: 'ty', d: 4, t: 'ServiceAccount', s: ['bez tokenu'], kind: 'ServiceAccount', where: 'ns <login>', who: 'ty',
+      i: { co: 'Tożsamość podów w API Kubernetesa. Bez własnego pody używają konta <code>default</code> i dostają token do API.',
+        poco: 'Ani web, ani api nie rozmawiają z API Kubernetesa, więc osobne konto z <code>automountServiceAccountToken: false</code> zabiera im niepotrzebny token.',
+        whoTxt: 'Ty (dzień 4, po lab13).', cmd: "kubectl get serviceaccount\nkubectl get pods -o custom-columns=POD:.metadata.name,SA:.spec.serviceAccountName", links: ['bez'] } },
+    { id: 'helm', x: 1018, y: 830, w: 106, h: 54, k: 'ty', d: 5, t: 'Helm', s: ['release todos'], kind: 'release Helm', where: 'ns <login>', who: 'ty',
+      i: { co: 'Chart <code>todos</code>: mongo, api, web, Ingress, NetworkPolicy, HPA i Secret. <code>values-dev.yaml</code> (1 replika, bez Ingressu) i <code>values-prod.yaml</code> (HPA 2–5, Ingress z TLS, większy PVC). Nazwy obiektów z nazwy release\'u: <code>todos-web</code>, <code>todos-api</code>, <code>todos-mongo</code>, a Secret <code>todos-tls</code> zostaje ten sam. Historię rewizji Helm trzyma w Secretach <code>sh.helm.release.v1.todos.vN</code>.',
+        poco: 'Jedna komenda wdraża cały ToDos i jedna go cofa (<code>helm rollback</code>).',
+        whoTxt: 'Ty (dzień 5, projekt etap 8).', cmd: 'helm upgrade --install todos ./todos -f values-prod.yaml --wait\nhelm list\nhelm history todos', links: ['helm'] } },
+
+    /* rząd D */
+    { id: 'quota', x: 340, y: 900, w: 176, h: 54, k: 'plat', d: 2, t: 'ResourceQuota', s: ['+ LimitRange'], kind: 'ResourceQuota + LimitRange', where: 'ns <login>', who: 'adm',
+      i: { co: 'Quota <code>kursant</code>: requests 1 CPU / 2Gi, limits 3 CPU / 4Gi, 25 podów, 10 Service, 1 LoadBalancer, 6 PVC, 30Gi dysków. LimitRange <code>kursant-domyslne</code>: kontener bez <code>resources</code> dostaje 50m/64Mi (requests) i 250m/256Mi (limits), najwyżej 2 CPU / 2Gi.',
+        poco: 'ToDos musi się zmieścić: mongo ok. 256Mi, api i web po kilkadziesiąt Mi, do tego repliki z HPA. Przy <code>exceeded quota</code> usuń obiekty ze starszych labów.',
+        whoTxt: 'Trener (<code>create-participants.sh</code>). Quota jest dla Ciebie tylko do odczytu.', cmd: 'kubectl describe resourcequota\nkubectl describe limitrange', links: ['pod'] } },
+    { id: 'rbac', x: 566, y: 900, w: 176, h: 54, k: 'plat', d: 2, t: 'RBAC', s: ['edit + kursant-lab'], kind: 'RoleBinding, Role, ClusterRoleBinding', where: 'ns <login> i cały klaster', who: 'adm',
+      i: { co: 'RoleBinding do ClusterRole <code>edit</code> w Twoim namespace, Role <code>kursant-lab</code> (Role, RoleBinding, LimitRange), a w całym klastrze podgląd (<code>view</code>, bez Secretów) i odczyt węzłów, PV i StorageClass.',
+        poco: 'Możesz tworzyć wszystko, czego potrzebuje ToDos, ale nie w <code>kube-system</code> i nie obiekty całego klastra. W lab13 (dzień 4) budujesz ten sam mechanizm dla ServiceAccountu.',
+        whoTxt: 'Trener (<code>create-participants.sh</code>).', cmd: 'kubectl auth can-i --list\nkubectl auth can-i create pods -n kube-system     # no', links: ['bez'] } },
+
+    /* AWS: dysk */
+    { id: 'ebs', x: 470, y: 1012, w: 160, h: 56, k: 'aws', d: 3, t: 'Wolumen EBS', s: ['gp3 · 1 GiB'], kind: 'wolumen EBS', where: 'konto AWS, strefa węzła', who: 'aws', whoLbl: 'sterownik EBS CSI (AWS)',
+      i: { co: 'Dysk sieciowy AWS w jednej strefie dostępności. Zakłada go sterownik EBS CSI na podstawie PVC i podłącza do węzła, na którym stoi <code>mongo-0</code>.',
+        poco: 'Tu fizycznie leżą zadania ToDos. Wolumen jest strefowy: pod <code>mongo-0</code> może wrócić tylko na węzeł z tej samej strefy.',
+        whoTxt: 'Sterownik EBS CSI w imieniu PVC (dzień 3).', cmd: 'kubectl get pv -o custom-columns=PV:.metadata.name,VOLUME:.spec.csi.volumeHandle,CLAIM:.spec.claimRef.name', links: ['jak'] } }
+  ];
+
+  /* ramki (obszary). id = klikalna ramka z opisem */
+  var GROUPS = [
+    { gid: 'g-net', x: 16, y: 16, w: 232, h: 210, cls: 'panel', label: 'INTERNET', d: 1 },
+    { gid: 'g-lap', x: 16, y: 240, w: 232, h: 592, cls: 'panel', label: 'TWÓJ LAPTOP', d: 1 },
+    { gid: 'g-docker', x: 24, y: 334, w: 216, h: 418, cls: 'panel2', label: 'DOCKER DESKTOP', d: 1 },
+    { gid: 'g-compose', id: 'compose', x: 34, y: 362, w: 196, h: 308, cls: 'ns', label: 'projekt compose · lab04', d: 1,
+      t: 'Projekt Compose ToDos', kind: 'projekt Docker Compose', where: 'laptop', who: 'ty',
+      i: { co: 'Plik <code>compose.yaml</code> z lab04: usługi web, api i mongo (plus mongo-express w profilu <code>debug</code>), healthchecki pilnujące kolejności startu, nazwany wolumen i sieć projektu.',
+        poco: 'Pierwsza wersja ToDos. Każdy element ma swój odpowiednik na klastrze: kontener → pod w Deploymencie, nazwa usługi → Service, wolumen → PVC, plik <code>.env</code> → Secret i ConfigMap.',
+        whoTxt: 'Ty (lab04, dzień 1).', cmd: 'docker compose up -d --build\ndocker compose ps', links: ['docker', 'app'] } },
+    { gid: 'g-aws', id: 'aws', x: 280, y: 16, w: 904, h: 1068, cls: 'panel', label: 'KONTO SZKOLENIOWE AWS · REGION eu-central-1', d: 1,
+      t: 'Konto szkoleniowe AWS', kind: 'konto AWS', where: 'eu-central-1 (Frankfurt)', who: 'tf',
+      i: { co: 'Jedno konto AWS na całe szkolenie, region <code>eu-central-1</code>. Trener ma dwa osobne stany Terraform: rejestr i konta kursantów (od dnia 1) oraz klaster (dni 2–5). Klaster można usunąć bez ruszania obrazów i kont.',
+        poco: 'Tu są Twoje obrazy, Twoje konto IAM i cały klaster.',
+        whoTxt: 'Trener (Terraform).', cmd: 'aws sts get-caller-identity --profile szkolenie', links: ['jak'] } },
+    { gid: 'g-vpc', id: 'vpc', x: 296, y: 136, w: 872, h: 862, cls: 'panel2', label: 'VPC 10.42.0.0/16 · 3 STREFY', d: 2,
+      t: 'VPC 10.42.0.0/16', kind: 'sieć VPC', where: 'konto AWS, 3 strefy', who: 'tf',
+      i: { co: 'Sieć klastra w 3 strefach dostępności. Podsieci prywatne /20 na węzły i pody (vpc-cni daje podom adresy z VPC, więc potrzeba dużo adresów), publiczne /24 na NLB i NAT. Tagi podsieci mówią Kubernetesowi, gdzie stawiać load balancery.',
+        poco: 'Pody web, api i mongo mają adresy IP z tej sieci, tak samo jak węzły.',
+        whoTxt: 'Trener (Terraform, przed dniem 2).', cmd: 'kubectl get pods -o wide        # IP 10.42.x.x\nkubectl get nodes -o wide', links: ['jak'] } },
+    { gid: 'g-pub', x: 312, y: 160, w: 840, h: 82, cls: 'panel', label: 'PODSIECI PUBLICZNE', labelRight: true, d: 2 },
+    { gid: 'g-priv', x: 312, y: 254, w: 840, h: 730, cls: 'panel', label: 'PODSIECI PRYWATNE · KLASTER EKS k8s-sages', labelX: 524, d: 2 },
+    { gid: 'g-traefik', x: 324, y: 326, w: 200, h: 168, cls: 'ns', label: 'ns traefik', d: 2 },
+    { gid: 'g-cm', x: 540, y: 326, w: 220, h: 168, cls: 'ns', label: 'ns cert-manager', d: 2 },
+    { gid: 'g-ks', x: 776, y: 326, w: 364, h: 168, cls: 'ns', label: 'ns kube-system · dodatki EKS', d: 2 },
+    { gid: 'g-keda', x: 648, y: 506, w: 150, h: 86, cls: 'ns', label: 'ns keda', d: 2 },
+    { gid: 'g-mon', x: 812, y: 506, w: 328, h: 86, cls: 'ns', label: 'ns monitoring · dzień 5', d: 5 },
+    { gid: 'g-login', id: 'nslogin', x: 324, y: 612, w: 816, h: 358, cls: 'ns', label: 'NAMESPACE <login> · TWÓJ', d: 2,
+      t: 'Namespace <login>', kind: 'Namespace', where: 'klaster', who: 'adm',
+      i: { co: 'Twoja przestrzeń w klastrze. Nazwa = Twój login, ustawiony jako domyślny w kontekście <code>szkolenie</code>. Etykiety Pod Security <code>warn</code> i <code>audit</code> na poziomie <code>baseline</code>: ostrzeżenia, bez blokowania.',
+        poco: 'Wszystkie obiekty ToDos żyją tutaj od dnia 2 do piątku. Etykieta <code>app.kubernetes.io/part-of: todos</code> chroni je przed wieczornym sprzątaniem po labach.',
+        whoTxt: 'Trener (<code>create-participants.sh</code>, przed dniem 2).', cmd: 'kubectl get ns <login> --show-labels\nkubectl get all,ingress -l app.kubernetes.io/part-of=todos', links: ['pod'] } }
+  ];
+
+  /* krawędzie: pts = [id, strona] albo [x, y]; d = dzień (domyślnie późniejszy z końców) */
+  var EDGES = [
+    { id: 'br-web', pts: [[200, 320], [200, 392]], label: [206, 374, 'localhost:3000'], d: 1, until: 1 },
+    { id: 'cweb-capi', pts: [['cweb', 'b'], ['capi', 't']] },
+    { id: 'capi-cmongo', pts: [['capi', 'b'], ['cmongo', 't']] },
+    { id: 'cmongo-cvol', pts: [['cmongo', 'b'], ['cvol', 't']], dash: true },
+    { id: 'build-ecr', pts: [['build', 'r'], [256, 716], [256, 84], ['ecr', 'l']], label: [250, 520, 'docker push', 'middle', -90], d: 1 },
+    { id: 'kubectl-cp', pts: [['kubectl', 'r'], [268, 790], [268, 126], [1017, 126], ['cp', 'b', 0, 0]], label: [700, 122, 'kubectl: token z aws login', 'middle'], d: 2 },
+    { id: 'iam-access', pts: [['iam', 'r'], ['access', 'l']] },
+    { id: 'access-cp', pts: [['access', 'r'], ['cp', 'l']] },
+    { id: 'dns-nlb', pts: [['dns', 'r'], [340, 187]], dash: true, label: [244, 182, 'CNAME → NLB'] },
+    { id: 'br-nlb', pts: [['browser', 'r'], [304, 294], [304, 216], [340, 216]], label: [244, 288, 'HTTPS :443'], d: 2 },
+    { id: 'nlb-svct', pts: [['nlb', 'b', 0, 0], ['svct', 't', 0, 0]], label: [430, 300, 'NodePort'] },
+    { id: 'svct-tr', pts: [['svct', 'b'], ['traefik', 't']] },
+    { id: 'tr-ing', pts: [[402, 480], [402, 650]], d: 2, label: [408, 600, 'reguły z Ingressu'] },
+    { id: 'ing-svcweb', pts: [['ing', 'r'], ['svcweb', 'l']] },
+    { id: 'svcweb-depweb', pts: [['svcweb', 'r'], ['depweb', 'l']] },
+    { id: 'depweb-svcapi', pts: [['depweb', 'r'], ['svcapi', 'l']], label: [790, 673, '/api'] },
+    { id: 'svcapi-depapi', pts: [['svcapi', 'r'], ['depapi', 'l']] },
+    { id: 'ing-tls', pts: [['ing', 'b'], ['tls', 't']], dash: true },
+    { id: 'depapi-svcmongo', pts: [[984, 708], [984, 726], [872, 726], ['svcmongo', 't']] , d: 2 },
+    { id: 'hpa-depapi', pts: [[1048, 744], [1048, 708]], dash: true, d: 3 },
+    { id: 'svcmongo-sts', pts: [['svcmongo', 'l'], ['sts', 'r']] },
+    { id: 'sts-pvc', pts: [['sts', 'l'], ['pvc', 'r']] },
+    { id: 'pvc-ebs', pts: [['pvc', 'b'], ['ebs', 't']] }
+  ];
+
+  /* ---------- plan dni ---------- */
+  var DAYS = {
+    1: { h: 'Po dniu 1: Docker na laptopie', p: 'ToDos działa w Docker Compose pod <code>localhost:3000</code>, a obrazy są w Twojej przestrzeni w ECR. Klastra jeszcze nie dotykasz.',
+      ty: [['compose', 'projekt Compose: kontenery web, api, mongo, sieć i wolumen mongodb_data (lab04)'], ['build', 'obrazy todos-api:1.0.0 i todos-web:1.0.0 dla linux/amd64'], ['ecr', 'docker push: repozytoria <login>/todos-api i <login>/todos-web powstają same'], ['awscli', 'aws login i docker login (hasło ważne 12 h)']],
+      pl: [['iam', 'trener: konto IAM i szablon repozytoriów ECR (Terraform)']] },
+    2: { h: 'Po dniu 2: ToDos na klastrze', p: 'ToDos ma adres z internetu i HTTPS. Mongo celowo bez dysku: usunięcie poda kasuje zadania.',
+      ty: [['kubectl', 'kontekst szkolenie: aws eks update-kubeconfig'], ['secret', 'Secret todos-mongo (z linii poleceń)'], ['cm', 'ConfigMap todos-config'], ['sts', 'Deployment mongo (Recreate, bez dysku) i Service mongo'], ['depapi', 'Deployment api i Service api (sonda na /api/health)'], ['depweb', 'Deployment web i Service web'], ['ing', 'Ingress todos z TLS; cert-manager tworzy Secret todos-tls']],
+      pl: [['vpc', 'trener: VPC, NAT, klaster EKS, 3 węzły, dodatki EKS'], ['traefik', 'trener: Traefik za jednym NLB, DNS *.k8s.marniok.dev'], ['certmgr', 'trener: cert-manager i ClusterIssuer letsencrypt-prod'], ['nslogin', 'trener: Twój namespace z ResourceQuota, LimitRange, RBAC i wpisem dostępu EKS']] },
+    3: { h: 'Po dniu 3: dane i zasoby', p: 'Zadania przeżywają restart bazy, a api samo dokłada repliki przy ruchu.',
+      ty: [['sts', 'Mongo przerabiasz na StatefulSet z volumeClaimTemplates'], ['svcmongo', 'Service mongo staje się headless'], ['pvc', 'PVC data-mongo-0 (1Gi, gp3) → wolumen EBS'], ['depapi', 'requests i limits dobrane tak, żeby HPA miał od czego liczyć procent'], ['hpa', 'HPA dla api: 2–5 replik, CPU 70%']],
+      pl: [['sc', 'z platformy: StorageClass gp3, sterownik EBS CSI, metrics-server (działają od dnia 2)']] },
+    4: { h: 'Po dniu 4: bezpieczeństwo', p: 'Pody nie działają jako root, nie mają tokenu do API, a ruch w namespace płynie tylko łańcuchem traefik → web → api → mongo.',
+      ty: [['build', 'skan obrazów ToDos (Trivy na laptopie, skan ECR przy push)'], ['depweb', 'securityContext na poziomie restricted we wszystkich podach'], ['sa', 'ServiceAccount bez automatycznego tokenu'], ['np', 'NetworkPolicy: default-deny, łańcuch 8080 → 3001 → 27017 i reguła dla solvera cert-managera (8089)']],
+      pl: [['vpccni', 'z platformy: vpc-cni z enableNetworkPolicy egzekwuje polityki']] },
+    5: { h: 'Po dniu 5: Helm i monitoring', p: 'Cały ToDos to jeden release Helm, a jego metryki i logi widzisz w Grafanie. Projekt lab20 to dopięcie i prezentacja.',
+      ty: [['helm', 'chart todos z values-dev.yaml i values-prod.yaml, release todos, helm rollback'], ['tls', 'ten sam host i Secret todos-tls, bez nowego certyfikatu'], ['grafana', 'w Grafanie: CPU, restarty i logi Twoich podów (lab19)']],
+      pl: [['prom', 'trener: Prometheus, Loki, Tempo, Alloy i Grafana w ns monitoring']] }
+  };
+
+  /* ---------- drogi ---------- */
+  var REQ = [
+    { n: ['browser'], e: [], h: 'Przeglądarka wysyła żądanie', p: 'React w przeglądarce woła <code>POST /api/todos</code> z JSON-em, tym samym adresem co strona.', c: "curl -s -X POST -H 'Content-Type: application/json' \\\n  -d '{\"title\":\"kupić mleko\"}' https://todos-<login>.k8s.marniok.dev/api/todos" },
+    { n: ['browser', 'dns'], e: ['dns-nlb'], h: 'DNS: nazwa → NLB', p: '<code>todos-&lt;login&gt;.k8s.marniok.dev</code> pasuje do wildcardu <code>*.k8s</code>: CNAME na nazwę NLB, a ta na jego adresy IP.', c: 'dig +short todos-<login>.k8s.marniok.dev' },
+    { n: ['browser', 'nlb', 'nodes'], e: ['br-nlb'], h: 'NLB przyjmuje połączenie', p: 'Przeglądarka łączy się z NLB na 443. NLB nie zagląda w HTTP: przekazuje TCP na NodePort Service <code>traefik</code> na jednym z węzłów.', c: 'kubectl -n traefik get svc traefik' },
+    { n: ['nlb', 'svct', 'traefik', 'kproxy'], e: ['nlb-svct', 'svct-tr'], h: 'Węzeł → pod Traefika', p: 'kube-proxy na węźle kieruje ruch z NodePortu do poda Traefika (może być na innym węźle).', c: 'kubectl -n traefik get pods -o wide' },
+    { n: ['traefik', 'ing', 'tls'], e: ['tr-ing', 'ing-tls'], h: 'Traefik: TLS i reguła z Ingressu', p: 'Traefik po nazwie hosta (SNI) wybiera certyfikat z Secretu <code>todos-tls</code>, kończy TLS i dopasowuje host oraz ścieżkę <code>/</code> z Ingressu <code>todos</code>.', c: 'kubectl get ingress todos\nkubectl get certificate todos-tls' },
+    { n: ['traefik', 'svcweb', 'depweb', 'np'], e: ['ing-svcweb', 'svcweb-depweb'], h: 'Do poda web', p: 'Traefik bierze adres poda web z EndpointSlice Service <code>web</code> i łączy się na port 8080. NetworkPolicy <code>web-from-ingress</code> wpuszcza ruch z ns <code>traefik</code>.', c: 'kubectl get endpointslices -l kubernetes.io/service-name=web' },
+    { n: ['depweb', 'coredns', 'svcapi', 'kproxy', 'depapi'], e: ['depweb-svcapi', 'svcapi-depapi'], h: 'nginx przekazuje /api do api', p: 'nginx w web dostaje <code>/api/todos</code> i przekazuje je do <code>http://api:3001</code>. CoreDNS zamienia <code>api</code> na ClusterIP, kube-proxy wybiera jeden z gotowych podów api. NetworkPolicy wpuszcza tylko od web.', c: 'kubectl logs deploy/api --tail=5' },
+    { n: ['depapi', 'secret', 'coredns', 'svcmongo', 'sts'], e: ['depapi-svcmongo', 'svcmongo-sts'], h: 'api zapisuje w MongoDB', p: 'api łączy się adresem z <code>MONGODB_URI</code> (Secret). Headless Service <code>mongo</code>: DNS zwraca od razu adres poda <code>mongo-0</code>, port 27017. NetworkPolicy wpuszcza tylko od api.', c: "kubectl exec mongo-0 -- mongosh --quiet -u root -p <hasło> \\\n  --authenticationDatabase admin todos --eval 'db.todos.countDocuments()'" },
+    { n: ['sts', 'pvc', 'ebs', 'nodes'], e: ['sts-pvc', 'pvc-ebs'], h: 'Zapis na dysk', p: 'MongoDB zapisuje do <code>/data/db</code>, czyli na PVC <code>data-mongo-0</code>, czyli na wolumen EBS gp3 podłączony do węzła, na którym stoi <code>mongo-0</code>.', c: 'kubectl get pvc data-mongo-0\nkubectl describe pod mongo-0 | grep -A2 Volumes' },
+    { n: ['browser', 'nlb', 'svct', 'traefik', 'ing', 'svcweb', 'depweb', 'svcapi', 'depapi', 'svcmongo', 'sts'], e: ['br-nlb', 'nlb-svct', 'svct-tr', 'tr-ing', 'ing-svcweb', 'svcweb-depweb', 'depweb-svcapi', 'svcapi-depapi', 'depapi-svcmongo', 'svcmongo-sts'], h: 'Odpowiedź wraca tą samą drogą', p: 'api odpowiada <code>201</code> z nowym zadaniem, nginx i Traefik oddają odpowiedź przeglądarce, a React odświeża listę (<code>GET /api/todos</code>, ta sama droga).', c: 'curl -s https://todos-<login>.k8s.marniok.dev/api/todos' }
+  ];
+  var IMG = [
+    { n: ['build', 'hub'], e: [], h: 'Build na laptopie', p: '<code>docker build</code> pobiera obrazy bazowe z Docker Huba i buduje <code>todos-api</code> oraz <code>todos-web</code> dla <code>linux/amd64</code> (węzły EKS są x86_64).', c: 'docker build --platform linux/amd64 -t <REJESTR>/todos-api:1.0.0 app/todos/backend' },
+    { n: ['awscli', 'iam'], e: [], h: 'Logowanie: aws login, docker login', p: '<code>aws login</code> daje tymczasowe poświadczenia użytkownika IAM <code>&lt;login&gt;</code>. Z nich <code>aws ecr get-login-password</code> robi hasło dla Dockera, ważne 12 h.', c: 'aws login --profile szkolenie\naws ecr get-login-password --profile szkolenie --region eu-central-1 \\\n  | docker login --username AWS --password-stdin <adres rejestru z karty>' },
+    { n: ['build', 'ecr'], e: ['build-ecr'], h: 'docker push do ECR', p: 'Obraz trafia do repozytorium <code>&lt;login&gt;/todos-api</code>. Przy pierwszym push repozytorium powstaje samo, a ECR skanuje obraz pod kątem podatności.', c: 'docker push <REJESTR>/todos-api:1.0.0\naws ecr describe-image-scan-findings --profile szkolenie --region eu-central-1 \\\n  --repository-name <login>/todos-api --image-id imageTag=1.0.0' },
+    { n: ['kubectl', 'iam', 'access', 'cp'], e: ['kubectl-cp', 'iam-access', 'access-cp'], h: 'kubectl apply z nazwą obrazu', p: 'Deployment ma <code>image: &lt;REJESTR&gt;/todos-api:1.0.0</code>. kube-apiserver sprawdza token IAM (wpis dostępu), potem RBAC, i zapisuje obiekt. Kontroler Deploymentu tworzy ReplicaSet i pody.', c: 'kubectl apply -f api.yaml\nkubectl get pods -w' },
+    { n: ['cp', 'nodes', 'nat', 'ecr'], e: [], h: 'kubelet pobiera obraz z ECR', p: 'Scheduler przydziela pod do węzła. kubelet na węźle pobiera obraz z ECR przez NAT gateway, z uprawnieniem roli węzła (tylko odczyt), bez <code>imagePullSecrets</code>.', c: 'kubectl describe pod <pod-api> | grep -A8 Events     # Pulling, Pulled' },
+    { n: ['nodes', 'nat', 'hub', 'sts'], e: [], h: 'mongo z Docker Huba', p: 'Obraz <code>mongo</code> nie jest w ECR: kubelet pobiera go z Docker Huba, też przez NAT. Cały klaster wychodzi jednym adresem, więc tu najłatwiej trafić na limit pobrań.', c: "kubectl get pod mongo-0 -o jsonpath='{.spec.containers[0].image}'" },
+    { n: ['nodes', 'depapi', 'depweb'], e: [], h: 'containerd uruchamia kontener', p: 'containerd startuje kontener, kubelet odpala sondy. Pod jest <code>Ready</code>, gdy readiness przejdzie, i dopiero wtedy Service kieruje do niego ruch.', c: 'kubectl get pods -o wide\nkubectl rollout status deploy/api' }
+  ];
+
+  /* ---------- pomocnicze ---------- */
+  var byId = {};
+  NODES.forEach(function (n) { byId[n.id] = n; });
+  var INFO = {};
+  NODES.forEach(function (n) { INFO[n.id] = n; });
+  GROUPS.forEach(function (g) { if (g.id) INFO[g.id] = g; });
+
+  function el(tag, attrs, parent, text) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in attrs) { if (attrs[k] !== null && attrs[k] !== undefined) e.setAttribute(k, attrs[k]); }
+    if (text !== undefined) e.textContent = text;
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function pt(p) {
+    if (typeof p[0] === 'number') return p;
+    var n = byId[p[0]], s = p[1], x, y;
+    if (s === 'r') { x = n.x + n.w; y = n.y + n.h / 2; }
+    else if (s === 'l') { x = n.x; y = n.y + n.h / 2; }
+    else if (s === 't') { x = n.x + n.w / 2; y = n.y; }
+    else { x = n.x + n.w / 2; y = n.y + n.h; }
+    return [x + (p[2] || 0), y + (p[3] || 0)];
+  }
+  function pathD(pts) {
+    return pts.map(function (p, i) { var q = pt(p); return (i ? 'L' : 'M') + q[0] + ' ' + q[1]; }).join(' ');
+  }
+  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function textFor(n, day) {
+    var t = n.t, s = n.s, changed = false;
+    if (n.v) {
+      Object.keys(n.v).map(Number).sort().forEach(function (d) {
+        if (day >= d) { if (n.v[d].t) t = n.v[d].t; if (n.v[d].s) s = n.v[d].s; if (day === d) changed = true; }
+      });
+    }
+    return { t: t, s: s, changed: changed };
+  }
+  function edgeDay(e) {
+    if (e.d) return e.d;
+    var d = 1;
+    e.pts.forEach(function (p) { if (typeof p[0] === 'string') d = Math.max(d, byId[p[0]].d); });
+    return d;
+  }
+
+  /* ---------- rysowanie mapy ---------- */
+  function render(svg, prefix, interactive) {
+    svg.setAttribute('viewBox', '0 0 1200 1100');
+    var defs = el('defs', {}, svg);
+    [['a', 'mk'], ['ac', 'mk-acc']].forEach(function (m) {
+      var mk = el('marker', { id: prefix + m[0], viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 9, markerHeight: 9, markerUnits: 'userSpaceOnUse', orient: 'auto-start-reverse' }, defs);
+      el('path', { 'class': m[1], d: 'M0 0L10 5L0 10z' }, mk);
+    });
+    var refs = { nodes: {}, groups: {}, edges: {}, svg: svg };
+    var gL = el('g', {}, svg), eL = el('g', {}, svg), nL = el('g', {}, svg);
+
+    GROUPS.forEach(function (g) {
+      var gg = el('g', { 'class': 'cgrp', 'data-gid': g.gid }, gL);
+      el('rect', { 'class': g.cls, x: g.x, y: g.y, width: g.w, height: g.h, rx: g.cls === 'ns' ? 10 : 12 }, gg);
+      var lx = g.labelRight ? g.x + g.w - 14 : (g.labelX || g.x + 12);
+      var anchor = g.labelRight ? 'end' : 'start';
+      var lt = el('text', { 'class': g.cls === 'ns' ? 'h' : 'h', x: lx, y: g.y + 20, 'text-anchor': anchor, style: g.cls === 'ns' ? 'letter-spacing:.02em' : null }, gg, g.label);
+      if (g.cls === 'ns') lt.setAttribute('style', 'letter-spacing:.02em;font-weight:700');
+      if (g.id && interactive) {
+        var hw = Math.min(g.w - 8, g.label.length * 8.2 + 20);
+        var hx = g.labelRight ? g.x + g.w - hw - 4 : lx - 8;
+        var hit = el('rect', { 'class': 'hit', x: hx, y: g.y + 4, width: hw, height: 24, rx: 6 }, gg);
+        el('rect', { 'class': 'ring', x: hx, y: g.y + 4, width: hw, height: 24, rx: 6 }, gg);
+        clickable(hit, g.t, function () { select(g.id, true); });
+        gg.setAttribute('data-id', g.id);
+      }
+      refs.groups[g.gid] = gg;
+    });
+
+    EDGES.forEach(function (e) {
+      var g = el('g', { 'class': 'edge', 'data-id': e.id }, eL);
+      el('path', { 'class': 'ln' + (e.dash ? ' dash' : ''), d: pathD(e.pts), 'marker-end': 'url(#' + prefix + 'a)' }, g);
+      if (e.label) el('text', { 'class': 'lbl', x: e.label[0], y: e.label[1], 'text-anchor': e.label[3] || 'start', transform: e.label[4] ? 'rotate(' + e.label[4] + ' ' + e.label[0] + ' ' + e.label[1] + ')' : null }, g, e.label[2]);
+      refs.edges[e.id] = g;
+    });
+
+    NODES.forEach(function (n) {
+      var g = el('g', { 'class': 'cnode', 'data-id': n.id }, nL);
+      el('rect', { 'class': 'ring', x: n.x - 4, y: n.y - 4, width: n.w + 8, height: n.h + 8, rx: 12 }, g);
+      var cls = n.k === 'aws' ? 'strong' : (n.k === 'ty' ? 'pod' : 'box');
+      el('rect', { 'class': 'nb ' + cls, x: n.x, y: n.y, width: n.w, height: n.h, rx: 9 }, g);
+      el('g', { 'class': 'txt' }, g);
+      var b = el('g', { 'class': 'badge' }, g);
+      el('circle', { cx: n.x + n.w - 2, cy: n.y + 2, r: 9 }, b);
+      el('text', { x: n.x + n.w - 2, y: n.y + 6.5, 'text-anchor': 'middle' }, b, '+');
+      if (interactive) clickable(g, n.t, function () { select(n.id, true); });
+      refs.nodes[n.id] = g;
+    });
+
+    /* legenda w wolnym miejscu pod laptopem */
+    var lg = el('g', {}, svg);
+    el('rect', { 'class': 'panel', x: 16, y: 848, width: 232, height: 236, rx: 12 }, lg);
+    el('text', { 'class': 'h', x: 28, y: 870 }, lg, 'LEGENDA');
+    var rows = [['strong', 'zasób AWS'], ['box', 'platforma: trener,'], [null, 'dodatki, usługi zewn.'], ['pod', 'tworzysz Ty'], ['ns', 'namespace w klastrze']];
+    var yy = 886;
+    rows.forEach(function (r) {
+      if (r[0] === 'ns') el('rect', { 'class': 'ns', x: 30, y: yy, width: 28, height: 18, rx: 4 }, lg);
+      else if (r[0]) el('rect', { 'class': r[0], x: 30, y: yy, width: 28, height: 18, rx: 4 }, lg);
+      el('text', { 'class': 'leg-t', x: 68, y: r[0] ? yy + 13.5 : yy - 1 }, lg, r[1]);
+      yy += r[0] ? 26 : 12;
+    });
+    var b2 = el('g', { 'class': 'badge' }, lg);
+    el('circle', { cx: 44, cy: yy + 9, r: 9 }, b2);
+    el('text', { x: 44, y: yy + 13.5, 'text-anchor': 'middle' }, b2, '+');
+    el('text', { 'class': 'leg-t', x: 68, y: yy + 13.5 }, lg, 'nowe tego dnia');
+    yy += 26;
+    el('path', { 'class': 'ln', d: 'M30 ' + (yy + 9) + ' L58 ' + (yy + 9), 'marker-end': 'url(#' + prefix + 'a)' }, lg);
+    el('text', { 'class': 'leg-t', x: 68, y: yy + 13.5 }, lg, 'kto do kogo się zwraca');
+    yy += 26;
+    el('path', { 'class': 'ln dash', d: 'M30 ' + (yy + 9) + ' L58 ' + (yy + 9), 'marker-end': 'url(#' + prefix + 'a)' }, lg);
+    el('text', { 'class': 'leg-t', x: 68, y: yy + 13.5 }, lg, 'tworzy, wskazuje, montuje');
+
+    return refs;
+  }
+
+  function drawTexts(refs, day) {
+    NODES.forEach(function (n) {
+      var g = refs.nodes[n.id], tg = g.querySelector('.txt');
+      while (tg.firstChild) tg.removeChild(tg.firstChild);
+      var tx = textFor(n, day);
+      var tCls = n.k === 'aws' ? 'ttl' : (n.k === 'ty' ? 'pod-t' : 'b');
+      var sCls = n.k === 'aws' ? 'on s' : (n.k === 'ty' ? 'pod-s' : 's');
+      var size = tx.t.length > 15 ? 13 : 14;
+      var block = 15 + tx.s.length * 15;
+      var y = n.y + n.h / 2 - block / 2 + 12;
+      var cx = n.x + n.w / 2;
+      el('text', { 'class': tCls, x: cx, y: y, 'text-anchor': 'middle', style: 'font-size:' + size + 'px' }, tg, tx.t);
+      tx.s.forEach(function (s, i) { el('text', { 'class': sCls, x: cx, y: y + 16 + i * 15, 'text-anchor': 'middle' }, tg, s); });
+      g.setAttribute('aria-label', tx.t + (tx.s.length ? ', ' + tx.s.join(', ') : ''));
+      n._changed = tx.changed;
+    });
+  }
+
+  function applyDay(refs, day) {
+    drawTexts(refs, day);
+    NODES.forEach(function (n) {
+      var g = refs.nodes[n.id];
+      g.classList.toggle('fut', n.d > day);
+      g.classList.toggle('new', n.d === day || n._changed);
+      if (n.d > day) g.setAttribute('aria-label', g.getAttribute('aria-label') + ' (od dnia ' + n.d + ')');
+    });
+    GROUPS.forEach(function (gr) { refs.groups[gr.gid].classList.toggle('fut', gr.d > day); });
+    EDGES.forEach(function (e) {
+      var d = edgeDay(e);
+      refs.edges[e.id].classList.toggle('fut', d > day || !!(e.until && day > e.until));
+    });
+  }
+
+  function clickable(g, label, onAct) {
+    g.setAttribute('tabindex', '0');
+    g.setAttribute('role', 'button');
+    g.setAttribute('aria-label', label);
+    g.addEventListener('click', onAct);
+    g.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); onAct(); }
+    });
+  }
+
+  /* ---------- mapa główna ---------- */
+  var map = render(document.getElementById('mapSvg'), 'm', true);
+  var detail = document.getElementById('detail');
+  var dayBox = document.getElementById('dayBox');
+  var currentDay = 5, selected = null;
+
+  function dayLabel(o) {
+    var d = o.d;
+    if (o.id === 'sts') return 'dzień 2, StatefulSet od dnia 3';
+    if (o.id === 'svcmongo') return 'dzień 2, headless od dnia 3';
+    if (['metrics', 'ebscsi', 'sc'].indexOf(o.id) >= 0) return 'dzień 2, używasz od dnia 3';
+    if (o.id === 'vpccni') return 'dzień 2, NetworkPolicy od dnia 4';
+    return 'dzień ' + d;
+  }
+  function whoLabel(o) { return o.whoLbl || WHO[o.who]; }
+
+  function select(id, scroll) {
+    var o = INFO[id];
+    if (!o) return;
+    selected = id;
+    Array.prototype.forEach.call(map.svg.querySelectorAll('.sel'), function (e) { e.classList.remove('sel'); });
+    if (map.nodes[id]) map.nodes[id].classList.add('sel');
+    GROUPS.forEach(function (g) { if (g.id === id) map.groups[g.gid].classList.add('sel'); });
+    var t = map.nodes[id] ? textFor(o, Math.max(currentDay, o.d)).t : o.t;
+    var links = (o.i.links || []).map(function (k) { return '<a href="' + DOC[k][0] + '">' + esc(DOC[k][1]) + '</a>'; }).join(' · ');
+    var later = o.d > currentDay ? '<p class="note">Na mapie jeszcze wyszarzone: pojawia się w dniu ' + o.d + '.</p>' : '';
+    detail.innerHTML =
+      '<h3>' + esc(t) + '<span class="tag">' + esc(dayLabel(o)) + '</span></h3>' +
+      '<dl><dt>Rodzaj</dt><dd>' + esc(o.kind) + '</dd><dt>Gdzie</dt><dd>' + esc(o.where) + '</dd><dt>Kto tworzy</dt><dd>' + o.i.whoTxt + '</dd></dl>' +
+      '<p><strong>Co to:</strong> ' + o.i.co + '</p>' +
+      '<p><strong>Po co w ToDos:</strong> ' + o.i.poco + '</p>' +
+      '<pre>' + esc(o.i.cmd) + '</pre>' + later +
+      (links ? '<p class="note">Ściąga: ' + links + '</p>' : '');
+    if (scroll) {
+      var r = detail.getBoundingClientRect();
+      if (r.top < 0 || r.top > window.innerHeight - 80) detail.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    }
+  }
+
+  function renderDay(day) {
+    var D = DAYS[day];
+    function li(item, cls) {
+      return '<li class="' + cls + '"><button type="button" class="lnk" data-sel="' + item[0] + '">' + esc(item[1]) + '</button></li>';
+    }
+    dayBox.innerHTML = '<h3>' + esc(D.h) + '</h3><p>' + D.p + '</p>' +
+      '<h4>Dziś dokładasz</h4><ul>' + D.ty.map(function (x) { return li(x, 'ty'); }).join('') + '</ul>' +
+      '<h4>Z platformy</h4><ul>' + D.pl.map(function (x) { return li(x, 'plat'); }).join('') + '</ul>';
+  }
+  dayBox.addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-sel]');
+    if (b) select(b.getAttribute('data-sel'), true);
+  });
+
+  var seg = document.getElementById('daySeg');
+  seg.hidden = false;
+  var dayBtns = Array.prototype.slice.call(seg.querySelectorAll('button'));
+  function setDay(day) {
+    currentDay = day;
+    dayBtns.forEach(function (b) { b.setAttribute('aria-pressed', String(Number(b.getAttribute('data-day')) === day)); });
+    applyDay(map, day);
+    renderDay(day);
+    if (selected) select(selected, false);
+  }
+  dayBtns.forEach(function (b, i) {
+    b.addEventListener('click', function () { setDay(Number(b.getAttribute('data-day'))); });
+    b.addEventListener('keydown', function (ev) {
+      var j = ev.key === 'ArrowRight' ? i + 1 : ev.key === 'ArrowLeft' ? i - 1 : -1;
+      if (j >= 0 && j < dayBtns.length) { ev.preventDefault(); dayBtns[j].focus(); dayBtns[j].click(); }
+    });
+  });
+  var m = /[?&#]dzien=([1-5])/.exec(location.search + location.hash);
+  setDay(m ? Number(m[1]) : 5);
+
+  /* ---------- drogi (sekcje 2 i 3) ---------- */
+  function pathSection(svgId, listId, navId, steps, prefix) {
+    var svg = document.getElementById(svgId);
+    var refs = render(svg, prefix, false);
+    svg.classList.add('pathmode');
+    applyDay(refs, 5);
+    NODES.forEach(function (n) { refs.nodes[n.id].classList.remove('new'); });
+    var numL = el('g', {}, svg);
+    var list = document.getElementById(listId);
+    list.innerHTML = steps.map(function (s, i) {
+      return '<li tabindex="0" data-step="' + (i + 1) + '"><strong>' + esc(s.h) + '.</strong> ' + s.p + '<pre>' + esc(s.c) + '</pre></li>';
+    }).join('');
+    var items = Array.prototype.slice.call(list.querySelectorAll('li'));
+    var cur = 0;
+    function show(k) {
+      cur = k;
+      svg.classList.toggle('has-active', k > 0);
+      Array.prototype.forEach.call(svg.querySelectorAll('.on'), function (e) { e.classList.remove('on'); });
+      while (numL.firstChild) numL.removeChild(numL.firstChild);
+      items.forEach(function (li, i) { li.classList.toggle('on', i + 1 === k); });
+      if (!k) return;
+      var s = steps[k - 1];
+      s.n.forEach(function (id) { refs.nodes[id].classList.add('on'); });
+      s.e.forEach(function (id) { refs.edges[id].classList.add('on'); });
+      var first = byId[s.n[s.n.length > 1 && k > 1 && k < steps.length ? 1 : 0]];
+      if (k === steps.length) first = byId[s.n[0]];
+      var g = el('g', { 'class': 'num' }, numL);
+      el('circle', { cx: first.x + 2, cy: first.y + 2, r: 12 }, g);
+      el('text', { x: first.x + 2, y: first.y + 6.5, 'text-anchor': 'middle' }, g, String(k));
+    }
+    items.forEach(function (li) {
+      li.addEventListener('click', function () { var n = Number(li.getAttribute('data-step')); show(cur === n ? 0 : n); });
+      li.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); li.click(); } });
+    });
+    var nav = document.getElementById(navId);
+    nav.hidden = false;
+    nav.addEventListener('click', function (ev) {
+      var b = ev.target.closest('button');
+      if (!b) return;
+      var a = b.getAttribute('data-act');
+      if (a === 'next') show(cur >= steps.length ? 1 : cur + 1);
+      else if (a === 'prev') show(cur <= 1 ? steps.length : cur - 1);
+      else show(0);
+    });
+    show(1);
+  }
+  pathSection('reqSvg', 'reqSteps', 'reqNav', REQ, 'r');
+  pathSection('imgSvg', 'imgSteps', 'imgNav', IMG, 'i');
+
+  /* ---------- tabela ---------- */
+  var EXTRA = [
+    { t: 'eks-pod-identity-agent', kind: 'dodatek EKS (DaemonSet)', where: 'ns kube-system', d: 2, who: 'tf', whoLbl: 'dodatek EKS (Terraform)' },
+    { t: 'Operator CloudNativePG', kind: 'operator (PostgreSQL)', where: 'ns cnpg-system', d: 5, who: 'adm', whoLbl: 'trener (lab18, nie ToDos)' }
+  ];
+  var rows = NODES.concat(GROUPS.filter(function (g) { return g.id; })).concat(EXTRA);
+  rows.sort(function (a, b) { return a.d - b.d; });
+  var tb = document.querySelector('#objTable tbody');
+  tb.innerHTML = rows.map(function (o) {
+    var label = byId[o.id] ? textFor(o, 5).t : o.t;
+    var name = o.id ? '<button type="button" class="lnk" data-sel="' + o.id + '">' + esc(label) + '</button>' : esc(label);
+    return '<tr><td data-h="Obiekt">' + name + '</td><td data-h="Rodzaj">' + esc(o.kind) + '</td><td data-h="Gdzie">' + esc(o.where) + '</td><td data-h="Dzień" class="d">' + o.d + '</td><td data-h="Kto tworzy">' + esc(whoLabel(o)) + '</td></tr>';
+  }).join('');
+  tb.addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-sel]');
+    if (!b) return;
+    select(b.getAttribute('data-sel'), false);
+    detail.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    detail.focus({ preventScroll: true });
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+# TLS na Ingressie z cert-managerem: adnotacja z nazwą ClusterIssuera + sekcja tls.
+# cert-manager sam tworzy Certificate, zamawia certyfikat w Let's Encrypt (HTTP-01) i zapisuje go w Secrecie secretName.
+#   kubectl get certificate,order,challenge     → READY True po ok. minucie
+# Wymaga prawdziwej domeny wskazującej na kontroler (na kind nie zadziała). Podmień <login> i <DOMENA>.
+# Bez cert-managera: usuń adnotację i utwórz Secret sam (self-signed, przeglądarka ostrzeże):
+#   openssl req -x509 -nodes -days 7 -newkey rsa:2048 -keyout tls.key -out tls.crt -subj "/CN=<login>.<DOMENA>"
+#   kubectl create secret tls przyklad-tls --cert=tls.crt --key=tls.key
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: przyklad-tls
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod     # nazwa od trenera: kubectl get clusterissuer
+spec:
+  ingressClassName: traefik     # kubectl get ingressclass
+  tls:
+  - hosts:
+    - <login>.<DOMENA>          # ten sam host co w rules
+    secretName: przyklad-tls
+  rules:
+  - host: <login>.<DOMENA>
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: przyklad-deploy
+            port:
+              number: 80

@@ -1,0 +1,20 @@
+# Lab05: mały pod, żeby w namespace pojawiły się zdarzenia. Kończy się po 10 minutach.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: lab05-ping
+  labels:
+    app: lab05-ping
+spec:
+  restartPolicy: Never
+  containers:
+  - name: busybox
+    image: busybox:1.37
+    command: ["sh", "-c", "echo start; sleep 600"]
+    resources:
+      requests:
+        cpu: 10m
+        memory: 16Mi
+      limits:
+        cpu: 50m
+        memory: 32Mi

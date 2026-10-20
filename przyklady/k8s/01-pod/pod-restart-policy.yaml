@@ -1,0 +1,18 @@
+# restartPolicy: Always (domyślnie, jedyna dozwolona w Deploymencie), OnFailure, Never.
+# Ten pod kończy się kodem 1 → przy OnFailure kubelet go restartuje → po kilku razach CrashLoopBackOff.
+# Przy Never: status Error i koniec.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: przyklad-restart-policy
+  labels:
+    app: przyklad-restart-policy
+spec:
+  restartPolicy: OnFailure
+  containers:
+  - name: busybox
+    image: busybox:1.37
+    command: ["sh", "-c", "echo 'Koncze sie bledem' && exit 1"]
+    resources:
+      requests: {cpu: 10m, memory: 16Mi}
+      limits: {cpu: 50m, memory: 32Mi}

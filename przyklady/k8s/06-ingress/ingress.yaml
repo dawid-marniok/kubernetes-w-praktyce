@@ -1,0 +1,21 @@
+# Ingress: host → Service. Podmień <login> i <DOMENA> (bez tego apply zwróci błąd walidacji):
+#   klasa traefik — kontroler na klastrze szkoleniowym i na kind (kubectl get ingressclass)
+#   <login>         → Twój login (host unikalny na wspólnym kontrolerze)
+#   <DOMENA>        → domena szkolenia od trenera (na kind cały host: <login>.local)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: przyklad-ingress
+spec:
+  ingressClassName: traefik     # kubectl get ingressclass
+  rules:
+  - host: <login>.<DOMENA>
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: przyklad-deploy        # ../05-service/clusterip.yaml
+            port:
+              number: 80

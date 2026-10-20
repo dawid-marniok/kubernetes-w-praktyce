@@ -1,0 +1,16 @@
+# Awaria 3: proces przekracza limit pamięci → OOMKilled, Exit Code 137 (128 + 9 = SIGKILL od kernela).
+# Diagnoza: kubectl describe pod przyklad-oom | grep -A3 "Last State". W logach nic nie ma — proces nie zdążył nic napisać.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: przyklad-oom
+  labels:
+    app: przyklad-oom
+spec:
+  containers:
+  - name: oom
+    image: busybox:1.37
+    command: ["sh", "-c", "tail /dev/zero"]    # czyta bez końca do pamięci
+    resources:
+      requests: {cpu: 50m, memory: 32Mi}
+      limits: {cpu: 100m, memory: 32Mi}

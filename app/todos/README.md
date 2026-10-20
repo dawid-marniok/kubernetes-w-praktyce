@@ -1,6 +1,6 @@
 # ToDos — aplikacja do labów
 
-Prosta lista zadań w trzech warstwach, plus panel do podglądu bazy. Uruchamiamy ją w dniu 1 w Docker Compose, a w dniu 5 wdrażamy na Kubernetesa (Helm).
+Prosta lista zadań w trzech warstwach, plus panel do podglądu bazy. Uruchamiamy ją w dniu 1 w Docker Compose, od dnia 2 żyje na Kubernetesie (blok ToDos na koniec każdego dnia), a w dniu 5 dostaje chart Helma.
 
 ```
 przeglądarka ──► web (nginx + React) ──/api──► api (Node.js + Express) ──► mongo (MongoDB)

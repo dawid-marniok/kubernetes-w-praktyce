@@ -1,0 +1,900 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ruch z zewnątrz</title>
+<meta name="description" content="Dzień 2 — ściąga: droga żądania z internetu do poda na klastrze EKS k8s-sages i on-prem, wystawianie certyfikatu przez cert-managera, typy Service, Ingress a Gateway API.">
+<style>
+:root {
+  --navy: #012438;
+  --acc: #41C0F0;
+  --light: #EBF8FD;
+  --light2: #E1EDF8;
+
+  --bg: #ffffff;
+  --ink: #0f2535;
+  --muted: #557080;
+  --panel: var(--light);
+  --card: #ffffff;
+  --card-line: #b9d3e2;
+  --strong: var(--navy);
+  --on-strong: #ffffff;
+  --strong-title: var(--acc);
+  --head: #0a7aa8;
+  --line: #34505f;
+  --code-bg: var(--light2);
+  --row-alt: #f4fafd;
+  --border: #d5e4ed;
+  --pod-ink: var(--navy);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #08151e;
+    --ink: #e3eef4;
+    --muted: #9cb4c3;
+    --panel: #0f2532;
+    --card: #142f3f;
+    --card-line: #2c5065;
+    --strong: #0d4b70;
+    --on-strong: #ffffff;
+    --strong-title: #7fd6f7;
+    --head: #41C0F0;
+    --line: #a8c3d2;
+    --code-bg: #12293a;
+    --row-alt: #0d1f2b;
+    --border: #23404f;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px 64px; }
+header.hero {
+  background: var(--navy);
+  color: #fff;
+  padding: 40px 0 32px;
+  border-bottom: 6px solid var(--acc);
+}
+header.hero .wrap { padding-bottom: 0; }
+.kicker { color: var(--acc); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; font-size: 13px; margin: 0 0 6px; }
+h1 { font-size: clamp(28px, 6vw, 44px); line-height: 1.15; margin: 0 0 12px; }
+.hero p.lead { max-width: 720px; margin: 0; color: #d6e9f3; font-size: 17px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0 0; padding: 0; list-style: none; }
+.chips li { background: rgba(65,192,240,.14); border: 1px solid rgba(65,192,240,.45); color: #e6f6fd; border-radius: 999px; padding: 3px 12px; font-size: 14px; }
+nav.toc { margin: 28px 0 8px; }
+nav.toc ol { display: flex; flex-wrap: wrap; gap: 6px 8px; padding: 0; margin: 0; list-style: none; counter-reset: toc; }
+nav.toc li { counter-increment: toc; }
+nav.toc a { display: inline-block; text-decoration: none; color: var(--ink); background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 4px 10px; font-size: 14px; }
+nav.toc a::before { content: counter(toc) ". "; color: var(--head); font-weight: 700; }
+nav.toc a:hover, nav.toc a:focus-visible { border-color: var(--acc); }
+section { margin-top: 48px; scroll-margin-top: 16px; }
+h2 { font-size: clamp(22px, 4.5vw, 28px); line-height: 1.25; margin: 0 0 10px; display: flex; gap: 12px; align-items: baseline; }
+h2 .n { color: var(--acc); font-weight: 800; font-size: 1.25em; line-height: 1; }
+h3 { font-size: 18px; margin: 24px 0 8px; }
+p { margin: 0 0 12px; }
+a { color: var(--head); }
+code, kbd, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: .9em; }
+:not(pre) > code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+pre { background: var(--code-bg); padding: 12px 14px; border-radius: 8px; overflow-x: auto; margin: 0 0 12px; }
+pre.wrap-pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.key { border-left: 5px solid var(--acc); background: var(--panel); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; }
+.key strong { color: var(--ink); }
+
+figure { margin: 20px 0; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
+figure svg { display: block; width: 100%; height: auto; }
+figcaption { font-size: 14px; color: var(--muted); margin-top: 8px; }
+@media (max-width: 640px) {
+  figure { padding: 8px; margin-left: -4px; margin-right: -4px; }
+}
+
+/* --- SVG --- */
+svg text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; fill: var(--ink); font-size: 14px; }
+svg .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+svg .b { font-weight: 700; }
+svg .s { font-size: 12px; fill: var(--muted); }
+svg .h { font-size: 13px; font-weight: 800; letter-spacing: .06em; fill: var(--head); }
+svg .ttl { font-size: 15px; font-weight: 800; fill: var(--strong-title); }
+svg .on { fill: var(--on-strong); }
+svg .on.s { fill: var(--on-strong); opacity: .88; }
+svg .pod-t { fill: var(--pod-ink); font-weight: 700; }
+svg .pod-s { fill: var(--pod-ink); font-size: 12px; }
+svg .box { fill: var(--card); stroke: var(--card-line); stroke-width: 1.2; }
+svg .strong { fill: var(--strong); }
+svg .pod { fill: var(--acc); }
+svg .ns { fill: none; stroke: var(--head); stroke-width: 1.6; stroke-dasharray: 8 6; }
+svg .ln { fill: none; stroke: var(--line); stroke-width: 1.8; }
+svg .ln.dash { stroke-dasharray: 6 5; }
+svg .ln.acc { stroke: var(--acc); stroke-width: 2.6; }
+svg .mk { fill: var(--line); }
+svg .mk-acc { fill: var(--acc); }
+svg .lbl { font-size: 12px; fill: var(--muted); font-style: italic; }
+svg .ring { fill: none; stroke: var(--acc); stroke-width: 3; display: none; }
+svg .diff { fill: var(--acc); stroke: var(--bg); stroke-width: 2; }
+svg .diff-t { fill: var(--navy); font-size: 11px; font-weight: 800; }
+
+/* klikalne ogniwa */
+.cnode { cursor: pointer; outline: none; }
+.cnode:hover .nb { stroke: var(--acc); stroke-width: 2; }
+.cnode:focus-visible .ring, .cnode.sel .ring { display: block; }
+.cnode .nb, .cnode text { transition: opacity .25s; }
+
+/* stepper certyfikatu */
+.certflow .cnode, .certflow .edge { transition: opacity .3s; }
+.certflow.has-active .cnode { opacity: .22; }
+.certflow.has-active .edge { opacity: .14; }
+.certflow.has-active .cnode.on, .certflow.has-active .edge.on { opacity: 1; }
+.certflow .edge.on .ln { stroke: var(--acc); stroke-width: 3; stroke-dasharray: 9 6; animation: run 0.9s linear infinite; }
+.certflow .cnode.gone .nb { stroke-dasharray: 5 4; }
+.certflow .cnode { cursor: default; }
+@keyframes run { to { stroke-dashoffset: -15; } }
+@media (prefers-reduced-motion: reduce) {
+  .certflow .edge.on .ln { animation: none; }
+  .certflow .cnode, .certflow .edge, .cnode .nb, .cnode text { transition: none; }
+}
+
+/* przełącznik EKS / on-prem */
+.seg { display: inline-flex; flex-wrap: wrap; gap: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin: 4px 0 12px; }
+.seg button { font: inherit; font-size: 15px; padding: 7px 14px; border: 0; background: var(--panel); color: var(--ink); cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button[aria-pressed="true"] { background: var(--navy); color: #fff; box-shadow: inset 0 -3px 0 var(--acc); }
+.seg button:focus-visible { outline: 3px solid var(--acc); outline-offset: -3px; }
+.legend { font-size: 14px; color: var(--muted); margin: 0 0 8px; }
+.legend .dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: var(--acc); vertical-align: -1px; margin-right: 4px; }
+
+.detail { border: 1px solid var(--border); border-left: 5px solid var(--acc); border-radius: 0 10px 10px 0; background: var(--bg); padding: 12px 16px; margin: 12px 0 0; min-height: 120px; }
+.detail h3 { margin: 0 0 6px; }
+.detail .tag { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--navy); background: var(--acc); border-radius: 999px; padding: 1px 9px; margin-left: 6px; vertical-align: 2px; }
+.detail pre { margin: 8px 0 0; }
+.detail .note { font-size: 14px; color: var(--muted); margin: 8px 0 0; }
+
+ol.steps { list-style: none; padding: 0; margin: 12px 0 0; counter-reset: st; display: grid; gap: 8px; }
+ol.steps li { counter-increment: st; position: relative; padding: 10px 14px 10px 52px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); }
+ol.steps li::before { content: counter(st); position: absolute; left: 12px; top: 10px; width: 28px; height: 28px; border-radius: 50%; background: var(--strong); color: #fff; font-weight: 800; display: grid; place-items: center; font-size: 15px; border: 2px solid var(--acc); }
+.js ol.steps li { cursor: pointer; }
+ol.steps li.on { border-color: var(--acc); box-shadow: 0 0 0 2px var(--acc) inset; }
+ol.steps li.on::before { background: var(--acc); color: var(--navy); }
+ol.steps li:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; }
+ol.steps li pre { margin: 8px 0 2px; font-size: 13px; }
+.js ol.steps li pre { display: none; }
+.js ol.steps li.on pre { display: block; }
+.stepnav { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 0; }
+.stepnav button { font: inherit; font-size: 14px; padding: 6px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--ink); cursor: pointer; }
+.stepnav button:hover, .stepnav button:focus-visible { border-color: var(--acc); }
+.stepnav button[aria-pressed="true"] { background: var(--navy); color: #fff; border-color: var(--acc); }
+.stepnav[hidden] { display: none; }
+
+/* karty Service */
+.cards { display: grid; gap: 14px; grid-template-columns: 1fr; margin: 16px 0; }
+@media (min-width: 860px) { .cards { grid-template-columns: repeat(3, 1fr); } }
+.card { border: 1px solid var(--border); border-radius: 12px; background: var(--bg); overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+.card .top { background: var(--strong); color: var(--on-strong); padding: 12px 14px; }
+.card .top .name { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 800; font-size: 18px; color: var(--strong-title); }
+.card .top .what { font-size: 14px; opacity: .9; margin: 2px 0 0; }
+.card .body { padding: 12px 14px; display: grid; gap: 10px; }
+.card h4 { margin: 0 0 4px; font-size: 13px; letter-spacing: .05em; text-transform: uppercase; color: var(--head); }
+.card ul.reach { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 15px; }
+.card ul.reach li { display: flex; justify-content: space-between; gap: 8px; border-bottom: 1px dashed var(--border); padding-bottom: 3px; }
+.badge { font-size: 12px; font-weight: 800; letter-spacing: .04em; border-radius: 999px; padding: 1px 10px; white-space: nowrap; align-self: center; }
+.badge.yes { background: var(--acc); color: var(--navy); }
+.badge.no { border: 1px dashed var(--muted); color: var(--muted); }
+.card p { margin: 0; font-size: 15px; }
+.card pre { margin: 0; font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.timeline { list-style: none; padding: 0; margin: 0; border-left: 3px solid var(--acc); font-size: 14px; }
+.timeline li { padding: 2px 0 8px 14px; position: relative; }
+.timeline li::before { content: ""; position: absolute; left: -8px; top: 8px; width: 13px; height: 13px; border-radius: 50%; background: var(--bg); border: 3px solid var(--acc); }
+.timeline .t { font-weight: 700; }
+.mini { display: grid; gap: 10px; grid-template-columns: 1fr; }
+@media (min-width: 760px) { .mini { grid-template-columns: 1fr 1fr; } }
+.mini div { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--bg); font-size: 15px; min-width: 0; }
+
+/* role: Ingress a Gateway API */
+.chains { display: grid; gap: 14px; grid-template-columns: 1fr; margin: 16px 0; }
+@media (min-width: 860px) { .chains { grid-template-columns: 1fr 1.25fr; } }
+.chain { border: 1px solid var(--border); border-radius: 12px; background: var(--panel); padding: 12px; min-width: 0; }
+.chain > h3 { margin: 0 0 10px; }
+.tier { display: grid; grid-template-columns: 120px 1fr; gap: 10px; align-items: stretch; }
+.tier + .tier { margin-top: 0; }
+.tier .who { font-size: 13px; font-weight: 700; color: var(--head); text-transform: uppercase; letter-spacing: .04em; padding-top: 10px; }
+.tier .obj { background: var(--card); border: 1px solid var(--card-line); border-radius: 8px; padding: 8px 12px; font-size: 15px; min-width: 0; }
+.tier .obj.you { border: 2px solid var(--acc); }
+.tier .obj b { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.tier .obj span { display: block; font-size: 14px; color: var(--muted); }
+.arrow { grid-column: 2; text-align: center; color: var(--muted); font-size: 13px; line-height: 1.2; padding: 3px 0; }
+@media (max-width: 520px) {
+  .tier { grid-template-columns: 1fr; gap: 2px; }
+  .tier .who { padding-top: 4px; }
+  .arrow { grid-column: 1; }
+}
+
+.tablewrap { overflow-x: auto; margin: 16px 0; border: 1px solid var(--border); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+thead th { background: var(--navy); color: #fff; font-size: 14px; }
+tbody tr:nth-child(even) { background: var(--row-alt); }
+tbody tr:last-child td { border-bottom: 0; }
+td:first-child { font-weight: 700; }
+@media (max-width: 640px) {
+  table.stack thead { display: none; }
+  table.stack, table.stack tbody, table.stack tr, table.stack td { display: block; width: 100%; }
+  table.stack tr { border-bottom: 1px solid var(--border); padding: 6px 0; }
+  table.stack td { border: 0; padding: 4px 12px; }
+  table.stack td[data-h]::before { content: attr(data-h); display: block; font-size: 12px; font-weight: 700; color: var(--head); text-transform: uppercase; letter-spacing: .05em; }
+}
+.cheat { display: grid; gap: 10px; grid-template-columns: 1fr; }
+@media (min-width: 760px) { .cheat { grid-template-columns: 1fr 1fr; } }
+.cheat div { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--bg); min-width: 0; }
+.cheat pre { margin: 0 0 6px; font-size: 14px; }
+.cheat p { margin: 0; font-size: 14px; color: var(--muted); }
+.noscript { border: 1px dashed var(--muted); border-radius: 10px; padding: 10px 14px; }
+footer { margin-top: 56px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--border); padding-top: 16px; }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="kicker">Dzień 2 · ściąga</p>
+    <h1>Ruch z zewnątrz do poda</h1>
+    <p class="lead">Co się dzieje między wpisaniem adresu w przeglądarce a odpowiedzią Twojego poda. Kto daje adres, kto wybiera Service, skąd się bierze certyfikat i co się zmienia, gdy klaster stoi we własnej serwerowni.</p>
+    <ul class="chips" aria-label="Nasz klaster">
+      <li>AWS EKS 1.35 · k8s-sages</li>
+      <li>3 węzły bez publicznych IP</li>
+      <li>Traefik za jednym NLB</li>
+      <li>cert-manager · letsencrypt-prod</li>
+      <li>*.k8s.marniok.dev</li>
+      <li>Twój namespace = Twój login</li>
+    </ul>
+  </div>
+</header>
+
+<main class="wrap">
+<nav class="toc" aria-label="Spis treści">
+  <ol>
+    <li><a href="#droga">Droga żądania</a></li>
+    <li><a href="#certyfikat">Certyfikat krok po kroku</a></li>
+    <li><a href="#service">Typy Service w AWS</a></li>
+    <li><a href="#gateway">Ingress a Gateway API</a></li>
+    <li><a href="#sciaga">Komendy</a></li>
+  </ol>
+</nav>
+
+<!-- 1 ============================================================ -->
+<section id="droga">
+  <h2><span class="n">1</span> Droga żądania: od przeglądarki do poda</h2>
+  <p>Wszystkie hosty pod domeną szkolenia prowadzą do jednego load balancera i jednego Traefika. Dopiero Traefik, po nazwie hosta i ścieżce, wybiera Twój Service. <span class="js-only" hidden>Kliknij ogniwo, żeby zobaczyć, co robi i jak je sprawdzisz. Przełącznik pokazuje, co wymienia się na własnych serwerach.</span></p>
+
+  <div class="seg" role="group" aria-label="Środowisko" id="modeSeg" hidden>
+    <button type="button" data-mode="eks" aria-pressed="true">EKS (nasz klaster)</button>
+    <button type="button" data-mode="op" aria-pressed="false">on-prem (MetalLB)</button>
+  </div>
+  <p class="legend" id="modeLegend" hidden><span class="dot" aria-hidden="true"></span> ogniwo, które on-prem wygląda inaczej niż na EKS</p>
+
+  <figure>
+    <svg id="pathSvg" role="group" aria-label="Droga żądania"></svg>
+    <noscript>
+      <div class="noscript">Przeglądarka → DNS (<code>*.k8s.marniok.dev</code> CNAME → NLB) → AWS NLB (Service <code>traefik</code> typu LoadBalancer) → Traefik (certyfikat po SNI z Secretu, reguły Host + ścieżka z Ingressu) → Service → EndpointSlice → pody. On-prem: DNS w firmie → VIP z MetalLB albo HAProxy → ten sam Traefik; certyfikat z firmowego CA albo przez DNS-01.</div>
+    </noscript>
+    <figcaption>Strzałki pokazują kolejność, nie każdy skok sieciowy: przeglądarka pyta DNS o adres, a potem łączy się prosto z load balancerem. Traefik łączy się z IP poda z EndpointSlice, z pominięciem ClusterIP.</figcaption>
+  </figure>
+
+  <div class="detail" id="pathDetail" aria-live="polite">
+    <h3>Wybierz ogniwo na diagramie</h3>
+    <p>Każde ogniwo ma krótki opis i komendę, którą je sprawdzisz. Diagnozę zaczynaj od końca: pody, EndpointSlice, Service, Ingress.</p>
+  </div>
+</section>
+
+<!-- 2 ============================================================ -->
+<section id="certyfikat">
+  <h2><span class="n">2</span> Jak cert-manager wystawia certyfikat (HTTP-01)</h2>
+  <p>Do Ingressu dopisujesz adnotację i sekcję <code>tls</code>. Resztę robią cert-manager i Let's Encrypt. Na naszym klastrze trwa to ok. 30 s. Wyniki w krokach pochodzą z testu na klastrze 20.10.2026 (host <code>lab08test.k8s.marniok.dev</code>). <span class="js-only" hidden>Kliknij krok albo użyj przycisków; „odtwórz” przechodzi przez wszystkie kroki sam.</span></p>
+
+  <figure>
+    <svg id="certSvg" class="certflow" role="img" aria-label="Przepływ wystawiania certyfikatu: Ingress, Certificate, CertificateRequest, Order, Let's Encrypt, Challenge, pod solvera, Traefik, Secret"></svg>
+    <figcaption>Obiekty <code>Order</code> i <code>Challenge</code> istnieją tylko przy Issuerze ACME (Let's Encrypt, step-ca). Firmowe CA w cert-managerze podpisuje <code>CertificateRequest</code> od razu.</figcaption>
+  </figure>
+
+  <ol class="steps" id="certSteps">
+    <li data-step="1"><strong>Ingress z adnotacją.</strong> Dopisujesz <code>cert-manager.io/cluster-issuer: letsencrypt-prod</code> i sekcję <code>tls</code> z tym samym hostem co w <code>rules</code> oraz <code>secretName: lab08-web-tls</code>. <code>kubectl apply</code>.
+<pre class="wrap-pre">$ kubectl apply -f moje/lab08-ingress.yaml
+ingress.networking.k8s.io/lab08-web configured</pre></li>
+    <li data-step="2"><strong>Certificate i CertificateRequest.</strong> Część cert-managera zwana ingress-shim widzi adnotację i tworzy <code>Certificate</code> o nazwie jak Secret. Secretu jeszcze nie ma, więc cert-manager generuje klucz prywatny i tworzy <code>CertificateRequest</code> z CSR.
+<pre class="wrap-pre">$ kubectl describe certificate lab08-web-tls
+  Normal  Issuing    Issuing certificate as Secret does not exist
+  Normal  Generated  Stored new private key in temporary Secret resource "lab08-web-tls-dtm8z"
+  Normal  Requested  Created new CertificateRequest resource "lab08-web-tls-1"</pre></li>
+    <li data-step="3"><strong>Order w Let's Encrypt.</strong> ClusterIssuer jest typu ACME, więc cert-manager składa <code>Order</code>. Let's Encrypt odpowiada: udowodnij, że kontrolujesz ten host, metodą HTTP-01. Oto token.
+<pre class="wrap-pre">$ kubectl get order
+NAME                        STATE     AGE
+lab08-web-tls-1-377731385   pending   4s</pre></li>
+    <li data-step="4"><strong>Challenge, pod solvera i tymczasowy Ingress.</strong> cert-manager tworzy <code>Challenge</code>, a w Twoim namespace pod <code>cm-acme-http-solver-…</code> (port 8089) z Service i tymczasowy Ingress na ścieżkę <code>/.well-known/acme-challenge/&lt;token&gt;</code> dla Twojego hosta.
+<pre class="wrap-pre">$ kubectl get challenge
+NAME                                  STATE     DOMAIN                      AGE
+lab08-web-tls-1-377731385-556202022   pending   lab08test.k8s.marniok.dev   2s
+$ kubectl get pods,ingress | grep acme
+pod/cm-acme-http-solver-qcqm6                         1/1   Running   0   2s
+ingress.networking.k8s.io/cm-acme-http-solver-9hfwd   traefik   lab08test.k8s.marniok.dev   …elb.eu-central-1.amazonaws.com   80   2s</pre></li>
+    <li data-step="5"><strong>Self-check.</strong> Zanim cert-manager zgłosi gotowość, sam pobiera token tą samą drogą co świat: DNS, NLB, Traefik, tymczasowy Ingress, pod solvera. Gdy NetworkPolicy odcina solver albo DNS jeszcze nie wskazuje na klaster, proces stoi tutaj.
+<pre class="wrap-pre">$ kubectl describe challenge &lt;nazwa&gt;     # tylko gdy coś nie działa
+  Reason: Waiting for HTTP-01 challenge propagation: failed to perform self check GET request …</pre></li>
+    <li data-step="6"><strong>Let's Encrypt sprawdza token.</strong> Serwer Let's Encrypt łączy się z internetu na port 80 Twojego hosta i pobiera token. Ruch idzie przez NLB i Traefika do poda solvera. Token się zgadza, więc wyzwanie i zamówienie są zaliczone.
+<pre class="wrap-pre">GET http://lab08test.k8s.marniok.dev/.well-known/acme-challenge/&lt;token&gt;
+  → NLB → Traefik → tymczasowy Ingress → pod solvera → 200 + token
+$ kubectl get challenge        # STATE valid, po chwili obiekt znika</pre></li>
+    <li data-step="7"><strong>Secret z certyfikatem.</strong> cert-manager pobiera podpisany certyfikat i zapisuje go z kluczem w Secrecie <code>lab08-web-tls</code> (typ <code>kubernetes.io/tls</code>). <code>Certificate</code> dostaje <code>READY True</code>. Pod solvera i tymczasowy Ingress są usuwane.
+<pre class="wrap-pre">$ kubectl get certificate
+NAME            READY   SECRET          AGE
+lab08-web-tls   True    lab08-web-tls   27s
+$ kubectl get secret lab08-web-tls
+NAME            TYPE                DATA   AGE
+lab08-web-tls   kubernetes.io/tls   2      27s</pre></li>
+    <li data-step="8"><strong>Traefik serwuje certyfikat.</strong> Traefik widzi Secret wskazany w <code>spec.tls</code> i pokazuje ten certyfikat każdemu, kto w TLS (SNI) prosi o Twój host. Za ok. 60 dni cert-manager sam przejdzie te kroki jeszcze raz (odnowienie ok. 30 dni przed końcem ważności).
+<pre class="wrap-pre">$ curl -sI https://lab08test.k8s.marniok.dev | head -1
+HTTP/2 200
+$ openssl s_client … | openssl x509 -noout -issuer -dates
+issuer=C=US, O=Let's Encrypt, CN=YR2
+notBefore=Oct 20 04:10:58 2026 GMT
+notAfter=Jan 18 04:10:57 2027 GMT</pre></li>
+  </ol>
+  <div class="stepnav" id="certNav" hidden>
+    <button type="button" data-act="prev">← poprzedni krok</button>
+    <button type="button" data-act="next">następny krok →</button>
+    <button type="button" data-act="play" aria-pressed="false">odtwórz</button>
+    <button type="button" data-act="all">pokaż wszystko</button>
+  </div>
+
+  <div class="key"><strong>On-prem:</strong> kroki 3–6 wymagają, żeby Let's Encrypt dosięgnął Twojego hosta z internetu. Klaster w firmowej sieci zwykle tego nie ma. Wtedy DNS-01 (token w rekordzie TXT, do klastra nikt się nie łączy) albo firmowe CA: <code>Certificate</code> → <code>CertificateRequest</code> → od razu Secret, bez <code>Order</code> i <code>Challenge</code>. Szczegóły: <a href="cert-manager.md">cert-manager.md</a>.</div>
+</section>
+
+<!-- 3 ============================================================ -->
+<section id="service">
+  <h2><span class="n">3</span> Typy Service: co naprawdę powstaje w AWS</h2>
+  <p>Każdy kolejny typ jest nadbudową poprzedniego: NodePort to ClusterIP plus port na węzłach, LoadBalancer to NodePort plus load balancer przed węzłami. Wyniki z naszego klastra, 20.10.2026.</p>
+
+  <div class="cards">
+    <article class="card">
+      <div class="top"><div class="name">ClusterIP</div><p class="what">domyślny · wirtualny adres w klastrze</p></div>
+      <div class="body">
+        <div><h4>Skąd dojdziesz</h4>
+          <ul class="reach">
+            <li>pod w klastrze <span class="badge yes">tak</span></li>
+            <li>maszyna w VPC <span class="badge no">nie</span></li>
+            <li>laptop / internet <span class="badge no">nie</span></li>
+          </ul></div>
+        <div><h4>Co tworzy w AWS</h4><p>Nic. Adres nie należy do żadnej maszyny: pakiet przechwytują reguły kube-proxy na węźle klienta.</p></div>
+        <div><h4>U nas</h4><p>Podstawa wszystkiego. Za Twoim Ingressem stoi właśnie ClusterIP <code>lab08-web</code>.</p></div>
+        <pre>$ kubectl get svc lab08-web
+TYPE        CLUSTER-IP     PORT(S)
+ClusterIP   172.20.x.x     80/TCP</pre>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="top"><div class="name">NodePort</div><p class="what">ClusterIP + port 30000–32767 na każdym węźle</p></div>
+      <div class="body">
+        <div><h4>Skąd dojdziesz</h4>
+          <ul class="reach">
+            <li>pod w klastrze <span class="badge yes">tak</span></li>
+            <li>maszyna w VPC <span class="badge yes">tak</span></li>
+            <li>laptop / internet <span class="badge no">nie</span></li>
+          </ul></div>
+        <div><h4>Co tworzy w AWS</h4><p>Nic. Port otwiera się na wszystkich 3 węzłach, także tam, gdzie nie ma Twojego poda.</p></div>
+        <div><h4>U nas</h4><p>Węzły stoją w prywatnych podsieciach, bez publicznych adresów. Z poda działa, z laptopa nie.</p></div>
+        <pre>$ kubectl get svc lab08-web-np
+TYPE       PORT(S)
+NodePort   80:30281/TCP
+$ kubectl exec deploy/lab08-web -- curl -s -o /dev/null \
+    -w '%{http_code}\n' http://&lt;INTERNAL-IP węzła&gt;:30281
+200</pre>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="top"><div class="name">LoadBalancer</div><p class="what">NodePort + load balancer AWS przed węzłami</p></div>
+      <div class="body">
+        <div><h4>Skąd dojdziesz</h4>
+          <ul class="reach">
+            <li>pod w klastrze <span class="badge yes">tak</span></li>
+            <li>maszyna w VPC <span class="badge yes">tak</span></li>
+            <li>laptop / internet <span class="badge yes">tak</span></li>
+          </ul></div>
+        <div><h4>Co tworzy w AWS</h4><p>Bez adnotacji <strong>Classic Load Balancer</strong>, z <code>aws-load-balancer-type: nlb</code> Network Load Balancer. Do tego security group <code>k8s-elb-…</code> i reguła w SG węzłów. Tworzy je <code>service-controller</code> w control plane EKS.</p></div>
+        <div><h4>Przebieg (Classic LB)</h4>
+          <ol class="timeline">
+            <li><span class="t">0 s</span> <code>EnsuringLoadBalancer</code>, Kubernetes przydziela NodePort 30586</li>
+            <li><span class="t">~5 s</span> <code>EnsuredLoadBalancer</code>, w <code>EXTERNAL-IP</code> nazwa <code>a3b8…-1968439010.eu-central-1.elb.amazonaws.com</code></li>
+            <li><span class="t">potem</span> listener TCP:80 → 30586 na 3 instancjach, health check <code>TCP:30586</code>, na początku <code>OutOfService</code></li>
+            <li><span class="t">~1 min 40 s</span> strona odpowiada z internetu (DNS + health check)</li>
+            <li><span class="t">delete</span> LB i security group znikają po ok. 12 s</li>
+          </ol></div>
+        <div><h4>U nas</h4><p>Każdy taki Service to osobny LB płatny za godzinę. Dlatego jest jeden: Traefik za NLB, a aplikacje wystawiamy Ingressem.</p></div>
+      </div>
+    </article>
+  </div>
+
+  <div class="mini">
+    <div><strong>headless</strong> (<code>clusterIP: None</code>) — bez wirtualnego adresu. DNS zwraca od razu adresy podów. Używa go StatefulSet (dzień 3).</div>
+    <div><strong>ExternalName</strong> — tylko rekord CNAME do nazwy spoza klastra, np. <code>api.example.com</code>. Bez proxy, portów i selektora.</div>
+    <div><strong>Adnotacja <code>aws-load-balancer-scheme: internal</code></strong> — LB dostaje adres prywatny, dostępny tylko z VPC.</div>
+    <div><strong>AWS Load Balancer Controller</strong> (na k8s-sages go nie ma) — NLB z celami IP podów zamiast NodePortów i ALB jako kontroler Ingress (klasa <code>alb</code>).</div>
+  </div>
+</section>
+
+<!-- 4 ============================================================ -->
+<section id="gateway">
+  <h2><span class="n">4</span> Ingress a Gateway API: kto co tworzy</h2>
+  <p>Ingress to jeden obiekt, w którym zespół aplikacji wpisuje wszystko: host, ścieżki, TLS i adnotacje kontrolera. Gateway API rozdziela to na trzy obiekty dla trzech ról. Ramką zaznaczony jest obiekt, który piszesz Ty.</p>
+
+  <div class="chains">
+    <div class="chain">
+      <h3>Ingress</h3>
+      <div class="tier"><div class="who">Administrator</div><div class="obj"><b>IngressClass traefik</b><span>i sam kontroler (Traefik) w ns <code>traefik</code></span></div></div>
+      <div class="tier"><div class="arrow">↑ <code>ingressClassName</code></div></div>
+      <div class="tier"><div class="who">Zespół aplikacji</div><div class="obj you"><b>Ingress</b><span>host, ścieżki, backend, <code>tls</code>, adnotacja cert-managera, adnotacje kontrolera (rewrite, redirect)</span></div></div>
+      <div class="tier"><div class="arrow">↓ <code>backend.service</code></div></div>
+      <div class="tier"><div class="who"></div><div class="obj"><b>Service</b><span>w Twoim namespace</span></div></div>
+    </div>
+
+    <div class="chain">
+      <h3>Gateway API</h3>
+      <div class="tier"><div class="who">Dostawca kontrolera</div><div class="obj"><b>GatewayClass traefik</b><span>który kontroler obsługuje bramy; instaluje się z kontrolerem</span></div></div>
+      <div class="tier"><div class="arrow">↑ <code>gatewayClassName</code></div></div>
+      <div class="tier"><div class="who">Zespół platformy</div><div class="obj"><b>Gateway</b><span>listenery (u Traefika porty 8000/8443), hosty, TLS z <code>certificateRefs</code> i adnotacją cert-managera, <code>allowedRoutes</code>: kto może się podpiąć</span></div></div>
+      <div class="tier"><div class="arrow">↑ <code>parentRefs</code></div></div>
+      <div class="tier"><div class="who">Zespół aplikacji</div><div class="obj you"><b>HTTPRoute</b><span><code>hostnames</code>, <code>matches</code> (ścieżka, nagłówki, metoda), <code>filters</code> (URLRewrite, RequestRedirect), <code>backendRefs</code> z wagami</span></div></div>
+      <div class="tier"><div class="arrow">↓ <code>backendRefs</code></div></div>
+      <div class="tier"><div class="who"></div><div class="obj"><b>Service</b><span>w Twoim namespace; z innego wymaga ReferenceGrant</span></div></div>
+    </div>
+  </div>
+
+  <div class="tablewrap">
+    <table class="stack">
+      <thead><tr><th>Sprawa</th><th>Ingress</th><th>Gateway API</th></tr></thead>
+      <tbody>
+        <tr><td data-h="Sprawa">Certyfikat</td><td data-h="Ingress">każdy Ingress osobno: adnotacja + <code>spec.tls</code></td><td data-h="Gateway API">raz, na listenerze Gatewaya; HTTPRoute o TLS nie wie</td></tr>
+        <tr><td data-h="Sprawa">Canary, nagłówki, rewrite</td><td data-h="Ingress">adnotacje albo Middleware konkretnego kontrolera</td><td data-h="Gateway API">w specyfikacji, takie same dla każdego kontrolera</td></tr>
+        <tr><td data-h="Sprawa">Kto może wystawić host</td><td data-h="Ingress">każdy, kto ma prawo tworzyć Ingress</td><td data-h="Gateway API">Gateway decyduje (<code>allowedRoutes</code>, <code>hostname</code>)</td></tr>
+        <tr><td data-h="Sprawa">Status</td><td data-h="Ingress">kolumna <code>ADDRESS</code></td><td data-h="Gateway API">warunki <code>Accepted</code>, <code>ResolvedRefs</code>, <code>Programmed</code></td></tr>
+        <tr><td data-h="Sprawa">Na k8s-sages</td><td data-h="Ingress">działa, ćwiczysz w lab08</td><td data-h="Gateway API">nie jest domyślnie włączone (CRD trzeba doinstalować); pokazuje prowadzący w demie</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Gotowe manifesty Gateway i HTTPRoute: <a href="../../../przyklady/k8s/07-gateway-api/"><code>przyklady/k8s/07-gateway-api/</code></a>. Czy klaster ma CRD Gateway API: <code>kubectl get crd | grep gateway.networking.k8s.io</code>.</p>
+</section>
+
+<!-- 5 ============================================================ -->
+<section id="sciaga">
+  <h2><span class="n">5</span> Komendy: sprawdzasz od końca</h2>
+  <div class="cheat">
+    <div><pre>kubectl get pods -l app=lab08-web -o wide</pre><p>Pody Running i READY 1/1? Bez readiness pod nie dostaje ruchu.</p></div>
+    <div><pre>kubectl get endpointslices \
+  -l kubernetes.io/service-name=lab08-web</pre><p>Adresy gotowych podów. Pusto = selektor albo readiness, Traefik zwraca 503.</p></div>
+    <div><pre>kubectl describe svc lab08-web</pre><p>Selector, Port, TargetPort. Zły <code>targetPort</code> daje 502.</p></div>
+    <div><pre>kubectl describe ingress lab08-web</pre><p>Klasa, host, backend z IP podów, zdarzenia. <code>ADDRESS</code> = nazwa NLB.</p></div>
+    <div><pre>kubectl get certificate,order,challenge
+kubectl describe challenge &lt;nazwa&gt;</pre><p>Stan certyfikatu. Gdy wisi, odpowiedź jest zwykle w <code>describe challenge</code>.</p></div>
+    <div><pre>dig +short &lt;login&gt;.k8s.marniok.dev
+curl -sI https://&lt;login&gt;.k8s.marniok.dev</pre><p>DNS prowadzi do NLB? HTTPS odpowiada bez <code>-k</code>?</p></div>
+  </div>
+  <p style="margin-top:14px">Więcej: <a href="README.md">README.md</a> (Service, Ingress, Gateway API), <a href="cert-manager.md">cert-manager.md</a> (certyfikaty), <a href="on-prem.md">on-prem.md</a> (własne serwery).</p>
+</section>
+
+<footer>Kubernetes w praktyce · Dzień 2 · stan na październik 2026 (EKS 1.35, Traefik za NLB, cert-manager z Let's Encrypt). Adresy w trybie on-prem są przykładowe.</footer>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  var NS = 'http://www.w3.org/2000/svg';
+  document.documentElement.classList.add('js');
+  Array.prototype.forEach.call(document.querySelectorAll('.js-only'), function (e) { e.hidden = false; });
+
+  /* ---------- pomocnicze ---------- */
+  function el(tag, attrs, parent, text) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in attrs) { if (attrs[k] !== null && attrs[k] !== undefined) e.setAttribute(k, attrs[k]); }
+    if (text !== undefined) e.textContent = text;
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function pt(nodes, p) {
+    if (typeof p[0] === 'number') return p;
+    var n = nodes[p[0]], s = p[1], x, y;
+    if (s === 'r') { x = n.x + n.w; y = n.y + n.h / 2; }
+    else if (s === 'l') { x = n.x; y = n.y + n.h / 2; }
+    else if (s === 't') { x = n.x + n.w / 2; y = n.y; }
+    else { x = n.x + n.w / 2; y = n.y + n.h; }
+    return [x + (p[2] || 0), y + (p[3] || 0)];
+  }
+  function pathD(nodes, pts) {
+    return pts.map(function (p, i) { var q = pt(nodes, p); return (i ? 'L' : 'M') + q[0] + ' ' + q[1]; }).join(' ');
+  }
+  function markers(svg, prefix) {
+    var defs = el('defs', {}, svg);
+    [['a', 'mk'], ['ac', 'mk-acc']].forEach(function (m) {
+      var mk = el('marker', { id: prefix + m[0], viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 10, markerHeight: 10, markerUnits: 'userSpaceOnUse', orient: 'auto-start-reverse' }, defs);
+      el('path', { 'class': m[1], d: 'M0 0L10 5L0 10z' }, mk);
+    });
+  }
+  function drawNode(parent, id, box, def, title, subs, titleSize, extraClass) {
+    var g = el('g', { 'class': 'cnode' + (extraClass ? ' ' + extraClass : ''), 'data-id': id }, parent);
+    var kind = def.kind || 'box';
+    el('rect', { 'class': 'ring', x: box.x - 4, y: box.y - 4, width: box.w + 8, height: box.h + 8, rx: 12 }, g);
+    el('rect', { 'class': 'nb ' + kind, x: box.x, y: box.y, width: box.w, height: box.h, rx: 9 }, g);
+    var tCls = kind === 'strong' ? 'ttl' : (kind === 'pod' ? 'pod-t' : 'b');
+    var sCls = kind === 'strong' ? 'on s' : (kind === 'pod' ? 'pod-s' : 's');
+    var block = 17 + subs.length * 16;
+    var y = box.y + box.h / 2 - block / 2 + 13;
+    var cx = box.x + box.w / 2;
+    el('text', { 'class': tCls, x: cx, y: y, 'text-anchor': 'middle', style: 'font-size:' + titleSize + 'px' }, g, title);
+    subs.forEach(function (s, i) {
+      el('text', { 'class': sCls, x: cx, y: y + 18 + i * 16, 'text-anchor': 'middle' }, g, s);
+    });
+    return g;
+  }
+  function drawEdge(parent, nodes, e, prefix, acc) {
+    var g = el('g', { 'class': 'edge', 'data-id': e.id || '' }, parent);
+    var attrs = { 'class': 'ln' + (acc ? ' acc' : '') + (e.dash ? ' dash' : ''), d: pathD(nodes, e.pts), 'marker-end': 'url(#' + prefix + (acc ? 'ac' : 'a') + ')' };
+    if (e.both) attrs['marker-start'] = 'url(#' + prefix + (acc ? 'ac' : 'a') + ')';
+    el('path', attrs, g);
+    if (e.label) el('text', { 'class': 'lbl', x: e.label[0], y: e.label[1], 'text-anchor': e.label[3] || 'start' }, g, e.label[2]);
+    return g;
+  }
+  function makeClickable(g, label, onAct) {
+    g.setAttribute('tabindex', '0');
+    g.setAttribute('role', 'button');
+    g.setAttribute('aria-label', label);
+    g.addEventListener('click', onAct);
+    g.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); onAct(); }
+    });
+  }
+  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+  var wideMq = window.matchMedia('(min-width: 760px)');
+
+  /* =========================================================
+     1. Droga żądania
+     ========================================================= */
+  var PATH = {
+    browser: { kind: 'box',
+      t: { eks: 'Przeglądarka', op: 'Przeglądarka' },
+      s: { eks: ['Ty albo curl', 'HTTPS :443'], op: ['laptop / VPN', 'HTTPS :443'] },
+      d: {
+        eks: { h: 'Przeglądarka albo curl', p: 'Wpisujesz <code>https://&lt;login&gt;.k8s.marniok.dev</code>. Domena <code>.dev</code> jest na liście HSTS preload, więc przeglądarka zawsze idzie po HTTPS na port 443, nawet gdy wpiszesz <code>http://</code>. Nazwę hosta wysyła dwa razy: w TLS (SNI) i w nagłówku <code>Host</code>.', c: 'curl -sI https://<login>.k8s.marniok.dev | head -1' },
+        op: { h: 'Przeglądarka w sieci firmy', p: 'Klient jest w sieci firmowej albo na VPN. Adres w rodzaju <code>https://&lt;login&gt;.apps.firma.internal</code> nie istnieje w publicznym internecie. Przeglądarka musi ufać firmowemu CA, inaczej pokaże ostrzeżenie.', c: 'curl -sI https://<login>.apps.firma.internal | head -1' }
+      } },
+    dns: { kind: 'box', diff: true,
+      t: { eks: 'DNS', op: 'DNS' },
+      s: { eks: ['*.k8s.marniok.dev', 'CNAME → NLB'], op: ['wildcard w AD/BIND', 'A → 10.20.30.200'] },
+      d: {
+        eks: { h: 'DNS: jeden rekord wildcard', p: 'W publicznym DNS (zenbox.pl) jest jeden rekord: <code>*.k8s</code> CNAME → nazwa NLB. Każdy host jeden poziom pod domeną trafia w ten sam load balancer. Dwa poziomy (<code>a.&lt;login&gt;.k8s…</code>) do wildcardu nie pasują.', c: 'dig +short <login>.k8s.marniok.dev', n: 'Wynik: nazwa NLB (…elb.eu-central-1.amazonaws.com), a pod nią jego adresy IP.' },
+        op: { h: 'DNS: wpis w firmowym DNS', p: 'Wildcard <code>*.apps.firma.internal</code> → rekord A z adresem VIP (np. <code>10.20.30.200</code>) w Active Directory, BIND albo Infoblox. Wpisuje go administrator raz albo automatycznie ExternalDNS na podstawie Ingressów.', c: 'dig +short <login>.apps.firma.internal', n: 'Wynik: adres VIP z puli MetalLB albo adres zewnętrznego load balancera.' }
+      } },
+    lb: { kind: 'strong', diff: true,
+      t: { eks: 'AWS NLB', op: 'MetalLB VIP' },
+      s: { eks: ['Service traefik', 'typ LoadBalancer'], op: ['10.20.30.200', 'lub HAProxy / F5'] },
+      d: {
+        eks: { h: 'AWS Network Load Balancer', p: 'Service <code>traefik</code> typu LoadBalancer w namespace <code>traefik</code> z adnotacją <code>aws-load-balancer-type: nlb</code>. NLB przekazuje TCP 80 i 443 na NodePorty Traefika na trzech węzłach. TLS go nie dotyczy: szyfrowane połączenie przechodzi przez niego w całości. Jeden NLB dla wszystkich, bo każdy LB to osobny rachunek.', c: 'kubectl get ingress lab08-web', n: 'Kolumna ADDRESS: afe21dba…-88ecc87c381c9d83.elb.eu-central-1.amazonaws.com.' },
+        op: { h: 'Adres VIP: MetalLB albo zewnętrzny load balancer', p: 'Bez chmury Service LoadBalancer zostaje <code>&lt;pending&gt;</code>. MetalLB przydziela adres z puli i ogłasza go w sieci: w trybie L2 jeden węzeł odpowiada na ARP (bez rozkładu ruchu, przy awarii adres przejmuje inny węzeł), w BGP trasę ogłaszają routerowi wszystkie węzły. Zamiast tego może stać HAProxy z keepalived albo F5 przed NodePortami Traefika.', c: 'kubectl get ingress lab08-web', n: 'Kolumna ADDRESS: 10.20.30.200. Administrator sprawdzi pule: kubectl get ipaddresspool,l2advertisement -n metallb-system.' }
+      } },
+    traefik: { kind: 'strong',
+      t: { eks: 'Traefik', op: 'Traefik' },
+      s: { eks: ['TLS: SNI → cert', 'Host + ścieżka'], op: ['TLS: SNI → cert', 'Host + ścieżka'] },
+      d: {
+        eks: { h: 'Traefik: kontroler Ingress', p: 'Najpierw TLS: po nazwie z SNI wybiera certyfikat z Secretu wskazanego w <code>spec.tls</code> Ingressu. Brak pasującego → <code>TRAEFIK DEFAULT CERT</code>. Potem HTTP: po nagłówku <code>Host</code> i ścieżce wybiera regułę ze wszystkich Ingressów w klastrze. Brak reguły → <code>404 page not found</code>.', c: 'kubectl describe ingress lab08-web' },
+        op: { h: 'Traefik: bez zmian', p: 'Ten sam kontroler, ta sama klasa <code>traefik</code>, te same reguły z Ingressów. Różni się tylko to, co stoi przed nim (VIP zamiast NLB) i skąd pochodzą certyfikaty.', c: 'kubectl describe ingress lab08-web' }
+      } },
+    svc: { kind: 'box',
+      t: { eks: 'Service', op: 'Service' },
+      s: { eks: ['lab08-web', 'ClusterIP'], op: ['lab08-web', 'ClusterIP'] },
+      d: {
+        eks: { h: 'Service lab08-web', p: 'Zwykły ClusterIP z selektorem <code>app: lab08-web</code>. Traefik nie wysyła ruchu na ClusterIP: bierze z Service listę podów (EndpointSlice) i sam rozkłada ruch. Zły <code>targetPort</code> → 502.', c: 'kubectl describe svc lab08-web' },
+        op: { h: 'Service lab08-web: bez zmian', p: 'Ten sam manifest co na EKS. Service, EndpointSlice i pody nie wiedzą, czy klaster stoi w chmurze.', c: 'kubectl describe svc lab08-web' }
+      } },
+    eps: { kind: 'box',
+      t: { eks: 'EndpointSlice', op: 'EndpointSlice' },
+      s: { eks: ['IP:port', 'gotowych podów'], op: ['IP:port', 'gotowych podów'] },
+      d: {
+        eks: { h: 'EndpointSlice: książka adresowa', p: 'Lista IP:port podów pasujących do selektora i gotowych (readiness). Prowadzi ją kontroler EndpointSlice. Pusta lista = selektor nie pasuje albo żaden pod nie jest Ready → Traefik zwraca 503.', c: 'kubectl get endpointslices -l kubernetes.io/service-name=lab08-web' },
+        op: { h: 'EndpointSlice: bez zmian', p: 'Działa tak samo. Adresy podów pochodzą z sieci klastra (CNI), na EKS z VPC.', c: 'kubectl get endpointslices -l kubernetes.io/service-name=lab08-web' }
+      } },
+    pods: { kind: 'pod',
+      t: { eks: 'Pody', op: 'Pody' },
+      s: { eks: ['3 × lab08-web', 'readiness OK'], op: ['3 × lab08-web', 'readiness OK'] },
+      d: {
+        eks: { h: 'Pody lab08-web', p: 'Trzy repliki z etykietą <code>app: lab08-web</code>, rozłożone po węzłach. Traefik łączy się prosto z IP poda, także na innym węźle niż ten, na którym sam działa.', c: 'kubectl get pods -l app=lab08-web -o wide' },
+        op: { h: 'Pody: bez zmian', p: 'Ten sam Deployment i te same sondy.', c: 'kubectl get pods -l app=lab08-web -o wide' }
+      } },
+    cert: { kind: 'box', diff: true,
+      t: { eks: 'Secret TLS', op: 'Secret TLS' },
+      s: { eks: ["cert-manager + Let's Encrypt", 'wyzwanie HTTP-01'], op: ['cert-manager + firmowe CA', 'albo LE przez DNS-01'] },
+      sn: { eks: ["Let's Encrypt", 'HTTP-01'], op: ['firmowe CA', 'lub DNS-01'] },
+      d: {
+        eks: { h: 'Certyfikat: Secret lab08-web-tls', p: 'Secret typu <code>kubernetes.io/tls</code> wystawia cert-manager. Let\'s Encrypt sprawdza przez HTTP-01 (port 80 z internetu), czy Twój host prowadzi do naszego klastra. Ważny 90 dni, odnawiany sam ok. 30 dni przed końcem. Przebieg: sekcja 2.', c: 'kubectl get certificate\nkubectl get secret lab08-web-tls' },
+        op: { h: 'Certyfikat on-prem', p: 'Host zwykle nie jest osiągalny z internetu, więc HTTP-01 odpada. cert-manager bierze certyfikat z firmowego CA (Issuer <code>ca</code>, Vault, step-ca) albo z Let\'s Encrypt przez DNS-01 (rekord TXT w DNS). W Ingressie zmienia się tylko nazwa Issuera w adnotacji.', c: 'kubectl get certificate\nkubectl get clusterissuer' }
+      } },
+    ing: { kind: 'box',
+      t: { eks: 'Ingress', op: 'Ingress' },
+      s: { eks: ['lab08-web: host + ścieżka', 'czyta go Traefik'], op: ['lab08-web: host + ścieżka', 'czyta go Traefik'] },
+      sn: { eks: ['host +', 'ścieżka'], op: ['host +', 'ścieżka'] },
+      d: {
+        eks: { h: 'Ingress lab08-web: Twój obiekt', p: 'Reguły: host <code>&lt;login&gt;.k8s.marniok.dev</code> + ścieżka <code>/</code> → Service <code>lab08-web</code>:80, sekcja <code>tls</code> z Secretem. Sam obiekt nic nie przekierowuje: Traefik czyta go przez API i konfiguruje się według niego.', c: 'kubectl get ingress' },
+        op: { h: 'Ingress on-prem', p: 'Ten sam obiekt. Zmienia się host (<code>&lt;login&gt;.apps.firma.internal</code>) i adnotacja z nazwą Issuera.', c: 'kubectl get ingress' }
+      } }
+  };
+  var PATH_ORDER = ['browser', 'dns', 'lb', 'traefik', 'svc', 'eps', 'pods'];
+
+  function pathLayout(wide) {
+    var n = {}, i;
+    if (wide) {
+      for (i = 0; i < PATH_ORDER.length; i++) n[PATH_ORDER[i]] = { x: 16 + i * 146, y: 56, w: 124, h: 80 };
+      n.cert = { x: 454, y: 196, w: 190, h: 72 };
+      n.ing = { x: 670, y: 196, w: 200, h: 72 };
+      return { vb: '0 0 1040 300', nodes: n, title: 15,
+        edges: [
+          { pts: [['browser', 'r'], ['dns', 'l']], dash: true },
+          { pts: [['dns', 'r'], ['lb', 'l']] },
+          { pts: [['lb', 'r'], ['traefik', 'l']] },
+          { pts: [['traefik', 'r'], ['svc', 'l']] },
+          { pts: [['svc', 'r'], ['eps', 'l']] },
+          { pts: [['eps', 'r'], ['pods', 'l']] },
+          { pts: [[500, 196], [500, 140]], side: true, label: [508, 176, 'certyfikat'] },
+          { pts: [['ing', 't'], [770, 166], [562, 166], [562, 140]], side: true, dash: true, label: [660, 160, 'reguły'] }
+        ],
+        zones: function (svg, mode) {
+          el('text', { 'class': 'h', x: 16, y: 38 }, svg, mode === 'eks' ? 'INTERNET' : 'SIEĆ FIRMOWA');
+          el('text', { 'class': 'h', x: 308, y: 38 }, svg, mode === 'eks' ? 'AWS' : 'WEJŚCIE');
+          el('rect', { 'class': 'ns', x: 440, y: 14, width: 592, height: 272, rx: 14 }, svg);
+          el('text', { 'class': 'h', x: 456, y: 38 }, svg, mode === 'eks' ? 'KLASTER · k8s-sages' : 'KLASTER · on-prem');
+          el('text', { 'class': 'lbl', x: 16, y: 168 }, svg, mode === 'eks' ? 'pyta o adres, potem łączy się z NLB' : 'pyta o adres, potem łączy się z VIP');
+        } };
+    }
+    var ys = [36, 118, 200, 296, 378, 460, 542];
+    for (i = 0; i < PATH_ORDER.length; i++) n[PATH_ORDER[i]] = { x: 16, y: ys[i], w: 214, h: 60 };
+    n.cert = { x: 252, y: 296, w: 100, h: 60 };
+    n.ing = { x: 252, y: 378, w: 100, h: 60 };
+    return { vb: '0 0 360 630', nodes: n, title: 15, narrow: true,
+      edges: [
+        { pts: [['browser', 'b'], ['dns', 't']], dash: true },
+        { pts: [['dns', 'b'], ['lb', 't']] },
+        { pts: [['lb', 'b'], ['traefik', 't']] },
+        { pts: [['traefik', 'b'], ['svc', 't']] },
+        { pts: [['svc', 'b'], ['eps', 't']] },
+        { pts: [['eps', 'b'], ['pods', 't']] },
+        { pts: [['cert', 'l'], ['traefik', 'r', 0, -4]], side: true },
+        { pts: [['ing', 'l'], [241, 408], [241, 344], [230, 344]], side: true, dash: true }
+      ],
+      zones: function (svg, mode) {
+        el('text', { 'class': 'h', x: 252, y: 60 }, svg, mode === 'eks' ? 'INTERNET' : 'SIEĆ FIRMY');
+        el('text', { 'class': 'h', x: 252, y: 224 }, svg, mode === 'eks' ? 'AWS' : 'WEJŚCIE');
+        el('rect', { 'class': 'ns', x: 8, y: 270, width: 348, height: 346, rx: 14 }, svg);
+        el('text', { 'class': 'h', x: 134, y: 288 }, svg, mode === 'eks' ? 'KLASTER · k8s-sages' : 'KLASTER · on-prem');
+      } };
+  }
+
+  var pathSvg = document.getElementById('pathSvg');
+  var pathDetail = document.getElementById('pathDetail');
+  var pathMode = 'eks', pathSel = null;
+
+  function renderDetail() {
+    if (!pathSel) return;
+    var d = PATH[pathSel].d[pathMode];
+    var diff = pathMode === 'op' && PATH[pathSel].diff;
+    pathDetail.innerHTML = '<h3>' + esc(d.h) + (diff ? '<span class="tag">inaczej niż na EKS</span>' : '') + '</h3>' +
+      '<p>' + d.p + '</p>' +
+      '<pre>' + esc(d.c) + '</pre>' +
+      (d.n ? '<p class="note">' + esc(d.n) + '</p>' : '');
+  }
+  function renderPath() {
+    if (!pathSvg) return;
+    var L = pathLayout(wideMq.matches);
+    while (pathSvg.firstChild) pathSvg.removeChild(pathSvg.firstChild);
+    pathSvg.setAttribute('viewBox', L.vb);
+    markers(pathSvg, 'p');
+    L.zones(pathSvg, pathMode);
+    L.edges.forEach(function (e) {
+      var g = drawEdge(pathSvg, L.nodes, L.narrow ? { pts: e.pts, dash: e.dash } : e, 'p', !e.side);
+      return g;
+    });
+    Object.keys(PATH).forEach(function (id) {
+      var def = PATH[id];
+      var subs = (L.narrow && def.sn) ? def.sn[pathMode] : def.s[pathMode];
+      var g = drawNode(pathSvg, id, L.nodes[id], def, def.t[pathMode], subs, L.title, id === pathSel ? 'sel' : '');
+      if (pathMode === 'op' && def.diff) {
+        var b = L.nodes[id];
+        el('circle', { 'class': 'diff', cx: b.x + b.w - 2, cy: b.y + 2, r: 8 }, g);
+      }
+      makeClickable(g, def.t[pathMode] + ': pokaż opis i komendę', function () {
+        pathSel = id;
+        Array.prototype.forEach.call(pathSvg.querySelectorAll('.cnode'), function (n) {
+          n.classList.toggle('sel', n.getAttribute('data-id') === id);
+        });
+        renderDetail();
+      });
+    });
+  }
+
+  var seg = document.getElementById('modeSeg');
+  var legend = document.getElementById('modeLegend');
+  if (seg) {
+    seg.hidden = false;
+    seg.addEventListener('click', function (ev) {
+      var b = ev.target.closest('button[data-mode]');
+      if (!b) return;
+      pathMode = b.getAttribute('data-mode');
+      Array.prototype.forEach.call(seg.querySelectorAll('button'), function (x) {
+        x.setAttribute('aria-pressed', x === b ? 'true' : 'false');
+      });
+      if (legend) legend.hidden = pathMode !== 'op';
+      renderPath();
+      renderDetail();
+    });
+  }
+
+  /* =========================================================
+     2. Certyfikat: stepper
+     ========================================================= */
+  var CERT = {
+    ing: { kind: 'box', t: 'Twój Ingress', s: ['adnotacja + tls'] },
+    cert: { kind: 'box', t: 'Certificate', s: ['tworzy ingress-shim'] },
+    cr: { kind: 'box', t: 'CertificateRequest', s: ['klucz + CSR'] },
+    order: { kind: 'box', t: 'Order', s: ['zamówienie ACME'] },
+    le: { kind: 'strong', t: "Let's Encrypt", s: ['serwer ACME', 'w internecie'] },
+    chal: { kind: 'box', t: 'Challenge', s: ['HTTP-01 + token'] },
+    solver: { kind: 'pod', t: 'pod solvera', s: [':8089 + Service', '+ tymczasowy Ingress'] },
+    traefik: { kind: 'strong', t: 'Traefik', s: ['za NLB, port 80/443'] },
+    secret: { kind: 'box', t: 'Secret', s: ['lab08-web-tls', 'kubernetes.io/tls'] }
+  };
+  var STEPS = {
+    1: { n: ['ing'], e: [] },
+    2: { n: ['ing', 'cert', 'cr'], e: ['e1', 'e2'] },
+    3: { n: ['cr', 'order', 'le'], e: ['e3', 'e4'] },
+    4: { n: ['order', 'chal', 'solver'], e: ['e5', 'e6'] },
+    5: { n: ['chal', 'solver', 'traefik'], e: ['e7'] },
+    6: { n: ['le', 'traefik', 'solver'], e: ['e8', 'e7'] },
+    7: { n: ['cr', 'secret'], e: ['e9'], gone: ['solver'] },
+    8: { n: ['secret', 'traefik'], e: ['e10'], gone: ['solver'] }
+  };
+  var NSTEPS = 8;
+
+  function certLayout(wide) {
+    var n = {};
+    if (wide) {
+      var xs = [16, 216, 416, 616, 816];
+      ['ing', 'cert', 'cr', 'order', 'le'].forEach(function (id, i) { n[id] = { x: xs[i], y: 24, w: 168, h: 64 }; });
+      ['secret', 'traefik', 'solver', 'chal'].forEach(function (id, i) { n[id] = { x: xs[i], y: 196, w: 168, h: 64 }; });
+      return { vb: '0 0 1000 340', nodes: n, title: 14,
+        edges: [
+          { id: 'e1', pts: [['ing', 'r'], ['cert', 'l']] },
+          { id: 'e2', pts: [['cert', 'r'], ['cr', 'l']] },
+          { id: 'e3', pts: [['cr', 'r'], ['order', 'l']] },
+          { id: 'e4', pts: [['order', 'r'], ['le', 'l']], both: true },
+          { id: 'e5', pts: [['order', 'b'], ['chal', 't']], label: [708, 150, 'tworzy'] },
+          { id: 'e6', pts: [['chal', 'l'], ['solver', 'r']] },
+          { id: 'e7', pts: [['traefik', 'r'], ['solver', 'l']], label: [400, 188, 'HTTP', 'middle'] },
+          { id: 'e8', pts: [['le', 'b'], [900, 302], [300, 302], ['traefik', 'b']], label: [600, 324, "Let's Encrypt: GET http://<host>/.well-known/acme-challenge/<token>", 'middle'] },
+          { id: 'e9', pts: [['cr', 'b'], [500, 142], [100, 142], ['secret', 't']], label: [300, 134, 'podpisany certyfikat', 'middle'] },
+          { id: 'e10', pts: [['secret', 'r'], ['traefik', 'l']] }
+        ] };
+    }
+    var L = 26, R = 192, W = 150, H = 58;
+    function row(i) { return 16 + i * 84; }
+    n.ing = { x: L, y: row(0), w: W, h: H };
+    n.cert = { x: L, y: row(1), w: W, h: H };
+    n.cr = { x: L, y: row(2), w: W, h: H };
+    n.order = { x: L, y: row(3), w: W, h: H };
+    n.le = { x: R, y: row(3), w: W, h: H };
+    n.chal = { x: L, y: row(4), w: W, h: H };
+    n.solver = { x: L, y: row(5), w: W, h: H };
+    n.traefik = { x: R, y: row(5), w: W, h: H };
+    n.secret = { x: L, y: row(6), w: W, h: H };
+    var sy = row(6) + H / 2, cy = row(2) + H / 2, tx = R + W / 2;
+    return { vb: '0 0 360 595', nodes: n, title: 13,
+      edges: [
+        { id: 'e1', pts: [['ing', 'b'], ['cert', 't']] },
+        { id: 'e2', pts: [['cert', 'b'], ['cr', 't']] },
+        { id: 'e3', pts: [['cr', 'b'], ['order', 't']] },
+        { id: 'e4', pts: [['order', 'r'], ['le', 'l']], both: true },
+        { id: 'e5', pts: [['order', 'b'], ['chal', 't']] },
+        { id: 'e6', pts: [['chal', 'b'], ['solver', 't']] },
+        { id: 'e7', pts: [['traefik', 'l'], ['solver', 'r']] },
+        { id: 'e8', pts: [['le', 'b'], ['traefik', 't']], label: [tx + 8, row(4) + 34, 'GET :80'] },
+        { id: 'e9', pts: [['cr', 'l'], [12, cy], [12, sy], ['secret', 'l']] },
+        { id: 'e10', pts: [['secret', 'r'], [tx, sy], ['traefik', 'b']] }
+      ] };
+  }
+
+  var certSvg = document.getElementById('certSvg');
+  var certList = document.getElementById('certSteps');
+  var certNav = document.getElementById('certNav');
+  var certItems = certList ? certList.querySelectorAll('li[data-step]') : [];
+  var certCur = 0, timer = null;
+
+  function renderCert() {
+    if (!certSvg) return;
+    var L = certLayout(wideMq.matches);
+    while (certSvg.firstChild) certSvg.removeChild(certSvg.firstChild);
+    certSvg.setAttribute('viewBox', L.vb);
+    markers(certSvg, 'c');
+    L.edges.forEach(function (e) { drawEdge(certSvg, L.nodes, e, 'c', false); });
+    Object.keys(CERT).forEach(function (id) {
+      var def = CERT[id];
+      drawNode(certSvg, id, L.nodes[id], def, def.t, def.s, L.title, '');
+    });
+    applyCert();
+  }
+  function applyCert() {
+    if (!certSvg) return;
+    var st = STEPS[certCur];
+    certSvg.classList.toggle('has-active', !!st);
+    Array.prototype.forEach.call(certSvg.querySelectorAll('.cnode'), function (g) {
+      var id = g.getAttribute('data-id');
+      g.classList.toggle('on', !!st && st.n.indexOf(id) >= 0);
+      g.classList.toggle('gone', !!st && !!st.gone && st.gone.indexOf(id) >= 0);
+    });
+    Array.prototype.forEach.call(certSvg.querySelectorAll('.edge'), function (g) {
+      var id = g.getAttribute('data-id');
+      g.classList.toggle('on', !!st && st.e.indexOf(id) >= 0);
+    });
+    Array.prototype.forEach.call(certItems, function (li) {
+      var on = Number(li.getAttribute('data-step')) === certCur;
+      li.classList.toggle('on', on);
+      li.setAttribute('aria-current', on ? 'step' : 'false');
+    });
+  }
+  function showCert(n) { certCur = n; applyCert(); }
+  function stopPlay() {
+    if (timer) { clearInterval(timer); timer = null; }
+    var pb = certNav && certNav.querySelector('[data-act="play"]');
+    if (pb) { pb.setAttribute('aria-pressed', 'false'); pb.textContent = 'odtwórz'; }
+  }
+  function startPlay() {
+    var pb = certNav.querySelector('[data-act="play"]');
+    pb.setAttribute('aria-pressed', 'true'); pb.textContent = 'pauza';
+    if (certCur === 0 || certCur >= NSTEPS) showCert(1);
+    timer = setInterval(function () {
+      if (certCur >= NSTEPS) { stopPlay(); return; }
+      showCert(certCur + 1);
+    }, 2800);
+  }
+
+  Array.prototype.forEach.call(certItems, function (li) {
+    li.tabIndex = 0;
+    li.addEventListener('click', function () {
+      stopPlay();
+      var n = Number(li.getAttribute('data-step'));
+      showCert(certCur === n ? 0 : n);
+    });
+    li.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); li.click(); }
+    });
+  });
+  if (certNav) {
+    certNav.hidden = false;
+    certNav.addEventListener('click', function (e) {
+      var b = e.target.closest('button');
+      if (!b) return;
+      var act = b.getAttribute('data-act');
+      if (act === 'play') { if (timer) stopPlay(); else startPlay(); return; }
+      stopPlay();
+      if (act === 'next') showCert(certCur >= NSTEPS ? 1 : certCur + 1);
+      else if (act === 'prev') showCert(certCur <= 1 ? NSTEPS : certCur - 1);
+      else if (act === 'all') showCert(0);
+    });
+  }
+
+  /* ---------- start i zmiana szerokości ---------- */
+  function renderAll() { renderPath(); renderCert(); }
+  if (wideMq.addEventListener) wideMq.addEventListener('change', renderAll);
+  else if (wideMq.addListener) wideMq.addListener(renderAll);
+  renderAll();
+})();
+</script>
+</body>
+</html>

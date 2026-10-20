@@ -1,0 +1,22 @@
+# Lab08, krok 3: szkielet Ingressu. Podmień trzy miejsca <…>, inaczej apply zwróci błąd walidacji
+# (klasa traefik = kontroler na klastrze szkoleniowym i na kind; sprawdzisz: kubectl get ingressclass):
+#   <login>          → Twój login, np. user07 (host musi być unikalny — wszyscy dzielą jeden kontroler)
+#   <DOMENA>         → domena szkolenia od trenera, np. k8s.marniok.dev (na kind: cały host to <login>.local)
+#   <nazwa-service>  → Service z kroku 1
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: lab08-web
+spec:
+  ingressClassName: traefik
+  rules:
+  - host: <login>.<DOMENA>
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: <nazwa-service>
+            port:
+              number: 80

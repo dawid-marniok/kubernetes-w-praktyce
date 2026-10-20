@@ -1,0 +1,29 @@
+# Trzy sondy: startup (wolny start), readiness (czy przyjąć ruch), liveness (czy restartować).
+# liveness sprawdza tylko sam proces — zależności (baza) to sprawa readiness.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: przyklad-sondy
+  labels:
+    app: przyklad-sondy
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.29
+    ports:
+    - name: http
+      containerPort: 80
+    startupProbe:
+      httpGet: {path: /, port: http}
+      failureThreshold: 30
+      periodSeconds: 2
+    readinessProbe:
+      httpGet: {path: /, port: http}
+      periodSeconds: 5
+    livenessProbe:
+      httpGet: {path: /, port: http}
+      periodSeconds: 10
+      timeoutSeconds: 2
+    resources:
+      requests: {cpu: 50m, memory: 32Mi}
+      limits: {cpu: 100m, memory: 64Mi}

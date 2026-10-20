@@ -1,0 +1,20 @@
+# LoadBalancer: adres od chmury, nazwa DNS …elb.amazonaws.com. Na EKS bez adnotacji powstaje Classic Load Balancer
+# (TCP 80 → NodePort na każdym węźle + własny security group), z aws-load-balancer-type: nlb — Network LB.
+# Każdy taki Service = osobny load balancer i koszt za godzinę. Na wspólnym klastrze tylko za zgodą trenera.
+# Adres prywatny w VPC: odkomentuj adnotację scheme.
+# Nigdy nie wystawiaj tak bazy danych (MySQL, Postgres) na publiczny adres.
+apiVersion: v1
+kind: Service
+metadata:
+  name: przyklad-deploy-lb
+  # annotations:
+  #   service.beta.kubernetes.io/aws-load-balancer-type: nlb
+  #   service.beta.kubernetes.io/aws-load-balancer-scheme: internal
+spec:
+  type: LoadBalancer
+  selector:
+    app: przyklad-deploy
+  ports:
+  - name: http
+    port: 80
+    targetPort: http

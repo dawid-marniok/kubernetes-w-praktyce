@@ -1,0 +1,48 @@
+# ToDos · dzień 2: MongoDB jako Deployment BEZ DYSKU — celowo.
+# Dane żyją tylko tak długo jak pod. Jutro rano zobaczysz, co z tego wynika, i przerobisz to na StatefulSet z PVC.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongo
+  labels: {app: todos-mongo, app.kubernetes.io/part-of: todos}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate               # nigdy dwa pody bazy naraz
+  selector:
+    matchLabels: {app: todos-mongo}
+  template:
+    metadata:
+      labels: {app: todos-mongo, app.kubernetes.io/part-of: todos}
+    spec:
+      containers:
+        - name: mongo
+          image: mongo:7.0
+          ports:
+            - {name: mongo, containerPort: 27017}
+          env:
+            - name: MONGO_INITDB_ROOT_USERNAME
+              valueFrom:
+                secretKeyRef: {name: todos-mongo, key: username}
+            - name: MONGO_INITDB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: todos-mongo, key: password}
+          readinessProbe:
+            exec:
+              command: ["mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: 500m, memory: 512Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo                    # ta nazwa jest w adresie bazy (Secret todos-mongo, klucz uri)
+  labels: {app.kubernetes.io/part-of: todos}
+spec:
+  selector: {app: todos-mongo}
+  ports:
+    - {name: mongo, port: 27017, targetPort: mongo}

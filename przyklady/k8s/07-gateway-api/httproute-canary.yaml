@@ -1,0 +1,20 @@
+# Canary bez dodatkowych narzędzi: 90% ruchu do web-v1, 10% do web-v2 (dwa Deploymenty, dwa Service).
+# Przesunięcie ruchu = zmiana wag i apply.
+# Zamiast httproute.yaml (ten sam host i ścieżka /) — najpierw kubectl delete httproute przyklad-route.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: przyklad-canary
+spec:
+  parentRefs:
+  - name: przyklad-gw            # ./gateway.yaml
+  hostnames:
+  - gw-<login>.<DOMENA>          # host musi pasować do listenera Gatewaya
+  rules:
+  - backendRefs:
+    - name: web-v1
+      port: 80
+      weight: 90
+    - name: web-v2
+      port: 80
+      weight: 10

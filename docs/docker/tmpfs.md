@@ -1,6 +1,6 @@
 # Dzień 1 — tmpfs na przykładach
 
-Rozwinięcie tabeli „Dane: wolumen, bind mount, tmpfs” z [ściągi z podstaw Dockera](d1-docker-podstawy.md).
+Rozwinięcie tabeli „Dane: wolumen, bind mount, tmpfs” z [ściągi z podstaw Dockera](podstawy.md).
 
 ## Czym jest tmpfs
 

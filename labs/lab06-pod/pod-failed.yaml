@@ -1,0 +1,20 @@
+# Lab06, krok 3: ten pod nie wstaje. Zastosuj, znajdź przyczynę w describe/events i popraw plik.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: lab06-failed
+  labels:
+    app: lab06-failed
+spec:
+  containers:
+  - name: nginx
+    image: nginxx:latest
+    ports:
+    - containerPort: 80
+    resources:
+      requests:
+        cpu: 100m
+        memory: 100Mi
+      limits:
+        cpu: 100m
+        memory: 100Mi

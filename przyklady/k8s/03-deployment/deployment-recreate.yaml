@@ -1,0 +1,29 @@
+# Strategia Recreate: najpierw wszystkie stare pody w dół, potem nowe. Przestój wpisany w strategię.
+# Kiedy: dwie wersje nie mogą działać naraz (migracja schematu, wolumen RWO).
+# Spróbuj: kubectl set image deploy/przyklad-recreate nginx=nginx:111 → 0/3 gotowych (zły tag, pełny przestój).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: przyklad-recreate
+  labels:
+    app: przyklad-recreate
+spec:
+  replicas: 3
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: przyklad-recreate
+  template:
+    metadata:
+      labels:
+        app: przyklad-recreate
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.29
+        ports:
+        - containerPort: 80
+        resources:
+          requests: {cpu: 20m, memory: 32Mi}
+          limits: {cpu: 100m, memory: 64Mi}

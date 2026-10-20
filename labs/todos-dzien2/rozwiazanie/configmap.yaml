@@ -1,0 +1,12 @@
+# ToDos · dzień 2: konfiguracja poza obrazem.
+# web (nginx) czyta API_HOST i API_PORT, api czyta PORT. Te same wartości są domyślne w obrazach,
+# tu są jawnie, żeby zmiana nie wymagała przebudowy obrazu.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: todos-config
+  labels: {app.kubernetes.io/part-of: todos}
+data:
+  API_HOST: api
+  API_PORT: "3001"
+  PORT: "3001"

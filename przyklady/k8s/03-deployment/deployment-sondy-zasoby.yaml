@@ -1,0 +1,41 @@
+# Deployment z sondami i zasobami. Rollout czeka na readiness nowych podów, zanim usunie stare.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: przyklad-sondy
+  labels:
+    app: przyklad-sondy
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: przyklad-sondy
+  template:
+    metadata:
+      labels:
+        app: przyklad-sondy
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.29
+        ports:
+        - name: http
+          containerPort: 80
+        startupProbe:
+          httpGet: {path: /, port: http}
+          failureThreshold: 30
+          periodSeconds: 2
+        readinessProbe:
+          httpGet: {path: /, port: http}
+          periodSeconds: 5
+        livenessProbe:
+          httpGet: {path: /, port: http}
+          periodSeconds: 10
+          timeoutSeconds: 2
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 250m
+            memory: 128Mi

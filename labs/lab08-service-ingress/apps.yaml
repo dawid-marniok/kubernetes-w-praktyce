@@ -1,0 +1,107 @@
+# Lab08, krok 4: dwie aplikacje pod jedną nazwą hosta, każda pod swoją ścieżką.
+# Strony leżą w podkatalogach /app1 i /app2 (ConfigMapy), więc kontroler nie musi przepisywać ścieżki.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lab08-app1-html
+data:
+  index.html: |
+    <h1>app1 · nginx</h1>
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lab08-app1
+  labels:
+    app: lab08-app1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: lab08-app1
+  template:
+    metadata:
+      labels:
+        app: lab08-app1
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.29
+        ports:
+        - name: http
+          containerPort: 80
+        volumeMounts:
+        - name: html
+          mountPath: /usr/share/nginx/html/app1
+        resources:
+          requests: {cpu: 20m, memory: 32Mi}
+          limits: {cpu: 100m, memory: 64Mi}
+      volumes:
+      - name: html
+        configMap:
+          name: lab08-app1-html
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lab08-app1
+spec:
+  selector:
+    app: lab08-app1
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lab08-app2-html
+data:
+  index.html: |
+    <h1>app2 · httpd</h1>
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lab08-app2
+  labels:
+    app: lab08-app2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: lab08-app2
+  template:
+    metadata:
+      labels:
+        app: lab08-app2
+    spec:
+      containers:
+      - name: httpd
+        image: httpd:2.4
+        ports:
+        - name: http
+          containerPort: 80
+        volumeMounts:
+        - name: html
+          mountPath: /usr/local/apache2/htdocs/app2
+        resources:
+          requests: {cpu: 20m, memory: 32Mi}
+          limits: {cpu: 100m, memory: 128Mi}
+      volumes:
+      - name: html
+        configMap:
+          name: lab08-app2-html
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lab08-app2
+spec:
+  selector:
+    app: lab08-app2
+  ports:
+  - name: http
+    port: 80
+    targetPort: http

@@ -1,0 +1,25 @@
+# Zmienne środowiskowe wpisane w manifest. Konfigurację z zewnątrz daje ConfigMap/Secret (../04-configmap-secret/).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: przyklad-env
+  labels:
+    app: przyklad-env
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.29
+    env:
+    - name: ENVIRONMENT
+      value: "production"
+    - name: APP_NAME
+      value: "my-app"
+    - name: VERSION
+      value: "1.0.0"
+    resources:
+      requests:
+        cpu: 50m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi

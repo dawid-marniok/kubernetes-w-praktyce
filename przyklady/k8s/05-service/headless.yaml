@@ -1,0 +1,13 @@
+# Headless: clusterIP: None — DNS zwraca adresy podów zamiast jednego wirtualnego IP. Używa go StatefulSet (dzień 3).
+apiVersion: v1
+kind: Service
+metadata:
+  name: przyklad-deploy-headless
+spec:
+  clusterIP: None
+  selector:
+    app: przyklad-deploy
+  ports:
+  - name: http
+    port: 80
+    targetPort: http

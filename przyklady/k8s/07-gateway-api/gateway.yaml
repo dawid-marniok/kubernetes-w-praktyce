@@ -1,0 +1,32 @@
+# Gateway = wejście, które stawia zespół platformy: porty, hosty, TLS i to, kto może się podpiąć.
+# Podmień <login> i <DOMENA> (na kind: cały host gw-<login>.local, bez listenera https).
+# Traefik: listener musi mieć port entrypointu Traefika (z chartu: 8000 = web, 8443 = websecure), nie 80/443.
+# Certyfikat zamawia cert-manager na podstawie adnotacji (wymaga w cert-managerze config.enableGatewayAPI: true)
+# i zapisuje go w Secrecie z certificateRefs. Wyzwanie HTTP-01 rozwiązuje ClusterIssuer jak dla Ingressu.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: przyklad-gw
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod   # kubectl get clusterissuer
+spec:
+  gatewayClassName: traefik      # kubectl get gatewayclass
+  listeners:
+  - name: http
+    protocol: HTTP
+    port: 8000
+    hostname: gw-<login>.<DOMENA>
+    allowedRoutes:
+      namespaces:
+        from: Same               # tylko HTTPRoute z tego samego namespace (wspólna brama: All)
+  - name: https
+    protocol: HTTPS
+    port: 8443
+    hostname: gw-<login>.<DOMENA>
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - name: przyklad-gw-tls    # Secret utworzy cert-manager
+    allowedRoutes:
+      namespaces:
+        from: Same

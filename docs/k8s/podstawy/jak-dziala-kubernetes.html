@@ -1,0 +1,843 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jak działa Kubernetes</title>
+<meta name="description" content="Dzień 2 — ściąga: architektura Kubernetesa na klastrze EKS k8s-sages, przepływ kubectl apply, rekoncyliacja, obiekty, ruch i awarie.">
+<style>
+:root {
+  --navy: #012438;
+  --acc: #41C0F0;
+  --light: #EBF8FD;
+  --light2: #E1EDF8;
+
+  --bg: #ffffff;
+  --ink: #0f2535;
+  --muted: #557080;
+  --panel: var(--light);
+  --card: #ffffff;
+  --card-line: #b9d3e2;
+  --strong: var(--navy);
+  --on-strong: #ffffff;
+  --strong-title: var(--acc);
+  --head: #0a7aa8;
+  --line: #34505f;
+  --code-bg: var(--light2);
+  --row-alt: #f4fafd;
+  --border: #d5e4ed;
+  --pod-ink: var(--navy);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #08151e;
+    --ink: #e3eef4;
+    --muted: #9cb4c3;
+    --panel: #0f2532;
+    --card: #142f3f;
+    --card-line: #2c5065;
+    --strong: #0d4b70;
+    --on-strong: #ffffff;
+    --strong-title: #7fd6f7;
+    --head: #41C0F0;
+    --line: #a8c3d2;
+    --code-bg: #12293a;
+    --row-alt: #0d1f2b;
+    --border: #23404f;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px 64px; }
+header.hero {
+  background: var(--navy);
+  color: #fff;
+  padding: 40px 0 32px;
+  border-bottom: 6px solid var(--acc);
+}
+header.hero .wrap { padding-bottom: 0; }
+.kicker { color: var(--acc); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; font-size: 13px; margin: 0 0 6px; }
+h1 { font-size: clamp(28px, 6vw, 44px); line-height: 1.15; margin: 0 0 12px; }
+.hero p.lead { max-width: 720px; margin: 0; color: #d6e9f3; font-size: 17px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0 0; padding: 0; list-style: none; }
+.chips li { background: rgba(65,192,240,.14); border: 1px solid rgba(65,192,240,.45); color: #e6f6fd; border-radius: 999px; padding: 3px 12px; font-size: 14px; }
+nav.toc { margin: 28px 0 8px; }
+nav.toc ol { display: flex; flex-wrap: wrap; gap: 6px 8px; padding: 0; margin: 0; list-style: none; counter-reset: toc; }
+nav.toc li { counter-increment: toc; }
+nav.toc a { display: inline-block; text-decoration: none; color: var(--ink); background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 4px 10px; font-size: 14px; }
+nav.toc a::before { content: counter(toc) ". "; color: var(--head); font-weight: 700; }
+nav.toc a:hover, nav.toc a:focus-visible { border-color: var(--acc); }
+section { margin-top: 48px; scroll-margin-top: 16px; }
+h2 { font-size: clamp(22px, 4.5vw, 28px); line-height: 1.25; margin: 0 0 10px; display: flex; gap: 12px; align-items: baseline; }
+h2 .n { color: var(--acc); font-weight: 800; font-size: 1.25em; line-height: 1; }
+h3 { font-size: 18px; margin: 24px 0 8px; }
+p { margin: 0 0 12px; }
+a { color: var(--head); }
+code, kbd, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: .9em; }
+:not(pre) > code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+pre { background: var(--code-bg); padding: 12px 14px; border-radius: 8px; overflow-x: auto; margin: 0 0 12px; }
+.key { border-left: 5px solid var(--acc); background: var(--panel); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; }
+.key strong { color: var(--ink); }
+
+figure { margin: 20px 0; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
+figure .scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+figure svg { display: block; width: 100%; height: auto; }
+figcaption { font-size: 14px; color: var(--muted); margin-top: 8px; }
+@media (max-width: 640px) {
+  figure { padding: 8px; margin-left: -4px; margin-right: -4px; }
+  figure .scroll svg.wide { min-width: 820px; }
+  figcaption .hint { display: inline; }
+}
+figcaption .hint { display: none; }
+
+/* --- SVG --- */
+svg text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; fill: var(--ink); font-size: 14px; }
+svg .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+svg .b { font-weight: 700; }
+svg .s { font-size: 12.5px; fill: var(--muted); }
+svg .h { font-size: 13px; font-weight: 800; letter-spacing: .06em; fill: var(--head); }
+svg .ttl { font-size: 16px; font-weight: 800; fill: var(--strong-title); }
+svg .on { fill: var(--on-strong); }
+svg .on.s { fill: var(--on-strong); opacity: .85; }
+svg .pod-t { fill: var(--pod-ink); font-weight: 700; font-size: 12.5px; }
+svg .panel { fill: var(--bg); stroke: var(--card-line); stroke-width: 1; }
+svg .panel2 { fill: var(--panel); stroke: var(--card-line); stroke-width: 1; }
+svg .box { fill: var(--card); stroke: var(--card-line); stroke-width: 1.2; }
+svg .strong { fill: var(--strong); }
+svg .pod { fill: var(--acc); }
+svg .pod-off { fill: var(--card); stroke: var(--muted); stroke-dasharray: 4 3; }
+svg .ns { fill: none; stroke: var(--head); stroke-width: 1.6; stroke-dasharray: 8 6; }
+svg .ln { fill: none; stroke: var(--line); stroke-width: 1.8; }
+svg .ln.dash { stroke-dasharray: 6 5; }
+svg .ln.acc { stroke: var(--acc); stroke-width: 2.6; }
+svg .ln.thick { stroke-width: 3; }
+svg .mk { fill: var(--line); }
+svg .mk-acc { fill: var(--acc); }
+svg .num circle { fill: var(--strong); stroke: var(--acc); stroke-width: 2; }
+svg .num text { fill: #fff; font-weight: 800; font-size: 14px; }
+svg .lbl { font-size: 12.5px; fill: var(--muted); font-style: italic; }
+
+/* przepływ kroków (sekcja 2) */
+.flow .step, .flow .num { transition: opacity .2s; }
+.flow.has-active .step { opacity: .18; }
+.flow.has-active .num { opacity: .35; }
+.flow[data-active="1"] .s1, .flow[data-active="2"] .s2, .flow[data-active="3"] .s3,
+.flow[data-active="4"] .s4, .flow[data-active="5"] .s5, .flow[data-active="6"] .s6 { opacity: 1; }
+.flow[data-active="1"] .s1 .ln, .flow[data-active="2"] .s2 .ln, .flow[data-active="3"] .s3 .ln,
+.flow[data-active="4"] .s4 .ln, .flow[data-active="5"] .s5 .ln, .flow[data-active="6"] .s6 .ln { stroke: var(--acc); stroke-width: 3.4; }
+.flow[data-active="1"] .num.s1 circle, .flow[data-active="2"] .num.s2 circle, .flow[data-active="3"] .num.s3 circle,
+.flow[data-active="4"] .num.s4 circle, .flow[data-active="5"] .num.s5 circle, .flow[data-active="6"] .num.s6 circle { fill: var(--acc); }
+.flow[data-active="1"] .num.s1 text, .flow[data-active="2"] .num.s2 text, .flow[data-active="3"] .num.s3 text,
+.flow[data-active="4"] .num.s4 text, .flow[data-active="5"] .num.s5 text, .flow[data-active="6"] .num.s6 text { fill: var(--navy); }
+.js .flow .num { cursor: pointer; }
+
+ol.steps { list-style: none; padding: 0; margin: 12px 0 0; counter-reset: st; display: grid; gap: 8px; }
+ol.steps li { counter-increment: st; position: relative; padding: 10px 14px 10px 52px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); }
+ol.steps li::before { content: counter(st); position: absolute; left: 12px; top: 10px; width: 28px; height: 28px; border-radius: 50%; background: var(--strong); color: #fff; font-weight: 800; display: grid; place-items: center; font-size: 15px; border: 2px solid var(--acc); }
+.js ol.steps li { cursor: pointer; }
+ol.steps li.on { border-color: var(--acc); box-shadow: 0 0 0 2px var(--acc) inset; }
+ol.steps li.on::before { background: var(--acc); color: var(--navy); }
+ol.steps li:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; }
+.stepnav { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 0; }
+.stepnav button { font: inherit; font-size: 14px; padding: 6px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--ink); cursor: pointer; }
+.stepnav button:hover, .stepnav button:focus-visible { border-color: var(--acc); }
+.stepnav[hidden] { display: none; }
+
+.grid2 { display: grid; gap: 20px; grid-template-columns: 1fr; align-items: start; }
+@media (min-width: 820px) { .grid2 { grid-template-columns: 1.1fr 1fr; } }
+.timeline { list-style: none; padding: 0; margin: 0; border-left: 3px solid var(--acc); }
+.timeline li { padding: 4px 0 10px 16px; position: relative; }
+.timeline li::before { content: ""; position: absolute; left: -8px; top: 11px; width: 13px; height: 13px; border-radius: 50%; background: var(--bg); border: 3px solid var(--acc); }
+.timeline .t { font-weight: 700; }
+
+.tablewrap { overflow-x: auto; margin: 16px 0; border: 1px solid var(--border); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+thead th { background: var(--navy); color: #fff; font-size: 14px; }
+tbody tr:nth-child(even) { background: var(--row-alt); }
+tbody tr:last-child td { border-bottom: 0; }
+td:first-child { font-weight: 700; }
+@media (max-width: 640px) {
+  table.stack thead { display: none; }
+  table.stack, table.stack tbody, table.stack tr, table.stack td { display: block; width: 100%; }
+  table.stack tr { border-bottom: 1px solid var(--border); padding: 6px 0; }
+  table.stack td { border: 0; padding: 4px 12px; }
+  table.stack td[data-h]::before { content: attr(data-h); display: block; font-size: 12px; font-weight: 700; color: var(--head); text-transform: uppercase; letter-spacing: .05em; }
+}
+.cheat { display: grid; gap: 10px; grid-template-columns: 1fr; }
+@media (min-width: 760px) { .cheat { grid-template-columns: 1fr 1fr; } }
+.cheat div { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--bg); min-width: 0; }
+.cheat pre { margin: 0 0 6px; font-size: 14px; }
+.cheat p { margin: 0; font-size: 14px; color: var(--muted); }
+footer { margin-top: 56px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--border); padding-top: 16px; }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="kicker">Dzień 2 · ściąga</p>
+    <h1>Jak działa Kubernetes</h1>
+    <p class="lead">Ty opisujesz, co ma działać. Kubernetes zapisuje ten opis, rozkłada kontenery po węzłach i ciągle pilnuje, żeby rzeczywistość zgadzała się z opisem. Poniżej zobaczysz, kto za to odpowiada na naszym klastrze.</p>
+    <ul class="chips" aria-label="Nasz klaster">
+      <li>AWS EKS · k8s-sages</li>
+      <li>control plane: AWS</li>
+      <li>3 węzły EC2</li>
+      <li>containerd</li>
+      <li>Amazon VPC CNI</li>
+      <li>kube-proxy · CoreDNS</li>
+      <li>Traefik za AWS NLB</li>
+      <li>Twój namespace = Twój login</li>
+    </ul>
+  </div>
+</header>
+
+<main class="wrap">
+<nav class="toc" aria-label="Spis treści">
+  <ol>
+    <li><a href="#architektura">Architektura</a></li>
+    <li><a href="#apply">Po kubectl apply</a></li>
+    <li><a href="#rekoncyliacja">Rekoncyliacja</a></li>
+    <li><a href="#obiekty">Obiekty</a></li>
+    <li><a href="#ruch">Droga ruchu</a></li>
+    <li><a href="#awarie">Co pada</a></li>
+    <li><a href="#sciaga">Komendy</a></li>
+  </ol>
+</nav>
+
+<!-- 1 ============================================================ -->
+<section id="architektura">
+  <h2><span class="n">1</span> Architektura: wszystko idzie przez kube-apiserver</h2>
+  <p>Klaster ma dwie części. <strong>Control plane</strong> podejmuje decyzje i przechowuje stan. <strong>Węzły robocze</strong> uruchamiają kontenery. Na EKS control plane działa na koncie AWS: nie widzisz tych maszyn i nie zalogujesz się na nie. Widzisz tylko adres API. Węzły to trzy instancje EC2 w naszym VPC.</p>
+  <p>Komponenty nie wywołują się nawzajem. Każdy <em>obserwuje</em> API (mechanizm <code>watch</code>), reaguje na zmiany i zapisuje wyniki z powrotem przez API. Bazę etcd odczytuje i zapisuje tylko kube-apiserver.</p>
+
+  <figure>
+    <div class="scroll">
+    <svg class="wide" viewBox="0 0 1040 570" role="img" aria-labelledby="arch-t arch-d">
+      <title id="arch-t">Architektura klastra EKS</title>
+      <desc id="arch-d">Po lewej użytkownik z kubectl łączy się z kube-apiserver. W control plane apiserver jako jedyny rozmawia z etcd; scheduler, controller-manager i cloud-controller-manager obserwują API. Po prawej trzy węzły z kubelet, containerd, kube-proxy i podami, połączone z apiserverem.</desc>
+      <defs>
+        <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk" d="M0 0L10 5L0 10z"/></marker>
+        <marker id="a1c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="mk-acc" d="M0 0L10 5L0 10z"/></marker>
+      </defs>
+
+      <!-- Ty -->
+      <rect class="panel" x="16" y="40" width="182" height="300" rx="12"/>
+      <text class="h" x="30" y="66">TY · LAPTOP</text>
+      <rect class="strong" x="30" y="82" width="154" height="60" rx="8"/>
+      <text class="ttl" x="107" y="108" text-anchor="middle">kubectl</text>
+      <text class="on s" x="107" y="128" text-anchor="middle">Twój namespace</text>
+      <rect class="box" x="30" y="156" width="154" height="58" rx="8"/>
+      <text class="mono b" x="107" y="181" text-anchor="middle" style="font-size:13px">~/.kube/config</text>
+      <text class="s" x="107" y="201" text-anchor="middle">adres API, kontekst</text>
+      <rect class="box" x="30" y="228" width="154" height="58" rx="8"/>
+      <text class="b" x="107" y="252" text-anchor="middle">token z AWS</text>
+      <text class="s mono" x="107" y="272" text-anchor="middle">aws eks get-token</text>
+      <text class="s" x="107" y="312" text-anchor="middle">IAM → login → RBAC</text>
+      <text class="s" x="107" y="328" text-anchor="middle">w Twoim namespace</text>
+
+      <!-- Control plane -->
+      <rect class="panel" x="222" y="20" width="446" height="490" rx="12"/>
+      <text class="h" x="238" y="46">CONTROL PLANE · ZARZĄDZA AWS</text>
+
+      <rect class="box" x="370" y="62" width="140" height="58" rx="8"/>
+      <text class="b" x="440" y="88" text-anchor="middle">etcd</text>
+      <text class="s" x="440" y="107" text-anchor="middle">cały stan klastra</text>
+
+      <rect class="strong" x="330" y="170" width="220" height="84" rx="10"/>
+      <text class="ttl" x="440" y="202" text-anchor="middle" style="font-size:18px">kube-apiserver</text>
+      <text class="on s" x="440" y="224" text-anchor="middle">REST API · uwierzytelnienie</text>
+      <text class="on s" x="440" y="241" text-anchor="middle">RBAC · walidacja · admission</text>
+
+      <rect class="box" x="236" y="330" width="184" height="62" rx="8"/>
+      <text class="b" x="328" y="356" text-anchor="middle">scheduler</text>
+      <text class="s" x="328" y="376" text-anchor="middle">wybiera węzeł dla poda</text>
+
+      <rect class="box" x="470" y="330" width="184" height="62" rx="8"/>
+      <text class="b" x="562" y="356" text-anchor="middle">controller-manager</text>
+      <text class="s" x="562" y="376" text-anchor="middle">Deployment, ReplicaSet…</text>
+
+      <rect class="box" x="236" y="430" width="418" height="62" rx="8"/>
+      <text class="b" x="445" y="456" text-anchor="middle">cloud-controller-manager</text>
+      <text class="s" x="445" y="476" text-anchor="middle">rozmawia z AWS: węzły EC2, load balancery</text>
+
+      <!-- apiserver <-> etcd -->
+      <path class="ln thick" d="M440 124 V166" marker-start="url(#a1)" marker-end="url(#a1)"/>
+      <text class="lbl" x="462" y="150">tylko apiserver ↔ etcd</text>
+
+      <!-- watch: komponenty CP -->
+      <path class="ln dash" d="M328 326 L392 258" marker-start="url(#a1)" marker-end="url(#a1)"/>
+      <path class="ln dash" d="M562 326 L490 258" marker-start="url(#a1)" marker-end="url(#a1)"/>
+      <path class="ln dash" d="M445 426 V258" marker-start="url(#a1)" marker-end="url(#a1)"/>
+      <text class="lbl" x="452" y="300">watch</text>
+
+      <!-- kubectl -> apiserver -->
+      <path class="ln acc" d="M184 112 C 250 112, 270 196, 326 200" marker-end="url(#a1c)"/>
+      <text class="lbl" x="206" y="98">HTTPS + token</text>
+
+      <!-- Węzły -->
+      <g id="node1">
+        <rect class="panel" x="700" y="20" width="324" height="152" rx="12"/>
+        <text class="h" x="714" y="44">WĘZEŁ 1 · EC2</text>
+        <rect class="strong" x="712" y="56" width="140" height="48" rx="8"/>
+        <text class="ttl" x="782" y="78" text-anchor="middle" style="font-size:15px">kubelet</text>
+        <text class="on s" x="782" y="95" text-anchor="middle">agent węzła</text>
+        <rect class="box" x="872" y="56" width="140" height="48" rx="8"/>
+        <text class="b" x="942" y="78" text-anchor="middle">containerd</text>
+        <text class="s" x="942" y="95" text-anchor="middle">runtime (CRI)</text>
+        <rect class="box" x="712" y="114" width="140" height="48" rx="8"/>
+        <text class="b" x="782" y="136" text-anchor="middle">kube-proxy</text>
+        <text class="s" x="782" y="153" text-anchor="middle">reguły Service</text>
+        <rect class="pod" x="872" y="114" width="42" height="48" rx="7"/><text class="pod-t" x="893" y="143" text-anchor="middle">Pod</text>
+        <rect class="pod" x="921" y="114" width="42" height="48" rx="7"/><text class="pod-t" x="942" y="143" text-anchor="middle">Pod</text>
+        <rect class="pod" x="970" y="114" width="42" height="48" rx="7"/><text class="pod-t" x="991" y="143" text-anchor="middle">Pod</text>
+        <path class="ln" d="M852 80 H868" marker-end="url(#a1)"/>
+        <path class="ln" d="M942 104 V110" marker-end="url(#a1)"/>
+      </g>
+      <g id="node2">
+        <rect class="panel" x="700" y="190" width="324" height="152" rx="12"/>
+        <text class="h" x="714" y="214">WĘZEŁ 2 · EC2</text>
+        <rect class="strong" x="712" y="226" width="140" height="48" rx="8"/>
+        <text class="ttl" x="782" y="248" text-anchor="middle" style="font-size:15px">kubelet</text>
+        <text class="on s" x="782" y="265" text-anchor="middle">agent węzła</text>
+        <rect class="box" x="872" y="226" width="140" height="48" rx="8"/>
+        <text class="b" x="942" y="248" text-anchor="middle">containerd</text>
+        <text class="s" x="942" y="265" text-anchor="middle">runtime (CRI)</text>
+        <rect class="box" x="712" y="284" width="140" height="48" rx="8"/>
+        <text class="b" x="782" y="306" text-anchor="middle">kube-proxy</text>
+        <text class="s" x="782" y="323" text-anchor="middle">reguły Service</text>
+        <rect class="pod" x="872" y="284" width="42" height="48" rx="7"/><text class="pod-t" x="893" y="313" text-anchor="middle">Pod</text>
+        <rect class="pod" x="921" y="284" width="42" height="48" rx="7"/><text class="pod-t" x="942" y="313" text-anchor="middle">Pod</text>
+        <path class="ln" d="M852 250 H868" marker-end="url(#a1)"/>
+        <path class="ln" d="M942 274 V280" marker-end="url(#a1)"/>
+      </g>
+      <g id="node3">
+        <rect class="panel" x="700" y="360" width="324" height="152" rx="12"/>
+        <text class="h" x="714" y="384">WĘZEŁ 3 · EC2</text>
+        <rect class="strong" x="712" y="396" width="140" height="48" rx="8"/>
+        <text class="ttl" x="782" y="418" text-anchor="middle" style="font-size:15px">kubelet</text>
+        <text class="on s" x="782" y="435" text-anchor="middle">agent węzła</text>
+        <rect class="box" x="872" y="396" width="140" height="48" rx="8"/>
+        <text class="b" x="942" y="418" text-anchor="middle">containerd</text>
+        <text class="s" x="942" y="435" text-anchor="middle">runtime (CRI)</text>
+        <rect class="box" x="712" y="454" width="140" height="48" rx="8"/>
+        <text class="b" x="782" y="476" text-anchor="middle">kube-proxy</text>
+        <text class="s" x="782" y="493" text-anchor="middle">reguły Service</text>
+        <rect class="pod" x="872" y="454" width="42" height="48" rx="7"/><text class="pod-t" x="893" y="483" text-anchor="middle">Pod</text>
+        <rect class="pod" x="921" y="454" width="42" height="48" rx="7"/><text class="pod-t" x="942" y="483" text-anchor="middle">Pod</text>
+        <path class="ln" d="M852 420 H868" marker-end="url(#a1)"/>
+        <path class="ln" d="M942 444 V450" marker-end="url(#a1)"/>
+      </g>
+
+      <!-- apiserver <-> węzły (watch) -->
+      <path class="ln dash" d="M554 200 C 620 190, 640 96, 696 96" marker-start="url(#a1)" marker-end="url(#a1)"/>
+      <path class="ln dash" d="M554 212 C 620 212, 640 266, 696 266" marker-start="url(#a1)" marker-end="url(#a1)"/>
+      <path class="ln dash" d="M554 226 C 600 240, 630 420, 696 420" marker-start="url(#a1)" marker-end="url(#a1)"/>
+      <text class="lbl" x="530" y="74">kubelet i kube-proxy</text>
+      <text class="lbl" x="530" y="90">na każdym węźle:</text>
+      <text class="lbl" x="530" y="106">watch na API →</text>
+
+      <!-- legenda -->
+      <path class="ln acc" d="M30 545 H70" marker-end="url(#a1c)"/>
+      <text class="s" x="80" y="550">Twoje żądanie</text>
+      <path class="ln thick" d="M220 545 H260" marker-end="url(#a1)"/>
+      <text class="s" x="270" y="550">odczyt/zapis stanu</text>
+      <path class="ln dash" d="M430 545 H470" marker-start="url(#a1)" marker-end="url(#a1)"/>
+      <text class="s" x="480" y="550">obserwuje API (watch) i zapisuje wyniki przez API</text>
+    </svg>
+    </div>
+    <figcaption>Control plane na EKS: kilka instancji apiservera i etcd w trzech strefach dostępności, utrzymywane przez AWS. W <code>kubectl get pods -n kube-system</code> ich nie zobaczysz. Zobaczysz tam dodatki działające na naszych węzłach: CoreDNS, kube-proxy i aws-node (VPC CNI). <span class="hint">Na telefonie diagram przewiniesz w bok.</span></figcaption>
+  </figure>
+
+  <div class="key"><strong>Zapamiętaj:</strong> kubectl rozmawia tylko z kube-apiserverem. Każdy komponent też. Kiedy apiserver nie odpowiada, w klastrze nic się nie zmieni, ale działające kontenery dalej działają.</div>
+</section>
+
+<!-- 2 ============================================================ -->
+<section id="apply">
+  <h2><span class="n">2</span> <span>Co się dzieje po <code>kubectl apply</code></span></h2>
+  <p>Prześledźmy jedno polecenie <code>kubectl apply -f deployment.yaml</code> z Deploymentem na 3 repliki. Numery na diagramie odpowiadają krokom na liście. <span class="js-only" hidden>Kliknij krok albo numer na diagramie, żeby podświetlić jego strzałkę.</span></p>
+
+  <figure>
+    <div class="scroll">
+    <svg class="wide flow" id="flow" viewBox="0 0 1000 400" role="img" aria-labelledby="flow-t">
+      <title id="flow-t">Przepływ kubectl apply w sześciu krokach</title>
+      <defs>
+        <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk" d="M0 0L10 5L0 10z"/></marker>
+      </defs>
+      <!-- węzły diagramu -->
+      <rect class="strong" x="16" y="150" width="140" height="64" rx="10"/>
+      <text class="ttl" x="86" y="178" text-anchor="middle">kubectl</text>
+      <text class="on s" x="86" y="198" text-anchor="middle">Ty</text>
+
+      <rect class="box" x="290" y="20" width="140" height="58" rx="8"/>
+      <text class="b" x="360" y="46" text-anchor="middle">etcd</text>
+      <text class="s" x="360" y="65" text-anchor="middle">stan pożądany</text>
+
+      <rect class="strong" x="260" y="142" width="200" height="80" rx="10"/>
+      <text class="ttl" x="360" y="176" text-anchor="middle" style="font-size:17px">kube-apiserver</text>
+      <text class="on s" x="360" y="198" text-anchor="middle">jedyne wejście</text>
+
+      <rect class="box" x="150" y="300" width="190" height="64" rx="8"/>
+      <text class="b" x="245" y="326" text-anchor="middle">controller-manager</text>
+      <text class="s" x="245" y="346" text-anchor="middle">Deployment → RS → Pody</text>
+
+      <rect class="box" x="380" y="300" width="170" height="64" rx="8"/>
+      <text class="b" x="465" y="326" text-anchor="middle">scheduler</text>
+      <text class="s" x="465" y="346" text-anchor="middle">pod → węzeł</text>
+
+      <rect class="panel2" x="600" y="110" width="384" height="276" rx="12"/>
+      <text class="h" x="614" y="134">WYBRANY WĘZEŁ</text>
+      <rect class="strong" x="614" y="150" width="150" height="64" rx="10"/>
+      <text class="ttl" x="689" y="178" text-anchor="middle">kubelet</text>
+      <text class="on s" x="689" y="198" text-anchor="middle">„mój nowy pod”</text>
+      <rect class="box" x="814" y="150" width="156" height="64" rx="8"/>
+      <text class="b" x="892" y="176" text-anchor="middle">containerd</text>
+      <text class="s" x="892" y="196" text-anchor="middle">pobiera obraz</text>
+      <rect class="pod" x="814" y="300" width="48" height="64" rx="8"/><text class="pod-t" x="838" y="337" text-anchor="middle">Pod</text>
+      <rect class="pod" x="868" y="300" width="48" height="64" rx="8"/><text class="pod-t" x="892" y="337" text-anchor="middle">Pod</text>
+      <rect class="pod" x="922" y="300" width="48" height="64" rx="8"/><text class="pod-t" x="946" y="337" text-anchor="middle">Pod</text>
+
+      <!-- strzałki kroków -->
+      <g class="step s1"><path class="ln" d="M156 182 H254" marker-end="url(#a2)"/><text class="lbl" x="166" y="240">uwierzytelnienie,</text><text class="lbl" x="166" y="256">RBAC, walidacja</text></g>
+      <g class="step s2"><path class="ln" d="M360 138 V84" marker-end="url(#a2)"/><text class="lbl" x="440" y="100">zapis obiektu</text></g>
+      <g class="step s3"><path class="ln" d="M260 296 L312 228" marker-start="url(#a2)" marker-end="url(#a2)"/><text class="lbl" x="240" y="288" text-anchor="end">watch + tworzy RS i Pody</text></g>
+      <g class="step s4"><path class="ln" d="M455 296 L408 228" marker-start="url(#a2)" marker-end="url(#a2)"/><text class="lbl" x="462" y="268">watch + zapis węzła</text></g>
+      <g class="step s5"><path class="ln" d="M464 170 H608" marker-start="url(#a2)" marker-end="url(#a2)"/><text class="lbl" x="474" y="158">watch: pody węzła</text></g>
+      <g class="step s6">
+        <path class="ln" d="M764 182 H808" marker-end="url(#a2)"/>
+        <path class="ln" d="M892 214 V294" marker-end="url(#a2)"/>
+        <path class="ln dash" d="M610 204 H466" marker-end="url(#a2)"/>
+        <text class="lbl" x="490" y="224">status → API</text>
+        <text class="lbl" x="904" y="262">start</text>
+      </g>
+
+      <!-- numery -->
+      <g class="num s1" data-step="1" tabindex="-1"><circle cx="205" cy="162" r="14"/><text x="205" y="167" text-anchor="middle">1</text></g>
+      <g class="num s2" data-step="2" tabindex="-1"><circle cx="384" cy="110" r="14"/><text x="384" y="115" text-anchor="middle">2</text></g>
+      <g class="num s3" data-step="3" tabindex="-1"><circle cx="300" cy="262" r="14"/><text x="300" y="267" text-anchor="middle">3</text></g>
+      <g class="num s4" data-step="4" tabindex="-1"><circle cx="440" cy="250" r="14"/><text x="440" y="255" text-anchor="middle">4</text></g>
+      <g class="num s5" data-step="5" tabindex="-1"><circle cx="536" cy="132" r="14"/><text x="536" y="137" text-anchor="middle">5</text></g>
+      <g class="num s6" data-step="6" tabindex="-1"><circle cx="786" cy="162" r="14"/><text x="786" y="167" text-anchor="middle">6</text></g>
+    </svg>
+    </div>
+  </figure>
+
+  <ol class="steps" id="steps">
+    <li data-step="1"><strong>kubectl → kube-apiserver.</strong> kubectl czyta <code>~/.kube/config</code>, pobiera z AWS token (<code>aws eks get-token</code>) i wysyła YAML przez HTTPS. Apiserver sprawdza po kolei: kim jesteś (uwierzytelnienie: tożsamość IAM → Twój login), czy wolno Ci to zrobić (RBAC w Twoim namespace), czy obiekt jest poprawny (walidacja i kontrolery admission, które mogą dopisać wartości domyślne albo odrzucić obiekt).</li>
+    <li data-step="2"><strong>Zapis w etcd.</strong> Apiserver zapisuje Deployment w etcd. Od tej chwili to <em>stan pożądany</em>. kubectl kończy pracę i wypisuje <code>deployment.apps/web created</code>, choć żaden kontener jeszcze nie działa.</li>
+    <li data-step="3"><strong>controller-manager tworzy obiekty.</strong> Kontroler Deployment widzi nowy obiekt i tworzy ReplicaSet. Kontroler ReplicaSet tworzy 3 obiekty Pod. Pody są już w API, ale nie mają węzła: status <code>Pending</code>.</li>
+    <li data-step="4"><strong>scheduler przypisuje węzeł.</strong> Widzi pody bez węzła, odrzuca węzły, które się nie nadają (za mało wolnych <code>requests</code> CPU i pamięci, taints, <code>nodeSelector</code>, affinity), z pozostałych wybiera najlepszy i zapisuje decyzję w API (<code>spec.nodeName</code>).</li>
+    <li data-step="5"><strong>kubelet widzi pod.</strong> Kubelet na wybranym węźle obserwuje API i zauważa nowy pod przypisany do swojego węzła.</li>
+    <li data-step="6"><strong>containerd uruchamia kontenery.</strong> Kubelet przez interfejs CRI każe containerd pobrać obraz i uruchomić kontenery. Adres IP z VPC nadaje podowi VPC CNI. Kubelet uruchamia sondy i raportuje status do API. Dopiero teraz <code>kubectl get pods</code> pokazuje <code>Running</code>.</li>
+  </ol>
+  <div class="stepnav" id="stepnav" hidden>
+    <button type="button" data-act="prev">← poprzedni krok</button>
+    <button type="button" data-act="next">następny krok →</button>
+    <button type="button" data-act="all">pokaż wszystko</button>
+  </div>
+  <p style="margin-top:14px">Kroki 3–6 zobaczysz na żywo w <code>kubectl get events -w</code>: <code>ScalingReplicaSet</code>, <code>SuccessfulCreate</code>, <code>Scheduled</code>, <code>Pulling</code>, <code>Pulled</code>, <code>Created</code>, <code>Started</code>.</p>
+</section>
+
+<!-- 3 ============================================================ -->
+<section id="rekoncyliacja">
+  <h2><span class="n">3</span> Pętla rekoncyliacji</h2>
+  <p>Każdy obiekt ma dwie części. <code>spec</code> to stan pożądany: piszesz go Ty w YAML-u. <code>status</code> to stan obecny: zapisują go kontrolery i kubelet. Każdy kontroler kręci się w tej samej pętli: <strong>obserwuj → porównaj → działaj</strong>. Nie wykonuje jednorazowego polecenia, tylko bez końca dąży do tego, co jest w <code>spec</code>.</p>
+
+  <div class="grid2">
+    <figure style="margin:0">
+      <svg viewBox="0 0 640 380" role="img" aria-labelledby="loop-t">
+        <title id="loop-t">Pętla rekoncyliacji: obserwuj, porównaj, działaj</title>
+        <defs>
+          <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="mk-acc" d="M0 0L10 5L0 10z"/></marker>
+        </defs>
+        <circle cx="320" cy="190" r="130" fill="none" stroke="var(--card-line)" stroke-width="1.5" stroke-dasharray="3 6"/>
+        <path class="ln acc" d="M403.6 90.4 A130 130 0 0 1 449.5 201.3" marker-end="url(#a3)"/>
+        <path class="ln acc" d="M394.6 296.5 A130 130 0 0 1 245.4 296.5" marker-end="url(#a3)"/>
+        <path class="ln acc" d="M190.5 201.3 A130 130 0 0 1 236.4 90.4" marker-end="url(#a3)"/>
+
+        <rect class="strong" x="240" y="36" width="160" height="56" rx="28"/>
+        <text class="ttl" x="320" y="60" text-anchor="middle">obserwuj</text>
+        <text class="on s" x="320" y="78" text-anchor="middle">watch na API</text>
+
+        <rect class="strong" x="380" y="226" width="160" height="56" rx="28"/>
+        <text class="ttl" x="460" y="250" text-anchor="middle">porównaj</text>
+        <text class="on s" x="460" y="268" text-anchor="middle">spec vs status</text>
+
+        <rect class="strong" x="100" y="226" width="160" height="56" rx="28"/>
+        <text class="ttl" x="180" y="250" text-anchor="middle">działaj</text>
+        <text class="on s" x="180" y="268" text-anchor="middle">zmiana przez API</text>
+
+        <text class="mono b" x="320" y="146" text-anchor="middle" style="font-size:15px">spec.replicas: 3</text>
+        <text class="mono" x="320" y="172" text-anchor="middle" style="font-size:15px">gotowe pody: 2</text>
+        <text class="b" x="320" y="204" text-anchor="middle" style="fill:var(--head)">brakuje 1 → utwórz poda</text>
+
+        <text class="s" x="320" y="350" text-anchor="middle">pętla nie kończy się nigdy: po zmianie znów obserwuje</text>
+      </svg>
+    </figure>
+    <div>
+      <h3 style="margin-top:0">Przykład: usuwasz pod, a on wraca</h3>
+      <ol class="timeline">
+        <li><span class="t">Ty:</span> <code>kubectl delete pod web-7d9f-abc12</code>. Apiserver usuwa obiekt.</li>
+        <li><span class="t">Kontroler ReplicaSet</span> dostaje zdarzenie z watch. Liczy pody pasujące do selektora: są 2, a <code>spec.replicas</code> mówi 3.</li>
+        <li><span class="t">Działa:</span> tworzy nowy obiekt Pod z szablonu. Nowy pod ma nową nazwę i nowe IP.</li>
+        <li><span class="t">Dalej jak w krokach 4–6:</span> scheduler wybiera węzeł, kubelet i containerd uruchamiają kontener.</li>
+        <li><span class="t">Po kilku sekundach</span> znów są 3 pody. Żeby było ich mniej, zmień <code>spec</code>: <code>kubectl scale deploy/web --replicas=2</code>.</li>
+      </ol>
+      <p style="margin-top:12px">Dlatego ręczne „naprawianie” obiektów, którymi zarządza kontroler, nic nie da: kontroler cofnie zmianę. Zmieniasz zawsze obiekt nadrzędny (Deployment), najlepiej przez plik YAML i <code>kubectl apply</code>.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 4 ============================================================ -->
+<section id="obiekty">
+  <h2><span class="n">4</span> Obiekty: dziś w dniu 2 i co dochodzi potem</h2>
+  <p>Deployment zarządza ReplicaSetami, ReplicaSet zarządza podami, pod zawiera kontenery. Wszystkie żyją w Twoim namespace. ConfigMap i Secret dostarczają konfigurację do podów. Service nie „zawiera” podów: wybiera je <strong>selektorem etykiet</strong>, a Ingress albo HTTPRoute kieruje ruch HTTP do Service.</p>
+
+  <figure>
+    <div class="scroll">
+    <svg class="wide" viewBox="0 0 1000 480" role="img" aria-labelledby="obj-t obj-d">
+      <title id="obj-t">Hierarchia obiektów</title>
+      <desc id="obj-d">Namespace zawiera Deployment, który zawiera ReplicaSet z trzema podami. Obok ConfigMap i Secret podłączone do szablonu poda. Service wybiera pody selektorem app=web, Ingress lub HTTPRoute kieruje ruch do Service.</desc>
+      <defs>
+        <marker id="a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk" d="M0 0L10 5L0 10z"/></marker>
+      </defs>
+      <rect class="ns" x="8" y="8" width="984" height="462" rx="16"/>
+      <text class="h" x="26" y="34">NAMESPACE · anna (Twój login)</text>
+
+      <rect class="panel2" x="26" y="50" width="568" height="300" rx="12"/>
+      <text class="b" x="42" y="76">Deployment web</text>
+      <text class="s" x="180" y="76">replicas: 3 · szablon poda · strategia aktualizacji</text>
+
+      <rect class="panel" x="44" y="92" width="532" height="238" rx="10"/>
+      <text class="b" x="60" y="116">ReplicaSet web-7d9f</text>
+      <text class="s" x="214" y="116">tworzy go Deployment, pilnuje liczby podów</text>
+
+      <g>
+        <rect class="box" x="62" y="134" width="160" height="176" rx="10"/>
+        <text class="b" x="78" y="158">Pod</text><text class="s mono" x="110" y="158">…-abc12</text>
+        <rect class="pod" x="76" y="172" width="132" height="44" rx="6"/>
+        <text class="pod-t" x="142" y="199" text-anchor="middle">kontener: web</text>
+        <rect class="box" x="76" y="224" width="132" height="34" rx="6" style="stroke-dasharray:4 3"/>
+        <text class="s" x="142" y="246" text-anchor="middle">wolumen (opcja)</text>
+        <text class="s mono" x="142" y="292" text-anchor="middle">app: web</text>
+      </g>
+      <g>
+        <rect class="box" x="230" y="134" width="160" height="176" rx="10"/>
+        <text class="b" x="246" y="158">Pod</text><text class="s mono" x="278" y="158">…-def34</text>
+        <rect class="pod" x="244" y="172" width="132" height="44" rx="6"/>
+        <text class="pod-t" x="310" y="199" text-anchor="middle">kontener: web</text>
+        <rect class="box" x="244" y="224" width="132" height="34" rx="6" style="stroke-dasharray:4 3"/>
+        <text class="s" x="310" y="246" text-anchor="middle">wolumen (opcja)</text>
+        <text class="s mono" x="310" y="292" text-anchor="middle">app: web</text>
+      </g>
+      <g>
+        <rect class="box" x="398" y="134" width="160" height="176" rx="10"/>
+        <text class="b" x="414" y="158">Pod</text><text class="s mono" x="446" y="158">…-gh567</text>
+        <rect class="pod" x="412" y="172" width="132" height="44" rx="6"/>
+        <text class="pod-t" x="478" y="199" text-anchor="middle">kontener: web</text>
+        <rect class="box" x="412" y="224" width="132" height="34" rx="6" style="stroke-dasharray:4 3"/>
+        <text class="s" x="478" y="246" text-anchor="middle">wolumen (opcja)</text>
+        <text class="s mono" x="478" y="292" text-anchor="middle">app: web</text>
+      </g>
+
+      <!-- ConfigMap / Secret -->
+      <rect class="box" x="630" y="50" width="160" height="70" rx="8"/>
+      <text class="b" x="710" y="78" text-anchor="middle">ConfigMap</text>
+      <text class="s" x="710" y="98" text-anchor="middle">konfiguracja jawna</text>
+      <rect class="box" x="810" y="50" width="164" height="70" rx="8"/>
+      <text class="b" x="892" y="78" text-anchor="middle">Secret</text>
+      <text class="s" x="892" y="98" text-anchor="middle">hasła, klucze (base64)</text>
+      <path class="ln dash" d="M710 124 V150 H598" marker-end="url(#a4)"/>
+      <path class="ln dash" d="M892 124 V150 H710"/>
+      <text class="lbl" x="726" y="172">env / pliki w wolumenie</text>
+
+      <!-- Service -->
+      <rect class="strong" x="630" y="210" width="344" height="80" rx="10"/>
+      <text class="ttl" x="802" y="240" text-anchor="middle">Service web · ClusterIP</text>
+      <text class="on s mono" x="802" y="262" text-anchor="middle">selector: app=web</text>
+      <text class="on s" x="802" y="279" text-anchor="middle">stały adres i nazwa DNS</text>
+
+      <path class="ln dash" d="M690 294 V378 H142 V314" marker-end="url(#a4)"/>
+      <path class="ln dash" d="M310 378 V314" marker-end="url(#a4)"/>
+      <path class="ln dash" d="M478 378 V314" marker-end="url(#a4)"/>
+      <text class="lbl" x="160" y="400">Service wybiera pody po etykietach, nie po nazwach (lista trafia do EndpointSlice)</text>
+
+      <!-- Ingress -->
+      <rect class="box" x="760" y="380" width="214" height="70" rx="8"/>
+      <text class="b" x="867" y="406" text-anchor="middle">Ingress / HTTPRoute</text>
+      <text class="s" x="867" y="428" text-anchor="middle">host + ścieżka → Service</text>
+      <path class="ln" d="M867 376 V296" marker-end="url(#a4)"/>
+    </svg>
+    </div>
+    <figcaption>Nazwa poda = nazwa ReplicaSetu + losowy sufiks, a nazwa ReplicaSetu = nazwa Deploymentu + hash szablonu. Po zmianie obrazu Deployment tworzy nowy ReplicaSet i stopniowo przenosi na niego pody. <span class="hint">Na telefonie diagram przewiniesz w bok.</span></figcaption>
+  </figure>
+
+  <h3 id="kolejne-dni">Co dochodzi w kolejne dni</h3>
+  <p>Diagram wyżej to stan po dniu 2. Każdego dnia dokładasz do swojego namespace nowe obiekty, a na koniec dnia przenosisz je do swojego ToDos. Kolumna „ToDos” mówi, co po tym dniu ma Twoja aplikacja. Całość na jednej mapie, z przełącznikiem dni: <a href="../stack/stack.html">stack.html</a>.</p>
+  <table class="stack">
+    <thead><tr><th>Dzień</th><th>Nowe obiekty i mechanizmy</th><th>Twój ToDos po tym dniu</th><th>Laby</th></tr></thead>
+    <tbody>
+      <tr>
+        <td data-h="Dzień"><strong>2 · dziś</strong></td>
+        <td data-h="Nowe obiekty">Namespace, Pod, ReplicaSet, Deployment (rollout, rollback), ConfigMap, Secret, Service (ClusterIP, NodePort, LoadBalancer), EndpointSlice, Ingress z TLS od cert-managera. Gateway i HTTPRoute pokazuje prowadzący.</td>
+        <td data-h="ToDos">web, api i mongo jako Deploymenty z Service, konfiguracja w ConfigMapie i Secrecie, adres <code>https://todos-&lt;login&gt;.k8s.marniok.dev</code>. Baza bez dysku: restart poda mongo czyści dane.</td>
+        <td data-h="Laby">lab05–lab08, ToDos · dzień 2</td>
+      </tr>
+      <tr>
+        <td data-h="Dzień"><strong>3</strong></td>
+        <td data-h="Nowe obiekty">PersistentVolumeClaim i StorageClass (dyski EBS gp3), StatefulSet z headless Service, Job, CronJob, DaemonSet, requests i limits (QoS), ResourceQuota i LimitRange, HorizontalPodAutoscaler. Na kind: affinity, taint i toleracja, PodDisruptionBudget, drain węzła.</td>
+        <td data-h="ToDos">mongo jako StatefulSet z własnym dyskiem (dane przeżywają restart), requests i limits w każdym kontenerze, HPA dla api.</td>
+        <td data-h="Laby">lab09–lab12</td>
+      </tr>
+      <tr>
+        <td data-h="Dzień"><strong>4</strong></td>
+        <td data-h="Nowe obiekty">ServiceAccount, Role i RoleBinding (RBAC), securityContext i Pod Security <code>restricted</code>, skanowanie obrazów i manifestów, NetworkPolicy, Downward API, CustomResourceDefinition (na kind).</td>
+        <td data-h="ToDos">kontenery bez roota (securityContext zgodny z <code>restricted</code>), NetworkPolicy w łańcuchu Traefik → web → api → mongo, obrazy przeskanowane przed wdrożeniem.</td>
+        <td data-h="Laby">lab13–lab16</td>
+      </tr>
+      <tr>
+        <td data-h="Dzień"><strong>5</strong></td>
+        <td data-h="Nowe obiekty">Helm (chart, release, values, rollback), operator i jego CRD (CloudNativePG: PostgreSQL jednym obiektem <code>Cluster</code>), monitoring i logi w Grafanie, własny alert.</td>
+        <td data-h="ToDos">cały ToDos jako chart Helm z <code>values-dev</code> i <code>values-prod</code>: StatefulSet z PVC, sondy, limity, Ingress z TLS, NetworkPolicy, HPA. Metryki i logi aplikacji w Grafanie.</td>
+        <td data-h="Laby">lab17–lab20 (projekt końcowy)</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- 5 ============================================================ -->
+<section id="ruch">
+  <h2><span class="n">5</span> Droga ruchu</h2>
+  <p>Service to nie proces ani kontener. To wpis w API. Na jego podstawie kube-proxy na każdym węźle układa reguły przekierowania, a kontroler EndpointSlice prowadzi listę <em>gotowych</em> podów (tych, które przechodzą readinessProbe).</p>
+
+  <figure>
+    <div class="scroll">
+    <svg class="wide" viewBox="0 0 1000 450" role="img" aria-labelledby="net-t net-d">
+      <title id="net-t">Droga ruchu z internetu i wewnątrz klastra</title>
+      <desc id="net-d">Z internetu: przeglądarka, AWS NLB, Traefik jako kontroler Ingress, Service ClusterIP z EndpointSlice, gotowe pody. Wewnątrz klastra: pod pyta CoreDNS o nazwę Service, dostaje ClusterIP, reguły kube-proxy kierują pakiet do jednego z gotowych podów.</desc>
+      <defs>
+        <marker id="a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk" d="M0 0L10 5L0 10z"/></marker>
+        <marker id="a5c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="mk-acc" d="M0 0L10 5L0 10z"/></marker>
+      </defs>
+
+      <text class="h" x="16" y="30">Z INTERNETU</text>
+      <rect class="box" x="16" y="48" width="140" height="72" rx="8"/>
+      <text class="b" x="86" y="78" text-anchor="middle">przeglądarka</text>
+      <text class="s mono" x="86" y="99" text-anchor="middle">https://web…</text>
+
+      <rect class="strong" x="190" y="48" width="140" height="72" rx="8"/>
+      <text class="ttl" x="260" y="78" text-anchor="middle">AWS NLB</text>
+      <text class="on s" x="260" y="99" text-anchor="middle">jeden adres</text>
+
+      <rect class="strong" x="364" y="48" width="170" height="72" rx="8"/>
+      <text class="ttl" x="449" y="76" text-anchor="middle">Traefik</text>
+      <text class="on s" x="449" y="95" text-anchor="middle">kontroler Ingress</text>
+      <text class="on s" x="449" y="111" text-anchor="middle">host + ścieżka</text>
+
+      <rect class="box" x="568" y="48" width="180" height="72" rx="8"/>
+      <text class="b" x="658" y="76" text-anchor="middle">Service web</text>
+      <text class="s" x="658" y="95" text-anchor="middle">ClusterIP</text>
+      <text class="s" x="658" y="111" text-anchor="middle">+ EndpointSlice</text>
+
+      <rect class="pod" x="784" y="40" width="200" height="26" rx="6"/><text class="pod-t" x="884" y="58" text-anchor="middle">web-1 · gotowy</text>
+      <rect class="pod" x="784" y="72" width="200" height="26" rx="6"/><text class="pod-t" x="884" y="90" text-anchor="middle">web-2 · gotowy</text>
+      <rect class="pod-off" x="784" y="104" width="200" height="26" rx="6"/><text class="s" x="884" y="122" text-anchor="middle">web-3 · readiness ✗</text>
+
+      <path class="ln acc" d="M156 84 H186" marker-end="url(#a5c)"/>
+      <path class="ln acc" d="M330 84 H360" marker-end="url(#a5c)"/>
+      <path class="ln acc" d="M534 84 H564" marker-end="url(#a5c)"/>
+      <path class="ln acc" d="M748 76 L780 54" marker-end="url(#a5c)"/>
+      <path class="ln acc" d="M748 86 L780 86" marker-end="url(#a5c)"/>
+
+      <text class="lbl" x="190" y="146">NodePort na węzłach → pod Traefika</text>
+      <text class="lbl" x="568" y="146">pod spoza EndpointSlice nie dostaje ruchu</text>
+
+      <line x1="16" y1="178" x2="984" y2="178" stroke="var(--card-line)" stroke-dasharray="2 6"/>
+
+      <text class="h" x="16" y="212">WEWNĄTRZ KLASTRA</text>
+      <rect class="box" x="16" y="300" width="150" height="72" rx="8"/>
+      <text class="b" x="91" y="330" text-anchor="middle">pod frontend</text>
+      <text class="s mono" x="91" y="351" text-anchor="middle">GET http://web</text>
+
+      <rect class="box" x="210" y="226" width="190" height="62" rx="8"/>
+      <text class="b" x="305" y="252" text-anchor="middle">CoreDNS</text>
+      <text class="s mono" x="305" y="272" text-anchor="middle">web → 10.100.12.34</text>
+
+      <rect class="strong" x="440" y="300" width="250" height="72" rx="8"/>
+      <text class="ttl" x="565" y="328" text-anchor="middle">reguły kube-proxy</text>
+      <text class="on s" x="565" y="348" text-anchor="middle">na węźle klienta: ClusterIP →</text>
+      <text class="on s" x="565" y="364" text-anchor="middle">jeden z gotowych podów</text>
+
+      <rect class="box" x="478" y="210" width="174" height="56" rx="8"/>
+      <text class="b" x="565" y="234" text-anchor="middle">EndpointSlice</text>
+      <text class="s" x="565" y="253" text-anchor="middle">IP gotowych podów</text>
+
+      <rect class="pod" x="740" y="300" width="244" height="32" rx="6"/><text class="pod-t" x="862" y="321" text-anchor="middle">web-1 · 10.0.21.7</text>
+      <rect class="pod" x="740" y="340" width="244" height="32" rx="6"/><text class="pod-t" x="862" y="361" text-anchor="middle">web-2 · 10.0.35.12</text>
+
+      <path class="ln" d="M110 296 C 120 262, 160 258, 206 256" marker-end="url(#a5)"/>
+      <path class="ln dash" d="M260 292 C 240 316, 210 324, 172 326" marker-end="url(#a5)"/>
+      <text class="lbl" x="20" y="250">① pytanie: „web”?</text>
+      <text class="lbl" x="266" y="312">② ClusterIP</text>
+      <path class="ln acc" d="M166 350 H436" marker-end="url(#a5c)"/>
+      <text class="lbl" x="226" y="368">③ pakiet na ClusterIP</text>
+      <path class="ln dash" d="M565 270 V296" marker-end="url(#a5)"/>
+      <text class="lbl" x="664" y="276">kube-proxy obserwuje</text>
+      <path class="ln acc" d="M690 326 H736" marker-end="url(#a5c)"/>
+      <path class="ln acc" d="M690 346 L736 356" marker-end="url(#a5c)"/>
+      <text class="lbl" x="700" y="396">④ prosto na IP poda (z VPC), także na innym węźle</text>
+      <text class="s" x="16" y="430">ClusterIP nie należy do żadnej maszyny. Pakiet przechwytują reguły na węźle, na którym działa pod klienta.</text>
+    </svg>
+    </div>
+    <figcaption>Krótka nazwa <code>web</code> działa w tym samym namespace. Z innego: <code>web.&lt;namespace&gt;</code> albo pełna <code>web.&lt;namespace&gt;.svc.cluster.local</code>. Adresy na rysunku są przykładowe. <span class="hint">Na telefonie diagram przewiniesz w bok.</span></figcaption>
+  </figure>
+
+  <ul>
+    <li><strong>NLB</strong> to jeden load balancer AWS przed Traefikiem (Service typu LoadBalancer). Każdy taki Service to osobny NLB i osobny rachunek, dlatego aplikacje wystawiamy przez Ingress, a nie własnym LoadBalancerem.</li>
+    <li><strong>Traefik</strong> czyta obiekty Ingress (i HTTPRoute z Gateway API) i po nagłówku Host oraz ścieżce wybiera Service.</li>
+    <li><strong>Pusty EndpointSlice</strong> to najczęstsza przyczyna „Service nie działa”: selektor nie pasuje do etykiet podów albo żaden pod nie przechodzi readiness.</li>
+  </ul>
+</section>
+
+<!-- 6 ============================================================ -->
+<section id="awarie">
+  <h2><span class="n">6</span> Co pada i co wtedy</h2>
+  <p>Działające kontenery są niezależne od control plane. Awaria jednego elementu nie wyłącza od razu całego klastra, ale za każdym razem tracisz inną zdolność.</p>
+  <div class="tablewrap">
+    <table class="stack">
+      <thead><tr><th>Co pada</th><th>Co dalej działa</th><th>Co przestaje działać</th><th>Na EKS / co robić</th></tr></thead>
+      <tbody>
+        <tr>
+          <td data-h="Co pada">kube-apiserver</td>
+          <td data-h="Co dalej działa">Działające pody działają dalej. Ruch do Service idzie, bo kube-proxy ma już reguły na węzłach.</td>
+          <td data-h="Co przestaje działać">Nic nie zmienisz: kubectl nie odpowiada. Kontrolery nie widzą zmian, więc nikt nie naprawi awarii ani nie uruchomi nowych podów.</td>
+          <td data-h="Na EKS">Co najmniej 2 instancje w różnych strefach (AZ), pilnuje ich AWS.</td>
+        </tr>
+        <tr>
+          <td data-h="Co pada">węzeł (EC2)</td>
+          <td data-h="Co dalej działa">Pody na pozostałych węzłach. Pody z martwego węzła wypadają z EndpointSlice, gdy węzeł dostaje status NotReady.</td>
+          <td data-h="Co przestaje działać">Po ok. 5 minutach (domyślna tolerancja <code>not-ready</code>/<code>unreachable</code>: 300 s) pody z węzła są usuwane. Kontrolery (ReplicaSet, StatefulSet) tworzą nowe na innych węzłach. <strong>Goły pod bez kontrolera nie wraca.</strong></td>
+          <td data-h="Na EKS">Grupa węzłów (Auto Scaling) podnosi nową instancję EC2. Aplikacje uruchamiaj zawsze przez Deployment.</td>
+        </tr>
+        <tr>
+          <td data-h="Co pada">pod / kontener</td>
+          <td data-h="Co dalej działa">Pozostałe repliki obsługują ruch.</td>
+          <td data-h="Co przestaje działać">Kontener padł: kubelet go restartuje (licznik RESTARTS, przy powtórkach <code>CrashLoopBackOff</code>). Pod usunięty: ReplicaSet tworzy nowy, z nową nazwą i nowym IP. Dane zapisane w kontenerze bez wolumenu przepadają.</td>
+          <td data-h="Na EKS">Minimum 2 repliki i readinessProbe, żeby ruch nie trafiał do niegotowego poda.</td>
+        </tr>
+        <tr>
+          <td data-h="Co pada">scheduler / controller-manager</td>
+          <td data-h="Co dalej działa">Wszystko, co już działa.</td>
+          <td data-h="Co przestaje działać">Bez schedulera nowe pody wiszą w <code>Pending</code>. Bez controller-managera nic się nie naprawia ani nie skaluje.</td>
+          <td data-h="Na EKS">Część control plane, utrzymuje AWS.</td>
+        </tr>
+        <tr>
+          <td data-h="Co pada">CoreDNS</td>
+          <td data-h="Co dalej działa">Połączenia po IP i już otwarte połączenia.</td>
+          <td data-h="Co przestaje działać">Nazwy Service przestają się rozwiązywać. Aplikacje zgłaszają błędy typu „unknown host”.</td>
+          <td data-h="Na EKS">Dodatek EKS, 2 repliki w <code>kube-system</code>.</td>
+        </tr>
+        <tr>
+          <td data-h="Co pada">etcd</td>
+          <td data-h="Co dalej działa">Kontenery do pierwszej potrzeby zmiany.</td>
+          <td data-h="Co przestaje działać">Utrata etcd = utrata stanu klastra: wszystkich obiektów, które w nim zapisałeś.</td>
+          <td data-h="Na EKS">3 kopie w 3 strefach, kopie zapasowe robi AWS. Na własnym klastrze kopie etcd to Twój obowiązek. Tak czy inaczej trzymaj manifesty w Git.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- 7 ============================================================ -->
+<section id="sciaga">
+  <h2><span class="n">7</span> Ściąga: jak to wszystko podejrzeć</h2>
+  <p>Komendy działają w Twoim namespace. Jeśli kontekst nie ma ustawionego namespace, dopisz <code>-n &lt;twój-login&gt;</code>.</p>
+  <div class="cheat">
+    <div><pre>kubectl auth whoami
+kubectl auth can-i --list</pre><p>Kim jesteś dla klastra (IAM → login) i na co pozwala Ci RBAC.</p></div>
+    <div><pre>kubectl get nodes -o wide</pre><p>Węzły: wersja kubeleta, wewnętrzne IP, runtime <code>containerd://…</code>.</p></div>
+    <div><pre>kubectl get pods -n kube-system</pre><p>Dodatki na węzłach: coredns, kube-proxy, aws-node (VPC CNI). Control plane tu nie ma, działa po stronie AWS. Lista zadziała, jeśli RBAC pozwala Ci czytać ten namespace.</p></div>
+    <div><pre>kubectl get events -w</pre><p>Na żywo: Scheduled, Pulling, Pulled, Created, Started, Killing. Najlepszy podgląd kroków 3–6.</p></div>
+    <div><pre>kubectl get deploy,rs,pods
+kubectl get pods --show-labels</pre><p>Hierarchia Deployment → ReplicaSet → Pody i etykiety, po których wybiera Service.</p></div>
+    <div><pre>kubectl get pods -o wide</pre><p>Na którym węźle działa pod i jakie ma IP (z VPC).</p></div>
+    <div><pre>kubectl get svc,ingress
+kubectl get endpointslices</pre><p>Service z ClusterIP i lista gotowych podów za nim. Pusta lista = selektor albo readiness.</p></div>
+    <div><pre>kubectl describe pod &lt;nazwa&gt;
+kubectl describe deploy web</pre><p>Sekcja <code>Events</code> na dole: decyzja schedulera, pobieranie obrazu, porażki sond.</p></div>
+    <div><pre>kubectl get deploy web -o yaml</pre><p>Porównaj <code>spec</code> (co chcesz) ze <code>status</code> (co jest). To dokładnie to, co porównuje kontroler.</p></div>
+    <div><pre>kubectl delete pod &lt;nazwa&gt;
+kubectl get pods -w</pre><p>Rekoncyliacja w praktyce: ReplicaSet od razu tworzy następcę.</p></div>
+  </div>
+</section>
+
+<footer>Kubernetes w praktyce · Dzień 2 · stan na październik 2026 (Kubernetes 1.35 na EKS, węzły z containerd: dockershim usunięto w 1.24, Service korzysta z EndpointSlice).</footer>
+</main>
+
+<script>
+(function () {
+  document.documentElement.classList.add('js');
+  var flow = document.getElementById('flow');
+  var list = document.getElementById('steps');
+  var nav = document.getElementById('stepnav');
+  if (!flow || !list) return;
+  var items = list.querySelectorAll('li[data-step]');
+  var hint = document.querySelector('.js-only');
+  if (hint) hint.hidden = false;
+  if (nav) nav.hidden = false;
+  var current = 0;
+
+  function show(n) {
+    current = n;
+    if (n) {
+      flow.setAttribute('data-active', String(n));
+      flow.classList.add('has-active');
+    } else {
+      flow.removeAttribute('data-active');
+      flow.classList.remove('has-active');
+    }
+    items.forEach(function (li) {
+      var on = Number(li.getAttribute('data-step')) === n;
+      li.classList.toggle('on', on);
+      li.setAttribute('aria-current', on ? 'step' : 'false');
+    });
+  }
+
+  items.forEach(function (li) {
+    li.tabIndex = 0;
+    li.addEventListener('click', function () {
+      var n = Number(li.getAttribute('data-step'));
+      show(current === n ? 0 : n);
+    });
+    li.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); li.click(); }
+    });
+  });
+
+  flow.querySelectorAll('.num[data-step]').forEach(function (g) {
+    g.addEventListener('click', function () {
+      var n = Number(g.getAttribute('data-step'));
+      show(current === n ? 0 : n);
+      var li = list.querySelector('li[data-step="' + n + '"]');
+      if (li && current) li.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+  });
+
+  if (nav) {
+    nav.addEventListener('click', function (e) {
+      var act = e.target && e.target.getAttribute('data-act');
+      if (act === 'next') show(current >= 6 ? 1 : current + 1);
+      else if (act === 'prev') show(current <= 1 ? 6 : current - 1);
+      else if (act === 'all') show(0);
+    });
+  }
+})();
+</script>
+</body>
+</html>

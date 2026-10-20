@@ -1,0 +1,45 @@
+# Trzy sposoby podania konfiguracji: env z jednego klucza, envFrom (wszystkie klucze), wolumen (klucze jako pliki).
+# Zmienne czyta się raz przy starcie; pliki z wolumenu (bez subPath) odświeżają się po ok. minucie.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: przyklad-config
+  labels:
+    app: przyklad-config
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: przyklad-config
+  template:
+    metadata:
+      labels:
+        app: przyklad-config
+    spec:
+      containers:
+      - name: app
+        image: busybox:1.37
+        command: ["sh", "-c", "env | grep -E 'LOG_LEVEL|DB_PASSWORD'; cat /etc/app/app.properties; sleep 3600"]
+        envFrom:
+        - configMapRef:
+            name: przyklad-config
+        env:
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: przyklad-db
+              key: password
+        volumeMounts:
+        - name: config
+          mountPath: /etc/app
+          readOnly: true
+        resources:
+          requests: {cpu: 10m, memory: 16Mi}
+          limits: {cpu: 50m, memory: 32Mi}
+      volumes:
+      - name: config
+        configMap:
+          name: przyklad-config
+          items:
+          - key: app.properties
+            path: app.properties

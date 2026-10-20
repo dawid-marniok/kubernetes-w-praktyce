@@ -10,3 +10,7 @@ __pycache__/
 bin/
 obj/
 .venv/
+# Twoje pliki z labów i klucze TLS z ćwiczeń
+moje/
+*.key
+*.crt

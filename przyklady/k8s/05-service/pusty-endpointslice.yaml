@@ -1,0 +1,13 @@
+# Antyprzykład: selektor, który nie pasuje do żadnego poda. Service istnieje, DNS odpowiada, ale EndpointSlice jest pusty.
+#   kubectl get endpointslices -l kubernetes.io/service-name=przyklad-pusty    → ENDPOINTS <unset>
+apiVersion: v1
+kind: Service
+metadata:
+  name: przyklad-pusty
+spec:
+  selector:
+    app: nie-ma-takiej-aplikacji
+  ports:
+  - name: http
+    port: 80
+    targetPort: 80

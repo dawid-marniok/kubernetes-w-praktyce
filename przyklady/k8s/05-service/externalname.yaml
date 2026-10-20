@@ -1,0 +1,8 @@
+# ExternalName: rekord CNAME do nazwy spoza klastra. Bez proxy, bez portów, bez selektora.
+apiVersion: v1
+kind: Service
+metadata:
+  name: przyklad-zewnetrzne-api
+spec:
+  type: ExternalName
+  externalName: api.example.com

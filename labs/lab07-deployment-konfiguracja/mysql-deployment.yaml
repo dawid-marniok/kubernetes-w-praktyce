@@ -1,0 +1,37 @@
+# Lab07, krok 4: MySQL bierze hasło roota z Secretu lab07-mysql (klucz root-password). Utwórz Secret najpierw.
+# Hasła NIE ma w tym pliku — i tak ma zostać.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lab07-mysql
+  labels:
+    app: lab07-mysql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: lab07-mysql
+  template:
+    metadata:
+      labels:
+        app: lab07-mysql
+    spec:
+      containers:
+      - name: mysql
+        image: mysql:8.4
+        ports:
+        - name: mysql
+          containerPort: 3306
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: lab07-mysql      # nazwa Secretu
+              key: root-password     # klucz w Secrecie
+        resources:
+          requests:
+            cpu: 100m
+            memory: 512Mi
+          limits:
+            cpu: 500m
+            memory: 1Gi

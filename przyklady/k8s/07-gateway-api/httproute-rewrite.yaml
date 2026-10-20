@@ -1,0 +1,24 @@
+# Przepisanie ścieżki w standardzie (w Ingressie to adnotacja kontrolera): /app1/x → /x w podzie.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: przyklad-rewrite
+spec:
+  parentRefs:
+  - name: przyklad-gw            # ./gateway.yaml
+  hostnames:
+  - gw-<login>.<DOMENA>          # host musi pasować do listenera Gatewaya
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /app1
+    filters:
+    - type: URLRewrite
+      urlRewrite:
+        path:
+          type: ReplacePrefixMatch
+          replacePrefixMatch: /
+    backendRefs:
+    - name: app1
+      port: 80

@@ -1,0 +1,14 @@
+# NodePort: ten sam port 30000–32767 na każdym węźle. Bez pola nodePort — klaster sam wybiera wolny port.
+# Na wspólnym klastrze nie wpisuj nodePort na sztywno (kolizja: „provided port is already allocated”).
+apiVersion: v1
+kind: Service
+metadata:
+  name: przyklad-deploy-np
+spec:
+  type: NodePort
+  selector:
+    app: przyklad-deploy
+  ports:
+  - name: http
+    port: 80
+    targetPort: http

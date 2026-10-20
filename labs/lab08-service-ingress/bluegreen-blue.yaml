@@ -1,0 +1,51 @@
+# Lab08, dla chętnych: blue/green. Wersja blue (nginx 1.28) i Service, który kieruje ruch tylko do niej.
+# Wersję green piszesz sam: kopia Deploymentu z innym kolorem i obrazem.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lab08-bg-blue
+  labels:
+    app: lab08-bg
+    version: blue
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: lab08-bg
+      version: blue
+  template:
+    metadata:
+      labels:
+        app: lab08-bg
+        version: blue
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.28
+        ports:
+        - name: http
+          containerPort: 80
+        readinessProbe:
+          httpGet:
+            path: /
+            port: http
+          periodSeconds: 5
+        resources:
+          requests:
+            cpu: 20m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lab08-bg
+spec:
+  selector:
+    app: lab08-bg
+    version: blue
+  ports:
+  - port: 80
+    targetPort: http

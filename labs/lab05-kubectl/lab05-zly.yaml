@@ -1,0 +1,18 @@
+# Lab05: pod z celowym błędem — da zdarzenie typu Warning do filtrowania.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: lab05-zly
+  labels:
+    app: lab05-zly
+spec:
+  containers:
+  - name: busybox
+    image: busybox:0.0-nie-ma-takiego
+    resources:
+      requests:
+        cpu: 10m
+        memory: 16Mi
+      limits:
+        cpu: 50m
+        memory: 32Mi

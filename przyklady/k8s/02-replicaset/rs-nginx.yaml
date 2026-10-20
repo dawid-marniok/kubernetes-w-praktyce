@@ -1,0 +1,25 @@
+# ReplicaSet pilnuje liczby kopii. Na co dzień piszesz Deployment, który tworzy ReplicaSety sam.
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: przyklad-rs
+  labels:
+    app: przyklad-rs
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: przyklad-rs
+  template:
+    metadata:
+      labels:
+        app: przyklad-rs       # musi pasować do selector.matchLabels
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.29
+        ports:
+        - containerPort: 80
+        resources:
+          requests: {cpu: 20m, memory: 32Mi}
+          limits: {cpu: 100m, memory: 64Mi}

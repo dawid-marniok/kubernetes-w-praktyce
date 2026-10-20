@@ -1,0 +1,10 @@
+# ConfigMap z dwoma rodzajami kluczy: zwykła wartość i cały plik.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: przyklad-config
+data:
+  LOG_LEVEL: info
+  app.properties: |
+    feature.x=true
+    timeout.seconds=30

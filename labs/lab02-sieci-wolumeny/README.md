@@ -2,7 +2,7 @@
 
 **Cel:** połączyć kontenery po nazwie we własnej sieci, sprawdzić izolację sieci, porównać wolumen, bind mount i tmpfs oraz ograniczyć rozmiar logów kontenera.
 
-**Czas:** ~30 min (kroki 1–4). Kroki „dla chętnych” robisz, jeśli skończysz wcześniej.
+Kroki „dla chętnych” robisz, jeśli skończysz wcześniej.
 
 **Po labie masz:** dwa kontenery, które rozmawiają po nazwie, stronę serwowaną z katalogu na Twoim laptopie i kontener, którego logi nie urosną ponad ustawiony limit.
 

@@ -2,7 +2,7 @@
 
 **Cel:** uruchomić, obejrzeć, zatrzymać i usunąć kontener; wystawić port, przekazać konfigurację przez zmienne środowiskowe i zachować plik w wolumenie.
 
-**Czas:** ~30 min (kroki 1–7). Kroki „dla chętnych” robisz, jeśli skończysz wcześniej.
+Kroki „dla chętnych” robisz, jeśli skończysz wcześniej.
 
 **Po labie masz:** stronę nginx na `http://localhost:8080`, bazę PostgreSQL skonfigurowaną zmiennymi z pliku i plik, który przeżył usunięcie kontenera, bo leżał w wolumenie.
 

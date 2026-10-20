@@ -2,9 +2,9 @@
 
 **Cel:** opisać aplikację ToDos (frontend, API, baza, panel) w jednym `compose.yaml` tak, żeby dane przetrwały `down`, usługi startowały we właściwej kolejności, a obrazy trafiły do rejestru.
 
-**Czas:** ~45 min (kroki 1–6), dla chętnych dodatkowo 15–20 min.
+Podstawa: kroki 1–6, reszta dla chętnych.
 
-**Po labie masz:** działającą aplikację ToDos pod `localhost:3000`, plik `compose.yaml`, który rozumiesz linijka po linijce, i obrazy `todos-web:1.0.0` oraz `todos-api:1.0.0` w swoim rejestrze. Tych obrazów użyjesz w dniu 5, gdy ToDos pojedzie do Kubernetesa.
+**Po labie masz:** działającą aplikację ToDos pod `localhost:3000`, plik `compose.yaml`, który rozumiesz linijka po linijce, i obrazy `todos-web:1.0.0` oraz `todos-api:1.0.0` w swoim rejestrze. Tych obrazów użyjesz już jutro wieczorem: od dnia 2 ToDos żyje w Twoim namespace na klastrze i co dzień dokładasz do niego to, czego się nauczysz.
 
 Aplikację ToDos opisuje [`app/todos/README.md`](../../app/todos/README.md): `web` to nginx z aplikacją React, który przekazuje `/api` do usługi `api`; `api` to Node.js + Express; dane trzyma MongoDB.
 

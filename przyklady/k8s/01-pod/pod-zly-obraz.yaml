@@ -1,0 +1,15 @@
+# Awaria 1: literówka w nazwie obrazu → ErrImagePull, potem ImagePullBackOff.
+# Diagnoza: kubectl describe pod przyklad-zly-obraz → Events na dole („pull access denied, repository does not exist”).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: przyklad-zly-obraz
+  labels:
+    app: przyklad-zly-obraz
+spec:
+  containers:
+  - name: nginx
+    image: nginxx:1.29        # celowy błąd: nginxx zamiast nginx
+    resources:
+      requests: {cpu: 50m, memory: 32Mi}
+      limits: {cpu: 100m, memory: 64Mi}

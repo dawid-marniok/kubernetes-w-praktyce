@@ -1,0 +1,20 @@
+# Najprostszy pod: jeden kontener, etykieta, port, zasoby.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: przyklad-pod
+  labels:
+    app: przyklad-pod
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.29
+    ports:
+    - containerPort: 80
+    resources:
+      requests:
+        cpu: 50m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi

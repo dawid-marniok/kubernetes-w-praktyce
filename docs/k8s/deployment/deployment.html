@@ -1,0 +1,913 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deployment i rollout</title>
+<meta name="description" content="Dzień 2 — ściąga: Deployment, ReplicaSet i pody, symulator RollingUpdate i Recreate, sondy w czasie, porównanie strategii wdrożeń i komendy kubectl rollout.">
+<style>
+:root {
+  --navy: #012438;
+  --acc: #41C0F0;
+  --light: #EBF8FD;
+  --light2: #E1EDF8;
+
+  --bg: #ffffff;
+  --ink: #0f2535;
+  --muted: #557080;
+  --panel: var(--light);
+  --card: #ffffff;
+  --card-line: #b9d3e2;
+  --strong: var(--navy);
+  --on-strong: #ffffff;
+  --strong-title: var(--acc);
+  --head: #0a7aa8;
+  --line: #34505f;
+  --code-bg: var(--light2);
+  --row-alt: #f4fafd;
+  --border: #d5e4ed;
+  --pod-ink: var(--navy);
+
+  --ok: #1d7a44;
+  --ok-bg: #dcf2e4;
+  --bad: #b42318;
+  --bad-bg: #fde3df;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #08151e;
+    --ink: #e3eef4;
+    --muted: #9cb4c3;
+    --panel: #0f2532;
+    --card: #142f3f;
+    --card-line: #2c5065;
+    --strong: #0d4b70;
+    --on-strong: #ffffff;
+    --strong-title: #7fd6f7;
+    --head: #41C0F0;
+    --line: #a8c3d2;
+    --code-bg: #12293a;
+    --row-alt: #0d1f2b;
+    --border: #23404f;
+
+    --ok: #6fd99a;
+    --ok-bg: #12382a;
+    --bad: #ff9a8c;
+    --bad-bg: #4a1c18;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px 64px; }
+header.hero {
+  background: var(--navy);
+  color: #fff;
+  padding: 40px 0 32px;
+  border-bottom: 6px solid var(--acc);
+}
+header.hero .wrap { padding-bottom: 0; }
+.kicker { color: var(--acc); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; font-size: 13px; margin: 0 0 6px; }
+.kicker a { color: var(--acc); }
+h1 { font-size: clamp(28px, 6vw, 44px); line-height: 1.15; margin: 0 0 12px; }
+.hero p.lead { max-width: 720px; margin: 0; color: #d6e9f3; font-size: 17px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0 0; padding: 0; list-style: none; }
+.chips li { background: rgba(65,192,240,.14); border: 1px solid rgba(65,192,240,.45); color: #e6f6fd; border-radius: 999px; padding: 3px 12px; font-size: 14px; }
+nav.toc { margin: 28px 0 8px; }
+nav.toc ol { display: flex; flex-wrap: wrap; gap: 6px 8px; padding: 0; margin: 0; list-style: none; counter-reset: toc; }
+nav.toc li { counter-increment: toc; }
+nav.toc a { display: inline-block; text-decoration: none; color: var(--ink); background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 4px 10px; font-size: 14px; }
+nav.toc a::before { content: counter(toc) ". "; color: var(--head); font-weight: 700; }
+nav.toc a:hover, nav.toc a:focus-visible { border-color: var(--acc); }
+section { margin-top: 48px; scroll-margin-top: 16px; }
+h2 { font-size: clamp(22px, 4.5vw, 28px); line-height: 1.25; margin: 0 0 10px; display: flex; gap: 12px; align-items: baseline; }
+h2 .n { color: var(--acc); font-weight: 800; font-size: 1.25em; line-height: 1; }
+h3 { font-size: 18px; margin: 24px 0 8px; }
+p { margin: 0 0 12px; }
+a { color: var(--head); }
+code, kbd, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: .9em; }
+:not(pre) > code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+pre { background: var(--code-bg); padding: 12px 14px; border-radius: 8px; overflow-x: auto; margin: 0 0 12px; }
+.key { border-left: 5px solid var(--acc); background: var(--panel); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; }
+.key strong { color: var(--ink); }
+figure { margin: 20px 0; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
+figcaption { font-size: 14px; color: var(--muted); margin-top: 8px; }
+@media (max-width: 640px) {
+  figure { padding: 8px; margin-left: -4px; margin-right: -4px; }
+}
+.grid2 { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+.grid2 > * { min-width: 0; }
+@media (min-width: 820px) { .grid2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.tablewrap { overflow-x: auto; margin: 16px 0; border: 1px solid var(--border); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+thead th { background: var(--navy); color: #fff; font-size: 14px; }
+tbody tr:nth-child(even) { background: var(--row-alt); }
+tbody tr:last-child td { border-bottom: 0; }
+td:first-child { font-weight: 700; }
+@media (max-width: 640px) {
+  table.stack thead { display: none; }
+  table.stack, table.stack tbody, table.stack tr, table.stack td { display: block; width: 100%; }
+  table.stack tr { border-bottom: 1px solid var(--border); padding: 6px 0; }
+  table.stack td { border: 0; padding: 4px 12px; }
+  table.stack td[data-h]::before { content: attr(data-h); display: block; font-size: 12px; font-weight: 700; color: var(--head); text-transform: uppercase; letter-spacing: .05em; }
+}
+.cheat { display: grid; gap: 10px; grid-template-columns: 1fr; }
+@media (min-width: 760px) { .cheat { grid-template-columns: 1fr 1fr; } }
+.cheat div { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--bg); min-width: 0; }
+.cheat pre { margin: 0 0 6px; font-size: 14px; }
+.cheat p { margin: 0; font-size: 14px; color: var(--muted); }
+footer { margin-top: 56px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--border); padding-top: 16px; }
+.js-only[hidden] { display: none; }
+
+/* --- pody (wspólne) --- */
+.pod-chip {
+  display: inline-flex; align-items: center; justify-content: center; gap: 3px;
+  min-width: 46px; height: 34px; padding: 0 8px; border-radius: 7px;
+  font: 700 13px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  border: 2px solid transparent; transition: opacity .25s, background-color .25s;
+}
+.pod-chip.v1 { background: var(--strong); color: var(--on-strong); }
+.pod-chip.v2 { background: var(--acc); color: var(--navy); }
+.pod-chip.starting { background: var(--card); color: var(--muted); border: 2px dashed var(--head); }
+.pod-chip.broken { background: var(--bad-bg); color: var(--bad); border: 2px dashed var(--bad); }
+.pod-chip.term { opacity: .35; text-decoration: line-through; }
+.pod-chip.blocked { background: transparent; color: var(--bad); border: 2px dotted var(--bad); font-weight: 600; font-size: 11.5px; }
+.pod-chip.green { background: var(--ok-bg); color: var(--ok); border-color: var(--ok); }
+.pod-chip.blue { background: var(--strong); color: var(--on-strong); }
+.pod-chip.mini { min-width: 0; width: 22px; height: 22px; padding: 0; font-size: 10px; border-radius: 5px; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 10px 0 0; padding: 0; list-style: none; font-size: 14px; color: var(--muted); }
+.legend li { display: flex; align-items: center; gap: 6px; }
+.legend .pod-chip { min-width: 40px; height: 26px; font-size: 12px; }
+
+/* --- 1. hierarchia --- */
+.tree { display: grid; gap: 0; justify-items: center; }
+.node { border-radius: 10px; padding: 12px 14px; width: 100%; min-width: 0; }
+.node .t { font-weight: 800; display: block; }
+.node small { display: block; font-size: 13.5px; }
+.node.dep { background: var(--strong); color: var(--on-strong); max-width: 520px; text-align: center; }
+.node.dep .t { color: var(--strong-title); font-size: 18px; }
+.node.dep small { color: var(--on-strong); opacity: .9; }
+.node.dep code { background: rgba(255,255,255,.12); color: var(--on-strong); }
+.node.rs { background: var(--card); border: 1.5px solid var(--card-line); }
+.node.rs small { color: var(--muted); }
+.node.rs.old { border-style: dashed; }
+.down { color: var(--muted); font-size: 13.5px; font-style: italic; text-align: center; padding: 6px 0; position: relative; }
+.down::before { content: "↓"; display: block; font-style: normal; font-size: 20px; line-height: 1; color: var(--line); }
+.rs-row { display: grid; gap: 14px; grid-template-columns: 1fr; width: 100%; }
+@media (min-width: 700px) { .rs-row { grid-template-columns: 1fr 1fr; } }
+.podlist { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; min-height: 34px; align-items: center; }
+.podname { display: grid; gap: 2px; justify-items: start; }
+.podname code { font-size: 12px; }
+.empty-note { font-size: 13.5px; color: var(--muted); font-style: italic; }
+
+/* --- 2. symulator --- */
+.sim-controls { display: grid; gap: 12px 20px; grid-template-columns: 1fr; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+@media (min-width: 720px) { .sim-controls { grid-template-columns: repeat(3, 1fr); } }
+.ctl label { display: flex; justify-content: space-between; gap: 8px; font-weight: 700; font-size: 15px; }
+.ctl output { font: 700 15px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--head); }
+.ctl small { display: block; color: var(--muted); font-size: 13px; line-height: 1.4; }
+input[type=range] { width: 100%; accent-color: var(--head); margin: 6px 0 2px; }
+.checks { display: flex; flex-wrap: wrap; gap: 8px 22px; grid-column: 1 / -1; font-size: 15px; }
+.checks label { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; }
+.checks input { margin-top: 5px; accent-color: var(--head); width: 16px; height: 16px; flex: none; }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; align-items: center; }
+button.b {
+  font: inherit; font-size: 15px; padding: 7px 16px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--panel); color: var(--ink); cursor: pointer;
+}
+button.b.primary { background: var(--strong); color: var(--on-strong); border-color: var(--strong); font-weight: 700; }
+button.b:hover, button.b:focus-visible { border-color: var(--acc); }
+button.b:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; }
+button.b:disabled { opacity: .45; cursor: not-allowed; }
+.tickno { font-size: 14px; color: var(--muted); margin-left: auto; }
+.err { color: var(--bad); font-weight: 700; margin: 8px 0 0; }
+.err[hidden] { display: none; }
+.side { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; min-width: 0; }
+.side h3 { margin: 0 0 4px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.side h3 span { font-size: 14px; font-weight: 400; color: var(--muted); }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 10px 0; }
+.stat { background: var(--panel); border-radius: 8px; padding: 6px 8px; min-width: 0; }
+.stat b { display: block; font: 800 20px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.stat span { display: block; font-size: 12.5px; color: var(--muted); line-height: 1.3; }
+.stat.warn b { color: var(--bad); }
+.rsbox { border: 1.5px solid var(--card-line); border-radius: 10px; padding: 8px 10px; margin-top: 8px; background: var(--card); }
+.rsbox.old { border-style: dashed; }
+.rsbox .rh { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 8px; font-size: 14px; }
+.rsbox .rh b { font-weight: 700; }
+.rsbox .rh code { font-size: 12.5px; }
+.rsbox .podlist { margin-top: 6px; gap: 6px; }
+.msg { margin: 10px 0 0; font-size: 14.5px; min-height: 3.2em; border-left: 4px solid var(--acc); padding: 4px 10px; background: var(--panel); border-radius: 0 6px 6px 0; }
+.msg.stuck { border-left-color: var(--bad); }
+.msg.done { border-left-color: var(--ok); }
+.hist { margin-top: 10px; }
+.hist .ht { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+.bars { position: relative; display: flex; align-items: flex-end; gap: 4px; height: 70px; border-bottom: 1.5px solid var(--card-line); }
+.bar { flex: 1 1 0; min-width: 0; max-width: 34px; background: var(--acc); border-radius: 3px 3px 0 0; position: relative; }
+.bar.zero { background: transparent; border: 1.5px dashed var(--bad); border-bottom: 0; height: 100% !important; }
+.bar.zero::after { content: "0"; position: absolute; bottom: 2px; left: 0; right: 0; text-align: center; color: var(--bad); font: 700 11px ui-monospace, Menlo, monospace; }
+.bar.low { background: var(--head); }
+.minline { position: absolute; left: 0; right: 0; border-top: 1.5px dashed var(--line); pointer-events: none; }
+.minline span { position: absolute; right: 0; top: -17px; font-size: 11px; color: var(--muted); background: var(--bg); padding: 0 3px; }
+
+/* --- 3. sondy --- */
+.seg { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+.seg button { font: inherit; font-size: 14.5px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel); color: var(--ink); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--strong); color: var(--on-strong); border-color: var(--strong); }
+.seg button:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; }
+.pgrid { display: grid; gap: 6px; }
+.prow { display: grid; grid-template-columns: 128px 1fr; gap: 8px; align-items: center; }
+.plabel { font-size: 13.5px; font-weight: 700; line-height: 1.2; }
+.plabel small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; }
+.pcells { display: grid; grid-template-columns: repeat(24, minmax(0, 1fr)); gap: 2px; }
+.pc { height: 24px; border-radius: 3px; display: grid; place-items: center; font: 700 12px/1 ui-monospace, Menlo, monospace; color: var(--muted); }
+.pc.pass { background: var(--ok-bg); color: var(--ok); }
+.pc.fail { background: var(--bad-bg); color: var(--bad); }
+.pc.none { color: var(--card-line); }
+.pc.in { background: var(--acc); color: var(--navy); }
+.pc.out { background: transparent; border: 1px dashed var(--card-line); }
+.pc.rst { background: var(--bad); color: #fff; }
+.paxis .pc { height: auto; font-weight: 400; font-size: 11px; color: var(--muted); justify-items: start; overflow: visible; white-space: nowrap; }
+@media (max-width: 640px) {
+  .prow { grid-template-columns: 1fr; gap: 2px; }
+  .plabel small { display: inline; margin-left: 6px; }
+  .pc { height: 20px; font-size: 10px; }
+  .paxis .plabel { display: none; }
+}
+.probe-desc { margin-top: 14px; }
+.probe-desc p:last-child { margin-bottom: 0; }
+
+/* --- 4. strategie --- */
+.cards { display: grid; gap: 14px; grid-template-columns: 1fr; }
+@media (min-width: 720px) { .cards { grid-template-columns: 1fr 1fr; } }
+.card { border: 1px solid var(--border); border-radius: 12px; background: var(--bg); padding: 14px; min-width: 0; display: flex; flex-direction: column; }
+.card h3 { margin: 0 0 2px; }
+.card .sub { color: var(--muted); font-size: 14px; margin: 0 0 10px; }
+.phases { display: grid; gap: 6px; background: var(--panel); border-radius: 8px; padding: 8px 10px; margin-bottom: 12px; }
+.phase { display: grid; grid-template-columns: 74px 1fr; gap: 8px; align-items: center; font-size: 12.5px; color: var(--muted); }
+.phase .podlist { margin: 0; gap: 4px; min-height: 22px; }
+.phase .gap { color: var(--bad); font-weight: 700; font-size: 12.5px; }
+.phase .route { font-size: 12px; color: var(--ink); white-space: nowrap; }
+dl.facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0; font-size: 14.5px; }
+dl.facts dt { font-weight: 700; color: var(--muted); }
+dl.facts dd { margin: 0; min-width: 0; }
+dl.facts .yes { color: var(--bad); font-weight: 700; }
+dl.facts .no { color: var(--ok); font-weight: 700; }
+@media (max-width: 400px) { dl.facts { grid-template-columns: 1fr; } dl.facts dd { margin-bottom: 4px; } }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="kicker">Dzień 2 · ściąga · <a href="README.md">wersja tekstowa</a></p>
+    <h1>Deployment i rollout</h1>
+    <p class="lead">Deployment opisuje, jaka wersja aplikacji ma działać i w ilu kopiach. Gdy zmieniasz wersję, sam wymienia pody, pilnując, żeby aplikacja przez cały czas odpowiadała. Poniżej zobaczysz, jak to robi i co może go zatrzymać.</p>
+    <ul class="chips" aria-label="Kontekst">
+      <li>Deployment → ReplicaSet → Pod</li>
+      <li>RollingUpdate · Recreate</li>
+      <li>startup · readiness · liveness</li>
+      <li>Twój namespace z ResourceQuota</li>
+      <li>Kubernetes 1.35</li>
+    </ul>
+  </div>
+</header>
+
+<main class="wrap">
+<nav class="toc" aria-label="Spis treści">
+  <ol>
+    <li><a href="#hierarchia">Kto co tworzy</a></li>
+    <li><a href="#symulator">Symulator rolloutu</a></li>
+    <li><a href="#sondy">Sondy w czasie</a></li>
+    <li><a href="#strategie">Strategie</a></li>
+    <li><a href="#sciaga">Komendy</a></li>
+  </ol>
+</nav>
+
+<!-- 1 ============================================================ -->
+<section id="hierarchia">
+  <h2><span class="n">1</span> Kto co tworzy</h2>
+  <p>Ty piszesz tylko Deployment. Deployment tworzy ReplicaSet, a ReplicaSet tworzy pody. Każda wersja szablonu poda dostaje własny ReplicaSet, więc po jednej aktualizacji obrazu masz dwa: stary z zerem replik i nowy z podami.</p>
+
+  <figure>
+    <div class="tree" role="group" aria-label="Deployment web, pod nim dwa ReplicaSety: stary z zerem replik i nowy z trzema podami">
+      <div class="node dep">
+        <span class="t">Deployment web</span>
+        <small>replicas: 3 · strategia · szablon poda</small>
+        <small><code>selector: app=web</code></small>
+      </div>
+      <div class="down">tworzy ReplicaSet dla każdej wersji szablonu</div>
+      <div class="rs-row">
+        <div class="node rs old">
+          <span class="t">ReplicaSet <code>web-5d59d67564</code></span>
+          <small>rewizja 1 · nginx:1.28 · replicas: 0</small>
+          <div class="podlist"><span class="empty-note">brak podów; zostaje w historii do <code>rollout undo</code></span></div>
+        </div>
+        <div class="node rs">
+          <span class="t">ReplicaSet <code>web-7c6d8f9b4d</code></span>
+          <small>rewizja 2 · nginx:1.29 · replicas: 3</small>
+          <div class="podlist">
+            <span class="podname"><span class="pod-chip v2">Pod</span><code>…-x2k9p</code></span>
+            <span class="podname"><span class="pod-chip v2">Pod</span><code>…-m4tqz</code></span>
+            <span class="podname"><span class="pod-chip v2">Pod</span><code>…-r8bnc</code></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <figcaption>Nazwa ReplicaSetu = nazwa Deploymentu + hash szablonu. Nazwa poda = nazwa ReplicaSetu + losowy sufiks. Pełna nazwa pierwszego poda: <code>web-7c6d8f9b4d-x2k9p</code>.</figcaption>
+  </figure>
+
+  <div class="grid2">
+    <div>
+      <h3 style="margin-top:0">Etykiety łączą obiekty</h3>
+      <ul>
+        <li><code>spec.selector.matchLabels</code> mówi, które pody należą do Deploymentu.</li>
+        <li><code>spec.template.metadata.labels</code> dostaje każdy nowy pod. Muszą zawierać etykiety z selektora, inaczej: <code>selector does not match template labels</code>.</li>
+        <li>Deployment dopisuje etykietę <code>pod-template-hash</code>. Dzięki niej stary i nowy ReplicaSet nie liczą sobie nawzajem podów.</li>
+        <li>Selektor jest niezmienny. Zmiana = usunięcie i ponowne utworzenie Deploymentu.</li>
+      </ul>
+    </div>
+    <div>
+      <h3 style="margin-top:0">Etykiety jednego poda</h3>
+<pre>metadata:
+  name: web-7c6d8f9b4d-x2k9p
+  labels:
+    app: web                      # z szablonu
+    pod-template-hash: 7c6d8f9b4d # dopisał Deployment
+  ownerReferences:
+  - kind: ReplicaSet
+    name: web-7c6d8f9b4d</pre>
+    </div>
+  </div>
+  <div class="key"><strong>Zapamiętaj:</strong> zmieniasz zawsze Deployment. Usunięty pod wróci, bo ReplicaSet utworzy następcę. Ręczna zmiana ReplicaSetu zostanie cofnięta przez Deployment.</div>
+</section>
+
+<!-- 2 ============================================================ -->
+<section id="symulator">
+  <h2><span class="n">2</span> Symulator rolloutu</h2>
+  <p>Zmieniasz obraz z v1 na v2. Po lewej RollingUpdate z Twoimi ustawieniami, po prawej Recreate dla porównania. Jeden krok to jedna runda kontrolera: nowe pody, które wystartowały, stają się gotowe, potem Deployment usuwa tyle starych, ile może, i tworzy tyle nowych, ile może.</p>
+
+  <figure>
+    <div class="sim-controls">
+      <div class="ctl">
+        <label for="in-r">replicas <output id="out-r" for="in-r">3</output></label>
+        <input type="range" id="in-r" min="1" max="8" value="3">
+        <small>ile podów ma działać</small>
+      </div>
+      <div class="ctl">
+        <label for="in-s">maxSurge <output id="out-s" for="in-s">1</output></label>
+        <input type="range" id="in-s" min="0" max="3" value="1">
+        <small>ile podów może być <strong>ponad</strong> replicas (miejsce w quocie)</small>
+      </div>
+      <div class="ctl">
+        <label for="in-u">maxUnavailable <output id="out-u" for="in-u">0</output></label>
+        <input type="range" id="in-u" min="0" max="3" value="0">
+        <small>ile podów może <strong>nie działać</strong> poniżej replicas</small>
+      </div>
+      <div class="checks">
+        <label><input type="checkbox" id="in-broken"> <span>v2 jest zepsuta (readinessProbe nie przechodzi)</span></label>
+        <label><input type="checkbox" id="in-tight"> <span>ciasna ResourceQuota: miejsce tylko na <code>replicas</code> podów</span></label>
+      </div>
+    </div>
+    <p class="err" id="sim-err" role="alert" hidden>maxSurge i maxUnavailable nie mogą być jednocześnie zerem: API odrzuci taki Deployment, bo rollout nie miałby jak ruszyć.</p>
+    <div class="btns">
+      <button type="button" class="b primary" id="btn-step">krok dalej →</button>
+      <button type="button" class="b" id="btn-play">odtwarzaj</button>
+      <button type="button" class="b" id="btn-reset">od nowa</button>
+      <span class="tickno" id="sim-tick" aria-live="polite">krok 0</span>
+    </div>
+
+    <div class="grid2">
+      <div class="side" id="side-ru">
+        <h3>RollingUpdate <span id="ru-cfg"></span></h3>
+        <div class="stats">
+          <div class="stat" id="ru-total-box"><b id="ru-total">3</b><span id="ru-total-l">podów naraz</span></div>
+          <div class="stat" id="ru-ready-box"><b id="ru-ready">3</b><span id="ru-ready-l">gotowych</span></div>
+          <div class="stat" id="ru-down-box"><b id="ru-down">0</b><span id="ru-down-l">nie działa</span></div>
+        </div>
+        <div class="rsbox old"><div class="rh"><b>ReplicaSet v1</b><code id="ru-rs1">replicas: 3</code></div><div class="podlist" id="ru-old"></div></div>
+        <div class="rsbox"><div class="rh"><b>ReplicaSet v2</b><code id="ru-rs2">replicas: 0</code></div><div class="podlist" id="ru-new"></div></div>
+        <p class="msg" id="ru-msg" aria-live="polite"></p>
+        <div class="hist"><div class="ht">gotowe pody w kolejnych krokach</div><div class="bars" id="ru-hist" role="img"></div></div>
+      </div>
+      <div class="side" id="side-rc">
+        <h3>Recreate <span>najpierw usuwa wszystko</span></h3>
+        <div class="stats">
+          <div class="stat"><b id="rc-total">3</b><span id="rc-total-l">podów naraz</span></div>
+          <div class="stat" id="rc-ready-box"><b id="rc-ready">3</b><span>gotowych</span></div>
+          <div class="stat" id="rc-down-box"><b id="rc-down">0</b><span>nie działa</span></div>
+        </div>
+        <div class="rsbox old"><div class="rh"><b>ReplicaSet v1</b><code id="rc-rs1">replicas: 3</code></div><div class="podlist" id="rc-old"></div></div>
+        <div class="rsbox"><div class="rh"><b>ReplicaSet v2</b><code id="rc-rs2">replicas: 0</code></div><div class="podlist" id="rc-new"></div></div>
+        <p class="msg" id="rc-msg" aria-live="polite"></p>
+        <div class="hist"><div class="ht">gotowe pody w kolejnych krokach</div><div class="bars" id="rc-hist" role="img"></div></div>
+      </div>
+    </div>
+
+    <ul class="legend" aria-label="Legenda">
+      <li><span class="pod-chip v1">v1</span> stary, gotowy</li>
+      <li><span class="pod-chip starting">v2</span> nowy, startuje</li>
+      <li><span class="pod-chip v2">v2</span> nowy, gotowy</li>
+      <li><span class="pod-chip broken">v2 ✗</span> readiness nie przechodzi</li>
+      <li><span class="pod-chip v1 term">v1</span> usuwany</li>
+      <li><span class="pod-chip blocked">quota</span> nie powstał: exceeded quota</li>
+    </ul>
+    <figcaption>W klastrze rundy kontrolera nakładają się w czasie, a pody startują w różnym tempie. Tu są rozdzielone na kroki, żeby dało się policzyć pody. Domyślne <code>25%</code>/<code>25%</code> przy 3 replikach to po zaokrągleniu <code>maxSurge: 1</code>, <code>maxUnavailable: 0</code>.</figcaption>
+  </figure>
+
+  <div class="grid2">
+    <div class="key" style="margin:0"><strong>Spróbuj:</strong> zaznacz „ciasna ResourceQuota” przy <code>maxSurge: 1</code>, <code>maxUnavailable: 0</code>. Rollout nie ruszy. Potem ustaw <code>maxSurge: 0</code>, <code>maxUnavailable: 1</code>: rollout przejdzie w tej samej quocie, za cenę jednego poda mniej w trakcie.</div>
+    <div class="key" style="margin:0"><strong>Zepsuta wersja:</strong> przy RollingUpdate z readinessProbe stare pody dalej obsługują ruch, a rollout czeka. Po <code>progressDeadlineSeconds</code> (domyślnie 600 s) Deployment dostaje <code>ProgressDeadlineExceeded</code>, ale nie cofa się sam. Przy Recreate starych podów już nie ma.</div>
+  </div>
+</section>
+
+<!-- 3 ============================================================ -->
+<section id="sondy">
+  <h2><span class="n">3</span> Sondy w czasie życia poda</h2>
+  <p>Sondy wykonuje kubelet na węźle. Najpierw działa startupProbe. Po jej pierwszym sukcesie readiness i liveness sprawdzają kontener równolegle, aż do jego końca. Wybierz scenariusz i zobacz, co robi każda sonda.</p>
+
+  <figure>
+    <div class="seg" id="probe-seg" role="group" aria-label="Scenariusz">
+      <button type="button" data-sc="ok" aria-pressed="true">wszystko działa</button>
+      <button type="button" data-sc="startup" aria-pressed="false">aplikacja nie wstaje</button>
+      <button type="button" data-sc="ready" aria-pressed="false">baza chwilowo pada</button>
+      <button type="button" data-sc="live" aria-pressed="false">aplikacja się zawiesza</button>
+    </div>
+    <div class="pgrid" id="probe-grid" aria-describedby="probe-desc"></div>
+    <figcaption>Jedna kratka = jedno sprawdzenie co 5 s (2 minuty razem). Progi: startup <code>failureThreshold: 4</code> (20 s na start), readiness <code>failureThreshold: 2</code>, liveness <code>failureThreshold: 3</code>. ✓ sonda przeszła, ✗ nie przeszła, · sonda nie działa.</figcaption>
+    <div class="probe-desc" id="probe-desc" aria-live="polite"></div>
+  </figure>
+
+  <div class="tablewrap">
+    <table class="stack">
+      <thead><tr><th>Sonda</th><th>Pytanie</th><th>Gdy nie przejdzie</th><th>W rolloucie</th></tr></thead>
+      <tbody>
+        <tr><td data-h="Sonda">startupProbe</td><td data-h="Pytanie">Czy aplikacja już wystartowała?</td><td data-h="Gdy nie przejdzie">po <code>failureThreshold</code> porażkach <strong>restart kontenera</strong>; do sukcesu readiness i liveness nie działają</td><td data-h="W rolloucie">pod nie jest gotowy, rollout czeka</td></tr>
+        <tr><td data-h="Sonda">readinessProbe</td><td data-h="Pytanie">Czy mogę teraz przyjmować ruch?</td><td data-h="Gdy nie przejdzie">pod <strong>wypada z EndpointSlice</strong>, nie dostaje ruchu. Bez restartu. Wraca, gdy sonda znów przejdzie</td><td data-h="W rolloucie">decyduje, kiedy nowy pod jest gotowy i kiedy można usunąć stary</td></tr>
+        <tr><td data-h="Sonda">livenessProbe</td><td data-h="Pytanie">Czy aplikacja się nie zawiesiła?</td><td data-h="Gdy nie przejdzie"><strong>restart kontenera</strong>, rośnie <code>RESTARTS</code>; przy powtórkach <code>CrashLoopBackOff</code></td><td data-h="W rolloucie">pod restartuje się i wypada z gotowych</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Parametry, przykłady i częste błędy: <a href="sondy.md">sondy.md</a>.</p>
+</section>
+
+<!-- 4 ============================================================ -->
+<section id="strategie">
+  <h2><span class="n">4</span> Strategie wdrożeń</h2>
+  <p>Deployment ma dwie strategie: RollingUpdate i Recreate. Blue/green i canary składasz z dwóch Deploymentów i Service albo HTTPRoute z wagami. Przykłady dla 3 replik.</p>
+
+  <div class="cards">
+    <article class="card">
+      <h3>RollingUpdate</h3>
+      <p class="sub">domyślna; nowe pody wchodzą, stare wychodzą stopniowo</p>
+      <div class="phases" aria-hidden="true">
+        <div class="phase"><span>przed</span><div class="podlist"><span class="pod-chip mini v1">1</span><span class="pod-chip mini v1">1</span><span class="pod-chip mini v1">1</span></div></div>
+        <div class="phase"><span>w trakcie</span><div class="podlist"><span class="pod-chip mini v1">1</span><span class="pod-chip mini v1">1</span><span class="pod-chip mini v2">2</span><span class="pod-chip mini starting">2</span></div></div>
+        <div class="phase"><span>po</span><div class="podlist"><span class="pod-chip mini v2">2</span><span class="pod-chip mini v2">2</span><span class="pod-chip mini v2">2</span></div></div>
+      </div>
+      <dl class="facts">
+        <dt>Podów naraz</dt><dd>do <code>replicas + maxSurge</code></dd>
+        <dt>Przerwa</dt><dd class="no">nie (z readinessProbe)</dd>
+        <dt>Rollback</dt><dd><code>rollout undo</code>, czyli kolejny rollout</dd>
+        <dt>Koszt</dt><dd>0–<code>maxSurge</code> podów więcej przez chwilę</dd>
+        <dt>Kiedy</dt><dd>większość aplikacji bezstanowych</dd>
+      </dl>
+    </article>
+
+    <article class="card">
+      <h3>Recreate</h3>
+      <p class="sub">najpierw usuwa wszystkie stare pody, potem tworzy nowe</p>
+      <div class="phases" aria-hidden="true">
+        <div class="phase"><span>przed</span><div class="podlist"><span class="pod-chip mini v1">1</span><span class="pod-chip mini v1">1</span><span class="pod-chip mini v1">1</span></div></div>
+        <div class="phase"><span>w trakcie</span><div class="podlist"><span class="gap">brak podów: przerwa</span></div></div>
+        <div class="phase"><span>po</span><div class="podlist"><span class="pod-chip mini v2">2</span><span class="pod-chip mini v2">2</span><span class="pod-chip mini v2">2</span></div></div>
+      </div>
+      <dl class="facts">
+        <dt>Podów naraz</dt><dd>najwyżej <code>replicas</code></dd>
+        <dt>Przerwa</dt><dd class="yes">tak</dd>
+        <dt>Rollback</dt><dd><code>rollout undo</code> i kolejna przerwa</dd>
+        <dt>Koszt</dt><dd>brak dodatkowych podów</dd>
+        <dt>Kiedy</dt><dd>wolumen <code>ReadWriteOnce</code>, dwie wersje nie mogą działać naraz, dev</dd>
+      </dl>
+    </article>
+
+    <article class="card">
+      <h3>Blue/green</h3>
+      <p class="sub">dwie pełne wersje obok siebie; Service przełącza ruch selektorem</p>
+      <div class="phases" aria-hidden="true">
+        <div class="phase"><span>przed</span><div class="podlist"><span class="pod-chip mini blue">B</span><span class="pod-chip mini blue">B</span><span class="pod-chip mini blue">B</span><span class="route">← ruch</span></div></div>
+        <div class="phase"><span>test green</span><div class="podlist"><span class="pod-chip mini blue">B</span><span class="pod-chip mini blue">B</span><span class="pod-chip mini blue">B</span><span class="pod-chip mini green">G</span><span class="pod-chip mini green">G</span><span class="pod-chip mini green">G</span></div></div>
+        <div class="phase"><span>po przełączeniu</span><div class="podlist"><span class="pod-chip mini green">G</span><span class="pod-chip mini green">G</span><span class="pod-chip mini green">G</span><span class="route">← ruch</span></div></div>
+      </div>
+      <dl class="facts">
+        <dt>Podów naraz</dt><dd><strong>2 × replicas</strong></dd>
+        <dt>Przerwa</dt><dd class="no">nie</dd>
+        <dt>Rollback</dt><dd>natychmiast: selektor Service z powrotem na blue</dd>
+        <dt>Koszt</dt><dd>podwójne zasoby przez czas wdrożenia; na naszym klastrze często za mało quoty</dd>
+        <dt>Kiedy</dt><dd>ryzykowne wdrożenie, test v2 przed wpuszczeniem ruchu</dd>
+      </dl>
+    </article>
+
+    <article class="card">
+      <h3>Canary</h3>
+      <p class="sub">nowa wersja dostaje mały procent ruchu, potem coraz więcej</p>
+      <div class="phases" aria-hidden="true">
+        <div class="phase"><span>start</span><div class="podlist"><span class="pod-chip mini v1">1</span><span class="pod-chip mini v1">1</span><span class="pod-chip mini v1">1</span><span class="pod-chip mini v2">2</span><span class="route">90 / 10</span></div></div>
+        <div class="phase"><span>metryki OK</span><div class="podlist"><span class="pod-chip mini v1">1</span><span class="pod-chip mini v1">1</span><span class="pod-chip mini v2">2</span><span class="pod-chip mini v2">2</span><span class="route">50 / 50</span></div></div>
+        <div class="phase"><span>po</span><div class="podlist"><span class="pod-chip mini v2">2</span><span class="pod-chip mini v2">2</span><span class="pod-chip mini v2">2</span><span class="route">0 / 100</span></div></div>
+      </div>
+      <dl class="facts">
+        <dt>Podów naraz</dt><dd><code>replicas</code> + kilka podów v2</dd>
+        <dt>Przerwa</dt><dd class="no">nie</dd>
+        <dt>Rollback</dt><dd>szybki: waga 0 dla v2 albo usunięcie v2</dd>
+        <dt>Koszt</dt><dd>mało; potrzebne metryki, żeby ocenić v2</dd>
+        <dt>Kiedy</dt><dd>sprawdzenie v2 na części użytkowników</dd>
+      </dl>
+    </article>
+  </div>
+  <p style="margin-top:16px">Proporcja z liczby replik działa mniej więcej (9 podów v1 i 1 pod v2 ≈ 10% ruchu). Dokładne wagi daje HTTPRoute z Gateway API. Manifesty i automatyzacja (Argo Rollouts, Flagger): <a href="strategie-wdrozen.md">strategie-wdrozen.md</a>.</p>
+</section>
+
+<!-- 5 ============================================================ -->
+<section id="sciaga">
+  <h2><span class="n">5</span> Ściąga: <code>kubectl rollout</code></h2>
+  <p>Komendy działają w Twoim namespace. <code>web</code> to nazwa Deploymentu, <code>nginx</code> to nazwa kontenera w szablonie.</p>
+  <div class="cheat">
+    <div><pre>kubectl set image deploy/web nginx=nginx:1.30
+kubectl annotate deploy/web \
+  kubernetes.io/change-cause="nginx 1.30" --overwrite</pre><p>Nowa wersja i jej opis w historii. Flaga <code>--record</code> jest wycofana.</p></div>
+    <div><pre>kubectl rollout status deploy/web --timeout=2m</pre><p>Czeka na koniec rolloutu. Kod wyjścia ≠ 0 po timeoucie albo po <code>ProgressDeadlineExceeded</code>.</p></div>
+    <div><pre>kubectl rollout history deploy/web
+kubectl rollout history deploy/web --revision=2</pre><p>Rewizje z kolumną <code>CHANGE-CAUSE</code>; szablon poda z wybranej rewizji.</p></div>
+    <div><pre>kubectl rollout undo deploy/web
+kubectl rollout undo deploy/web --to-revision=1</pre><p>Powrót do poprzedniej albo wskazanej rewizji. To nowy rollout. Twój plik YAML się nie zmienia.</p></div>
+    <div><pre>kubectl rollout pause deploy/web
+kubectl rollout resume deploy/web</pre><p>Kilka zmian szablonu bez rolloutu po każdej, potem jeden rollout. Na wstrzymanym Deploymencie <code>undo</code> nie działa.</p></div>
+    <div><pre>kubectl rollout restart deploy/web</pre><p>Nowe pody z tym samym obrazem, np. po zmianie ConfigMapy albo Secretu. Dopisuje do szablonu <code>kubectl.kubernetes.io/restartedAt</code>.</p></div>
+    <div><pre>kubectl get deploy,rs,pods -l app=web
+kubectl get pods -l app=web -w</pre><p>Stary i nowy ReplicaSet, liczba replik każdego; zmiany podów na żywo w trakcie rolloutu.</p></div>
+    <div><pre>kubectl describe deploy web
+kubectl describe rs &lt;nowy-rs&gt;
+kubectl describe quota</pre><p>Warunki <code>Progressing</code>/<code>Available</code>, zdarzenia <code>ScalingReplicaSet</code>, <code>exceeded quota</code> przy nowym ReplicaSecie.</p></div>
+  </div>
+</section>
+
+<footer>Kubernetes w praktyce · Dzień 2 · stan na październik 2026 (Kubernetes 1.35). Wersja tekstowa: <a href="README.md">README.md</a> · <a href="sondy.md">sondy.md</a> · <a href="strategie-wdrozen.md">strategie-wdrozen.md</a>.</footer>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  document.documentElement.classList.add('js');
+  var $ = function (id) { return document.getElementById(id); };
+
+  /* ================= symulator rolloutu ================= */
+  var inR = $('in-r'), inS = $('in-s'), inU = $('in-u');
+  var outR = $('out-r'), outS = $('out-s'), outU = $('out-u');
+  var inBroken = $('in-broken'), inTight = $('in-tight');
+  var btnStep = $('btn-step'), btnPlay = $('btn-play'), btnReset = $('btn-reset');
+  var simErr = $('sim-err'), simTick = $('sim-tick');
+  if (!inR || !btnStep) return;
+
+  var cfg, ru, rc, tick, timer = null;
+
+  function pod(v, st) { return { v: v, st: st }; }
+  function count(list, fn) { var n = 0; list.forEach(function (p) { if (fn(p)) n++; }); return n; }
+  function alive(p) { return p.st !== 'term'; }
+  function isReady(p) { return p.st === 'ready'; }
+
+  function readCfg() {
+    var R = Number(inR.value);
+    inS.max = String(R); inU.max = String(R);
+    if (Number(inS.value) > R) inS.value = String(R);
+    if (Number(inU.value) > R) inU.value = String(R);
+    cfg = { R: R, S: Number(inS.value), U: Number(inU.value), broken: inBroken.checked, tight: inTight.checked };
+    outR.textContent = cfg.R; outS.textContent = cfg.S; outU.textContent = cfg.U;
+  }
+
+  function initSide() {
+    var old = [];
+    for (var i = 0; i < cfg.R; i++) old.push(pod(1, 'ready'));
+    return { old: old, nw: [], blocked: 0, hist: [cfg.R], done: false, stuck: false, msg: '', cls: '' };
+  }
+
+  function reset() {
+    stop();
+    readCfg();
+    tick = 0;
+    ru = initSide();
+    rc = initSide();
+    var invalid = cfg.S === 0 && cfg.U === 0;
+    simErr.hidden = !invalid;
+    ru.msg = invalid ? 'Popraw ustawienia: jedno z pól musi być większe od zera.'
+      : 'Stan wyjściowy: ' + cfg.R + ' × v1. Naciśnij „krok dalej”: obraz w szablonie zmienia się na v2 i powstaje nowy ReplicaSet.';
+    rc.msg = 'Stan wyjściowy: ' + cfg.R + ' × v1. Recreate nie ma żadnych parametrów.';
+    cfg.invalid = invalid;
+    if (invalid) { ru.stuck = true; ru.cls = 'stuck'; }
+    render();
+  }
+
+  // promuje pody, które startowały w poprzednim kroku
+  function promote(side) {
+    var n = 0;
+    side.nw.forEach(function (p) {
+      if (p.st === 'starting') { p.st = cfg.broken ? 'broken' : 'ready'; if (!cfg.broken) n++; }
+    });
+    return n;
+  }
+
+  function stepRU() {
+    if (ru.done || ru.stuck) return;
+    var R = cfg.R, S = cfg.S, U = cfg.U;
+    ru.old = ru.old.filter(alive);           // usunięte w poprzednim kroku znikają
+    var promoted = promote(ru);
+
+    var available = count(ru.old, isReady) + count(ru.nw, isReady);
+    var minAvail = R - U;
+    var removable = Math.max(0, Math.min(ru.old.length, available - minAvail));
+    for (var i = 0; i < removable; i++) ru.old[i].st = 'term';
+
+    var total = count(ru.old, alive) + ru.nw.length;
+    var wanted = Math.max(0, Math.min(R - ru.nw.length, R + S - total));
+    var quotaRoom = cfg.tight ? Math.max(0, R - total) : Infinity;
+    var added = Math.min(wanted, quotaRoom);
+    ru.blocked = wanted - added;
+    for (var j = 0; j < added; j++) ru.nw.push(pod(2, 'starting'));
+
+    var parts = [];
+    if (promoted) parts.push('Nowe pody gotowe: ' + promoted + '.');
+    if (removable) parts.push('Usunięte stare: ' + removable + '.');
+    if (added) parts.push('Utworzone nowe: ' + added + '.');
+    if (ru.blocked) parts.push('Nie powstało z powodu quoty: ' + ru.blocked + '.');
+
+    var oldLeft = count(ru.old, alive);
+    if (oldLeft === 0 && ru.nw.length === R && count(ru.nw, isReady) === R) {
+      ru.done = true; ru.cls = 'done';
+      ru.msg = parts.join(' ') + ' Koniec rolloutu. Stary ReplicaSet ma 0 replik i zostaje w historii.';
+    } else if (!promoted && !removable && !added) {
+      ru.stuck = true; ru.cls = 'stuck';
+      if (ru.blocked && ru.nw.length === 0) {
+        ru.msg = 'Rollout stoi: exceeded quota. Nowy pod nie mieści się w quocie, a maxUnavailable: ' + U +
+          ' nie pozwala usunąć starego. W kubectl describe rs <nowy-rs> zobaczysz exceeded quota. Ustaw maxSurge: 0 i maxUnavailable: 1.';
+      } else if (cfg.broken) {
+        ru.msg = 'Rollout stoi. Nowe pody nie przechodzą readiness, więc Deployment nie usuwa kolejnych starych. Stare dalej obsługują ruch. ' +
+          'Po progressDeadlineSeconds: ProgressDeadlineExceeded. Wyjście: kubectl rollout undo.';
+      } else {
+        ru.msg = 'Rollout stoi: brak miejsca na nowy pod (quota), a nie wolno usunąć kolejnego starego.';
+      }
+    } else {
+      ru.cls = '';
+      ru.msg = parts.join(' ') || 'Czekam.';
+    }
+    ru.hist.push(count(ru.old, isReady) + count(ru.nw, isReady));
+  }
+
+  function stepRC() {
+    if (rc.done || rc.stuck) return;
+    var R = cfg.R;
+    var promoted = promote(rc);
+    var hadTerm = rc.old.some(function (p) { return p.st === 'term'; });
+    if (promoted) {
+      rc.done = true; rc.cls = 'done';
+      rc.msg = 'Nowe pody gotowe. Koniec przerwy w działaniu.';
+    } else if (hadTerm) {
+      rc.old = [];
+      for (var i = 0; i < R; i++) rc.nw.push(pod(2, 'starting'));
+      rc.cls = 'stuck';
+      rc.msg = 'Stare pody zniknęły. Dopiero teraz powstaje ' + R + ' × v2. Dalej 0 gotowych: aplikacja nie działa.';
+    } else if (rc.old.length) {
+      rc.old.forEach(function (p) { p.st = 'term'; });
+      rc.cls = 'stuck';
+      rc.msg = 'Usuwa wszystkie stare pody naraz. Gotowych: 0. Od tej chwili aplikacja nie działa.';
+    } else {
+      rc.stuck = true; rc.cls = 'stuck';
+      rc.msg = 'Nowe pody nie przechodzą readiness, a starych już nie ma. Pełna przerwa w działaniu aż do kubectl rollout undo.';
+    }
+    rc.hist.push(count(rc.old, isReady) + count(rc.nw, isReady));
+  }
+
+  function finished() { return cfg.invalid || ((ru.done || ru.stuck) && (rc.done || rc.stuck)); }
+
+  function step() {
+    if (finished()) return;
+    tick++;
+    stepRU();
+    stepRC();
+    render();
+    if (finished()) stop();
+  }
+
+  function chip(p) {
+    var s = document.createElement('span');
+    var label = 'v' + p.v, cls = 'pod-chip ', title;
+    if (p.v === 1) { cls += 'v1'; title = 'v1, gotowy'; if (p.st === 'term') { cls += ' term'; title = 'v1, usuwany'; } }
+    else if (p.st === 'starting') { cls += 'starting'; title = 'v2, startuje'; }
+    else if (p.st === 'broken') { cls += 'broken'; label = 'v2 ✗'; title = 'v2, readiness nie przechodzi'; }
+    else { cls += 'v2'; title = 'v2, gotowy'; }
+    s.className = cls; s.textContent = label; s.title = title;
+    s.setAttribute('aria-label', 'pod ' + title);
+    return s;
+  }
+
+  function fillPods(id, list, blocked) {
+    var box = $(id);
+    box.textContent = '';
+    list.forEach(function (p) { box.appendChild(chip(p)); });
+    for (var i = 0; i < (blocked || 0); i++) {
+      var b = document.createElement('span');
+      b.className = 'pod-chip blocked'; b.textContent = 'quota';
+      b.title = 'pod nie powstał: exceeded quota';
+      box.appendChild(b);
+    }
+    if (!list.length && !blocked) {
+      var e = document.createElement('span');
+      e.className = 'empty-note'; e.textContent = 'brak podów';
+      box.appendChild(e);
+    }
+  }
+
+  function fillHist(id, hist, minReady) {
+    var box = $(id), R = cfg.R;
+    box.textContent = '';
+    hist.forEach(function (v, i) {
+      var b = document.createElement('div');
+      b.className = 'bar' + (v === 0 ? ' zero' : (v < R ? ' low' : ''));
+      b.style.height = (v / R * 100) + '%';
+      b.title = (i === 0 ? 'start' : 'krok ' + i) + ': gotowych ' + v + ' z ' + R;
+      box.appendChild(b);
+    });
+    if (minReady !== null && minReady > 0) {
+      var m = document.createElement('div');
+      m.className = 'minline';
+      m.style.bottom = (minReady / R * 100) + '%';
+      var t = document.createElement('span'); t.textContent = 'min ' + minReady;
+      m.appendChild(t);
+      box.appendChild(m);
+    }
+    box.setAttribute('aria-label', 'Gotowe pody w kolejnych krokach: ' + hist.join(', '));
+  }
+
+  function renderSide(prefix, side, isRU) {
+    var R = cfg.R;
+    var total = count(side.old, alive) + side.nw.length;
+    var ready = count(side.old, isReady) + count(side.nw, isReady);
+    var down = Math.max(0, R - ready);
+    $(prefix + '-total').textContent = total;
+    $(prefix + '-ready').textContent = ready;
+    $(prefix + '-down').textContent = down;
+    $(prefix + '-rs1').textContent = 'replicas: ' + count(side.old, alive);
+    $(prefix + '-rs2').textContent = 'replicas: ' + side.nw.length;
+    $(prefix + '-ready-box').classList.toggle('warn', ready === 0);
+    $(prefix + '-down-box').classList.toggle('warn', down > 0 && (!isRU || down > cfg.U));
+    fillPods(prefix + '-old', side.old);
+    fillPods(prefix + '-new', side.nw, isRU ? side.blocked : 0);
+    var msg = $(prefix + '-msg');
+    msg.textContent = side.msg;
+    msg.className = 'msg' + (side.cls ? ' ' + side.cls : '');
+    if (isRU) {
+      var maxT = cfg.tight ? Math.min(R + cfg.S, R) : R + cfg.S;
+      $('ru-total-l').textContent = 'podów naraz, max ' + maxT + (cfg.tight && cfg.S ? ' (quota)' : '');
+      $('ru-ready-l').textContent = 'gotowych, min ' + (R - cfg.U);
+      $('ru-down-l').textContent = 'nie działa, wolno ' + cfg.U;
+      $('ru-cfg').textContent = 'maxSurge: ' + cfg.S + ' · maxUnavailable: ' + cfg.U;
+      fillHist('ru-hist', side.hist, R - cfg.U);
+    } else {
+      $('rc-total-l').textContent = 'podów naraz, max ' + R;
+      fillHist('rc-hist', side.hist, null);
+    }
+  }
+
+  function render() {
+    renderSide('ru', ru, true);
+    renderSide('rc', rc, false);
+    simTick.textContent = 'krok ' + tick + (finished() && tick ? ' · koniec' : '');
+    btnStep.disabled = finished();
+    btnPlay.disabled = finished();
+  }
+
+  function stop() {
+    if (timer) { clearInterval(timer); timer = null; }
+    btnPlay.textContent = 'odtwarzaj';
+    btnPlay.setAttribute('aria-pressed', 'false');
+  }
+  function play() {
+    if (timer) { stop(); return; }
+    if (finished()) return;
+    btnPlay.textContent = 'pauza';
+    btnPlay.setAttribute('aria-pressed', 'true');
+    step();
+    timer = setInterval(step, 1300);
+  }
+
+  [inR, inS, inU].forEach(function (el) { el.addEventListener('input', reset); });
+  [inBroken, inTight].forEach(function (el) { el.addEventListener('change', reset); });
+  btnStep.addEventListener('click', function () { stop(); step(); });
+  btnReset.addEventListener('click', reset);
+  btnPlay.addEventListener('click', play);
+  reset();
+
+  /* ================= oś czasu sond ================= */
+  var N = 24, STARTUP_FT = 4, READY_FT = 2, LIVE_FT = 3;
+  var SCEN = {
+    ok: { startSlots: 3,
+      desc: '<p><strong>Wszystko działa.</strong> Aplikacja startuje 15 s. Startup nie przechodzi trzy razy, ale próg to 4, więc restartu nie ma. Po sukcesie startup ruszają readiness i liveness. Pierwszy sukces readiness: pod trafia do EndpointSlice i dostaje ruch. W rolloucie to moment, w którym Deployment może usunąć stary pod.</p>' },
+    startup: { startSlots: Infinity,
+      desc: '<p><strong>Aplikacja nie wstaje</strong> (np. zła konfiguracja, brak migracji). Po 4 porażkach startup kubelet restartuje kontener. Readiness i liveness w ogóle nie ruszają, pod nigdy nie dostaje ruchu.</p><p>W klastrze kolejne restarty nie następują od razu: kubelet czeka coraz dłużej (do 5 min) i pod ma status <code>CrashLoopBackOff</code>. Rollout z takim podem stoi.</p>' },
+    ready: { startSlots: 3, depDown: [10, 15],
+      desc: '<p><strong>Baza chwilowo pada</strong> (od 50 s przez 30 s). <code>/ready</code> sprawdza połączenie z bazą, więc readiness nie przechodzi. Po 2 porażkach pod wypada z EndpointSlice: ruch idzie do innych replik. Liveness sprawdza tylko proces, więc przechodzi i <strong>restartu nie ma</strong>. Gdy baza wraca, pierwszy sukces readiness przywraca pod do ruchu.</p><p>Gdyby liveness sprawdzała bazę, wszystkie repliki zrestartowałyby się naraz, choć same są zdrowe.</p>' },
+    live: { startSlots: 3, hangAt: 12,
+      desc: '<p><strong>Aplikacja się zawiesza</strong> (od 60 s). Proces działa, ale nie odpowiada. Readiness po 2 porażkach wyłącza pod z ruchu. Liveness po 3 porażkach każe kubeletowi <strong>zrestartować kontener</strong>. Nowy kontener przechodzi od początku startup, a po pierwszym sukcesie readiness wraca do EndpointSlice.</p><p>Pod zostaje ten sam (ta sama nazwa i IP), zmienia się tylko kontener. W <code>kubectl get pods</code> rośnie <code>RESTARTS</code>.</p>' }
+  };
+
+  function simulateProbes(sc) {
+    var r = { startup: [], ready: [], live: [], ep: [], rst: [] };
+    var started = false, sf = 0, rf = 0, lf = 0, inEP = false, instance = 0, cStart = 0, restarts = 0;
+    function restart(t) {
+      restarts++; r.rst[t] = true; cStart = t + 1;
+      started = false; sf = rf = lf = 0; inEP = false; instance++;
+    }
+    for (var t = 0; t < N; t++) {
+      var since = t - cStart;
+      var appUp = since >= sc.startSlots;
+      var hung = sc.hangAt !== undefined && instance === 0 && t >= sc.hangAt;
+      var depDown = sc.depDown && t >= sc.depDown[0] && t <= sc.depDown[1];
+      r.rst[t] = false;
+      if (!started) {
+        r.startup[t] = appUp ? 'pass' : 'fail';
+        r.ready[t] = 'none'; r.live[t] = 'none';
+        if (appUp) started = true;
+        else if (++sf >= STARTUP_FT) restart(t);
+      } else {
+        r.startup[t] = 'none';
+        var readyOk = !hung && !depDown;
+        r.ready[t] = readyOk ? 'pass' : 'fail';
+        if (readyOk) { rf = 0; inEP = true; } else if (++rf >= READY_FT) inEP = false;
+        var liveOk = !hung;
+        r.live[t] = liveOk ? 'pass' : 'fail';
+        if (liveOk) lf = 0; else if (++lf >= LIVE_FT) restart(t);
+      }
+      r.ep[t] = inEP;
+    }
+    r.restarts = restarts;
+    return r;
+  }
+
+  var GLYPH = { pass: '✓', fail: '✗', none: '·' };
+  var WORD = { pass: 'przeszła', fail: 'nie przeszła', none: 'nie działa' };
+
+  function row(label, sub, cells) {
+    var rw = document.createElement('div'); rw.className = 'prow';
+    var l = document.createElement('div'); l.className = 'plabel';
+    l.textContent = label;
+    if (sub) { var s = document.createElement('small'); s.textContent = sub; l.appendChild(s); }
+    var c = document.createElement('div'); c.className = 'pcells';
+    cells.forEach(function (x) {
+      var d = document.createElement('span');
+      d.className = 'pc ' + x.cls; d.textContent = x.txt; d.title = x.title;
+      c.appendChild(d);
+    });
+    rw.appendChild(l); rw.appendChild(c);
+    return rw;
+  }
+
+  function probeCells(arr, name) {
+    return arr.map(function (v, t) { return { cls: v, txt: GLYPH[v], title: (t * 5) + ' s: ' + name + ' ' + WORD[v] }; });
+  }
+
+  function renderProbes(key) {
+    var sc = SCEN[key], r = simulateProbes(sc);
+    var grid = $('probe-grid');
+    grid.textContent = '';
+    grid.appendChild(row('startupProbe', 'restart po 4 ✗', probeCells(r.startup, 'startup')));
+    grid.appendChild(row('readinessProbe', 'ruch: 2 ✗ / 1 ✓', probeCells(r.ready, 'readiness')));
+    grid.appendChild(row('livenessProbe', 'restart po 3 ✗', probeCells(r.live, 'liveness')));
+    grid.appendChild(row('w EndpointSlice', 'dostaje ruch', r.ep.map(function (v, t) {
+      return { cls: v ? 'in' : 'out', txt: '', title: (t * 5) + ' s: ' + (v ? 'w EndpointSlice, dostaje ruch' : 'poza EndpointSlice, bez ruchu') };
+    })));
+    grid.appendChild(row('restart', 'RESTARTS: ' + r.restarts, r.rst.map(function (v, t) {
+      return { cls: v ? 'rst' : 'none', txt: v ? '↻' : '', title: (t * 5) + ' s: ' + (v ? 'kubelet restartuje kontener' : 'bez restartu') };
+    })));
+    var axis = [];
+    for (var t = 0; t < N; t++) axis.push({ cls: '', txt: t % 4 === 0 ? (t * 5) + ' s' : '', title: '' });
+    var ax = row('', '', axis); ax.classList.add('paxis'); ax.setAttribute('aria-hidden', 'true');
+    grid.appendChild(ax);
+    $('probe-desc').innerHTML = sc.desc;
+  }
+
+  var seg = $('probe-seg');
+  seg.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-sc]');
+    if (!b) return;
+    seg.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+    renderProbes(b.getAttribute('data-sc'));
+  });
+  renderProbes('ok');
+})();
+</script>
+</body>
+</html>

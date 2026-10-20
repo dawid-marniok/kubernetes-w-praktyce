@@ -1,0 +1,35 @@
+# Deployment z jawną strategią RollingUpdate: jeden pod ponad stan, żaden niedostępny.
+# Najbezpieczniej, ale wymaga zapasu zasobów na dodatkowy pod. Start na nginx:1.28, żeby było do czego aktualizować (README).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: przyklad-deploy
+  labels:
+    app: przyklad-deploy
+  annotations:
+    kubernetes.io/change-cause: "nginx 1.28"
+spec:
+  replicas: 3
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: przyklad-deploy
+  template:
+    metadata:
+      labels:
+        app: przyklad-deploy
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.28
+        ports:
+        - name: http
+          containerPort: 80
+        resources:
+          requests: {cpu: 20m, memory: 32Mi}
+          limits: {cpu: 100m, memory: 64Mi}

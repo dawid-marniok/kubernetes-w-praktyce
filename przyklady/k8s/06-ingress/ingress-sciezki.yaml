@@ -1,0 +1,26 @@
+# Jeden host, dwie ścieżki, dwa Service. Prefix dopasowuje po segmentach: /app1 pasuje do /app1/x, nie do /app10.
+# Kontroler przekazuje ścieżkę bez zmian — aplikacja musi obsługiwać /app1/ (albo potrzebny rewrite).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: przyklad-sciezki
+spec:
+  ingressClassName: traefik     # kubectl get ingressclass
+  rules:
+  - host: apps-<login>.<DOMENA>
+    http:
+      paths:
+      - path: /app1
+        pathType: Prefix
+        backend:
+          service:
+            name: app1
+            port:
+              number: 80
+      - path: /app2
+        pathType: Prefix
+        backend:
+          service:
+            name: app2
+            port:
+              number: 80

@@ -165,7 +165,7 @@ docker volume prune                     # nieużywane wolumeny: dane znikają na
 | Pusty na starcie | kopiuje zawartość katalogu z obrazu | **przykrywa** katalog z obrazu | pusty |
 | Do czego | bazy, dane aplikacji | kod w trakcie pisania, pliki konfiguracji | pliki tymczasowe, `--read-only` |
 
-tmpfs na przykładach (restart, `--read-only`, limit rozmiaru, Compose): [d1-docker-tmpfs.md](d1-docker-tmpfs.md).
+tmpfs na przykładach (restart, `--read-only`, limit rozmiaru, Compose): [docs/docker/tmpfs.md](tmpfs.md).
 
 `postgres:18` trzyma dane w `/var/lib/postgresql` (starsze wersje: `/var/lib/postgresql/data`).
 

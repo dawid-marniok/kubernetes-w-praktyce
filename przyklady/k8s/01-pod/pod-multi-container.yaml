@@ -1,0 +1,32 @@
+# Dwa kontenery w jednym podzie: wspólna sieć (localhost) i wspólny wolumen emptyDir.
+# emptyDir żyje tyle co pod: restart kontenera go nie czyści, usunięcie poda tak.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: przyklad-multi
+  labels:
+    app: przyklad-multi
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.29
+    ports:
+    - containerPort: 80
+    volumeMounts:
+    - name: shared-data
+      mountPath: /usr/share/nginx/html
+    resources:
+      requests: {cpu: 50m, memory: 32Mi}
+      limits: {cpu: 100m, memory: 64Mi}
+  - name: busybox
+    image: busybox:1.37
+    command: ["sh", "-c", "echo 'Hello z busyboxa' > /shared/index.html && sleep 3600"]
+    volumeMounts:
+    - name: shared-data
+      mountPath: /shared
+    resources:
+      requests: {cpu: 10m, memory: 16Mi}
+      limits: {cpu: 50m, memory: 32Mi}
+  volumes:
+  - name: shared-data
+    emptyDir: {}

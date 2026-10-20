@@ -2,7 +2,7 @@
 
 **Cel:** napisać Dockerfile, który dobrze korzysta z cache warstw, nie uruchamia aplikacji jako root i nie wnosi do obrazu zbędnych plików; porównać obraz multi-stage z jednoetapowym i wypchnąć obraz z wersją do rejestru.
 
-**Czas:** ~60 min (kroki 1–4 ok. 45 min, reszta dla chętnych).
+Podstawa: kroki 1–4, reszta dla chętnych.
 
 **Po labie masz:** własny obraz `node-app:1.0.0` działający jako użytkownik bez uprawnień roota, porównanie rozmiarów `sample:multi` i `sample:single` oraz swój obraz w rejestrze pod pełną nazwą z wersją. Ten obraz przyda się w dniach z Kubernetesem.
 
