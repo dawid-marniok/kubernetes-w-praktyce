@@ -4,34 +4,51 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: web
-  labels: {app: todos-web, app.kubernetes.io/part-of: todos}
+  labels:
+    app: todos-web
+    app.kubernetes.io/part-of: todos
 spec:
   replicas: 2
   selector:
-    matchLabels: {app: todos-web}
+    matchLabels:
+      app: todos-web
   template:
     metadata:
-      labels: {app: todos-web, app.kubernetes.io/part-of: todos}
+      labels:
+        app: todos-web
+        app.kubernetes.io/part-of: todos
     spec:
       containers:
         - name: web
           image: <REJESTR>/todos-web:1.0.0
           ports:
-            - {name: http, containerPort: 8080}
+            - name: http
+              containerPort: 8080
           envFrom:
-            - configMapRef: {name: todos-config}
+            - configMapRef:
+                name: todos-config
           readinessProbe:
-            httpGet: {path: /, port: http}
+            httpGet:
+              path: /
+              port: http
           resources:
-            requests: {cpu: 25m, memory: 32Mi}
-            limits: {cpu: 100m, memory: 64Mi}
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: web
-  labels: {app.kubernetes.io/part-of: todos}
+  labels:
+    app.kubernetes.io/part-of: todos
 spec:
-  selector: {app: todos-web}
+  selector:
+    app: todos-web
   ports:
-    - {name: http, port: 80, targetPort: http}
+    - name: http
+      port: 80
+      targetPort: http

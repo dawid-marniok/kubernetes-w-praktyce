@@ -5,7 +5,8 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: todos-config
-  labels: {app.kubernetes.io/part-of: todos}
+  labels:
+    app.kubernetes.io/part-of: todos
 data:
   API_HOST: api
   API_PORT: "3001"

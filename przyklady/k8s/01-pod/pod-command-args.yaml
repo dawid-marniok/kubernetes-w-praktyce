@@ -12,8 +12,15 @@ spec:
   containers:
   - name: busybox
     image: busybox:1.37
-    command: ["sh", "-c"]
-    args: ["echo 'Hello z Kubernetesa' && sleep 3600"]
+    command:
+      - sh
+      - -c
+    args:
+      - "echo 'Hello z Kubernetesa' && sleep 3600"
     resources:
-      requests: {cpu: 10m, memory: 16Mi}
-      limits: {cpu: 50m, memory: 32Mi}
+      requests:
+        cpu: 10m
+        memory: 16Mi
+      limits:
+        cpu: 50m
+        memory: 32Mi

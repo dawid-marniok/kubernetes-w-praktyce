@@ -10,7 +10,10 @@ spec:
   containers:
   - name: busybox
     image: busybox:1.37
-    command: ["sh", "-c", "echo start; sleep 600"]
+    command:
+      - sh
+      - -c
+      - "echo start; sleep 600"
     resources:
       requests:
         cpu: 10m

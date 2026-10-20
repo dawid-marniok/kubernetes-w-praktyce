@@ -16,17 +16,28 @@ spec:
     - name: shared-data
       mountPath: /usr/share/nginx/html
     resources:
-      requests: {cpu: 50m, memory: 32Mi}
-      limits: {cpu: 100m, memory: 64Mi}
+      requests:
+        cpu: 50m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
   - name: busybox
     image: busybox:1.37
-    command: ["sh", "-c", "echo 'Hello z busyboxa' > /shared/index.html && sleep 3600"]
+    command:
+      - sh
+      - -c
+      - "echo 'Hello z busyboxa' > /shared/index.html && sleep 3600"
     volumeMounts:
     - name: shared-data
       mountPath: /shared
     resources:
-      requests: {cpu: 10m, memory: 16Mi}
-      limits: {cpu: 50m, memory: 32Mi}
+      requests:
+        cpu: 10m
+        memory: 16Mi
+      limits:
+        cpu: 50m
+        memory: 32Mi
   volumes:
   - name: shared-data
     emptyDir: {}

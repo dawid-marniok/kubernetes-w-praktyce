@@ -10,7 +10,14 @@ spec:
   containers:
   - name: app
     image: busybox:1.37
-    command: ["sh", "-c", "echo 'Brak zmiennej DB_HOST, koncze prace'; exit 1"]
+    command:
+      - sh
+      - -c
+      - "echo 'Brak zmiennej DB_HOST, koncze prace'; exit 1"
     resources:
-      requests: {cpu: 50m, memory: 16Mi}
-      limits: {cpu: 100m, memory: 32Mi}
+      requests:
+        cpu: 50m
+        memory: 16Mi
+      limits:
+        cpu: 100m
+        memory: 32Mi

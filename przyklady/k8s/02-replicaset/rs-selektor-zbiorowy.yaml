@@ -13,7 +13,9 @@ spec:
     matchExpressions:
     - key: environment
       operator: In
-      values: ["dev", "test"]
+      values:
+        - dev
+        - test
   template:
     metadata:
       labels:
@@ -23,10 +25,17 @@ spec:
       containers:
       - name: alpine
         image: alpine:3.22
-        command: ["sh", "-c", "sleep 3600"]
+        command:
+          - sh
+          - -c
+          - "sleep 3600"
         env:
         - name: ENVIRONMENT
           value: dev
         resources:
-          requests: {cpu: 10m, memory: 16Mi}
-          limits: {cpu: 50m, memory: 32Mi}
+          requests:
+            cpu: 10m
+            memory: 16Mi
+          limits:
+            cpu: 50m
+            memory: 32Mi

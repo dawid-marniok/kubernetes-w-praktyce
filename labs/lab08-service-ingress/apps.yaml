@@ -34,8 +34,12 @@ spec:
         - name: html
           mountPath: /usr/share/nginx/html/app1
         resources:
-          requests: {cpu: 20m, memory: 32Mi}
-          limits: {cpu: 100m, memory: 64Mi}
+          requests:
+            cpu: 20m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 64Mi
       volumes:
       - name: html
         configMap:
@@ -87,8 +91,12 @@ spec:
         - name: html
           mountPath: /usr/local/apache2/htdocs/app2
         resources:
-          requests: {cpu: 20m, memory: 32Mi}
-          limits: {cpu: 100m, memory: 128Mi}
+          requests:
+            cpu: 20m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
       volumes:
       - name: html
         configMap:

@@ -4,45 +4,67 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: mongo
-  labels: {app: todos-mongo, app.kubernetes.io/part-of: todos}
+  labels:
+    app: todos-mongo
+    app.kubernetes.io/part-of: todos
 spec:
   replicas: 1
   strategy:
     type: Recreate               # nigdy dwa pody bazy naraz
   selector:
-    matchLabels: {app: todos-mongo}
+    matchLabels:
+      app: todos-mongo
   template:
     metadata:
-      labels: {app: todos-mongo, app.kubernetes.io/part-of: todos}
+      labels:
+        app: todos-mongo
+        app.kubernetes.io/part-of: todos
     spec:
       containers:
         - name: mongo
           image: mongo:7.0
           ports:
-            - {name: mongo, containerPort: 27017}
+            - name: mongo
+              containerPort: 27017
           env:
             - name: MONGO_INITDB_ROOT_USERNAME
               valueFrom:
-                secretKeyRef: {name: todos-mongo, key: username}
+                secretKeyRef:
+                  name: todos-mongo
+                  key: username
             - name: MONGO_INITDB_ROOT_PASSWORD
               valueFrom:
-                secretKeyRef: {name: todos-mongo, key: password}
+                secretKeyRef:
+                  name: todos-mongo
+                  key: password
           readinessProbe:
             exec:
-              command: ["mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+              command:
+                - mongosh
+                - --quiet
+                - --eval
+                - "db.adminCommand('ping')"
             initialDelaySeconds: 10
             periodSeconds: 10
             timeoutSeconds: 5
           resources:
-            requests: {cpu: 100m, memory: 256Mi}
-            limits: {cpu: 500m, memory: 512Mi}
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: mongo                    # ta nazwa jest w adresie bazy (Secret todos-mongo, klucz uri)
-  labels: {app.kubernetes.io/part-of: todos}
+  labels:
+    app.kubernetes.io/part-of: todos
 spec:
-  selector: {app: todos-mongo}
+  selector:
+    app: todos-mongo
   ports:
-    - {name: mongo, port: 27017, targetPort: mongo}
+    - name: mongo
+      port: 27017
+      targetPort: mongo

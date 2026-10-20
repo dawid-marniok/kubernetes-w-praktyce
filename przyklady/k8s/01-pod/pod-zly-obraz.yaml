@@ -11,5 +11,9 @@ spec:
   - name: nginx
     image: nginxx:1.29        # celowy błąd: nginxx zamiast nginx
     resources:
-      requests: {cpu: 50m, memory: 32Mi}
-      limits: {cpu: 100m, memory: 64Mi}
+      requests:
+        cpu: 50m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
