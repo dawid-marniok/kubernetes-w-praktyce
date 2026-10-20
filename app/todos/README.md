@@ -30,7 +30,7 @@ docker compose down                   # zatrzymuje i usuwa kontenery (dane w wol
 docker compose down -v                # ... i usuwa wolumen z danymi
 ```
 
-> **Dlaczego `mongo:7.0`, a nie 8.0?** MongoDB 8.x nie startuje na jądrze Linuksa 6.19–7.0.13, a takie jądro ma obecny Docker Desktop. W logach kontenera pojawia się wtedy `MongoDB cannot start: Linux kernel versions 6.19 and newer has a known incompatibility…` ([SERVER-121912](https://jira.mongodb.org/browse/SERVER-121912)). Na Kubernetesie (AKS) i na starszym Docker Desktop działa 8.0: `MONGO_IMAGE=mongo:8.0 docker compose up -d` albo wpis w `.env`.
+> **Dlaczego `mongo:7.0`, a nie 8.0?** MongoDB 8.x nie startuje na jądrze Linuksa 6.19–7.0.13, a takie jądro ma obecny Docker Desktop. W logach kontenera pojawia się wtedy `MongoDB cannot start: Linux kernel versions 6.19 and newer has a known incompatibility…` ([SERVER-121912](https://jira.mongodb.org/browse/SERVER-121912)). Na klastrze EKS i na starszym Docker Desktop działa 8.0: `MONGO_IMAGE=mongo:8.0 docker compose up -d` albo wpis w `.env`.
 
 Kolejność startu pilnują healthchecki: `api` czeka, aż `mongo` będzie `healthy`, a `web` czeka na `healthy` od `api`.
 

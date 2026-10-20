@@ -11,7 +11,7 @@ Tu masz tylko wymagania. Jak je spełnisz, decydujesz sam. Utknąłeś: gotowe m
 przeglądarka ──► Ingress ──► Service web:80 ──► pody web (nginx :8080) ──/api──► Service api:3001 ──► pody api ──► Service mongo:27017 ──► pod mongo
 ```
 
-**Od trenera na czacie:** klasa Ingress (`<klasa-ingress>`), domena szkolenia (`<DOMENA>`) i nazwa ClusterIssuera (ten sam co w lab08, krok 4). Twój adres: `https://todos-<login>.<DOMENA>`.
+**Od trenera na czacie:** domena szkolenia (`<DOMENA>`) i nazwa ClusterIssuera (ten sam co w lab08, krok 4). Twój adres: `https://todos-<login>.<DOMENA>`.
 `<REJESTR>` masz w punkcie 1 karty dostępowej (ten sam co w lab04, np. `123456789012.dkr.ecr.eu-central-1.amazonaws.com/jkowalski`).
 
 ## Zanim zaczniesz
@@ -63,7 +63,7 @@ Brak obrazu → wróć do lab04, krok 6 (Mac M: `buildx --platform linux/amd64`)
 - Service `web` na porcie 80.
 
 **Ingress**
-- klasa od trenera, host `todos-<login>.<DOMENA>`, ścieżka `/` do Service `web`. Ścieżka `/api` nie jest potrzebna: nginx w web sam przekazuje ją do api.
+- klasa `traefik` (jak w lab08), host `todos-<login>.<DOMENA>`, ścieżka `/` do Service `web`. Ścieżka `/api` nie jest potrzebna: nginx w web sam przekazuje ją do api.
 - HTTPS z certyfikatem od Let's Encrypt jak w lab08 (krok 4): adnotacja `cert-manager.io/cluster-issuer` i sekcja `tls` z Secretem `todos-tls`. Bez tego przeglądarka pokaże ostrzeżenie (domena `.dev` działa w przeglądarce tylko po HTTPS). Ten sam host i Secret wykorzystasz w dniu 5.
 
 Ściąga: `kubectl explain deployment.spec.strategy`, `kubectl explain pod.spec.containers.env.valueFrom`, `kubectl create secret generic --help`, wzorce w [`przyklady/k8s/`](../../przyklady/k8s/).

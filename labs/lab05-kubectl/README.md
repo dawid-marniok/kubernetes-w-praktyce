@@ -46,6 +46,8 @@ kubectl explain deployment.spec.strategy
 - Co oznaczają pola `type` i `rollingUpdate` w strategii Deploymentu?
 
 ### Krok 3. Zdarzenia
+> **Pod** poznasz dokładnie w następnym temacie. Na potrzeby tego kroku traktuj go po prostu jak kontener. Pliki są gotowe, nie musisz ich czytać ani rozumieć: pody są tu tylko po to, żeby w klastrze coś się wydarzyło i było co oglądać w zdarzeniach.
+
 Utwórz dwa pody — jeden zadziała, drugi nie:
 ```bash
 kubectl apply -f lab05-ping.yaml -f lab05-zly.yaml

@@ -59,7 +59,7 @@ services:
   mongo:
     # mongo:7.0 domyślnie, bo MongoDB 8.x nie startuje na jądrze Linuksa 6.19–7.0.13
     # (aktualny Docker Desktop: "MongoDB cannot start: Linux kernel versions 6.19 and newer...",
-    # https://jira.mongodb.org/browse/SERVER-121912). Na AKS (starsze jądro) działa mongo:8.0:
+    # https://jira.mongodb.org/browse/SERVER-121912). Na EKS (starsze jądro) działa mongo:8.0:
     #   MONGO_IMAGE=mongo:8.0 docker compose up -d
     image: ${MONGO_IMAGE:-mongo:7.0}
     environment:

@@ -1,5 +1,5 @@
 # ToDos · dzień 2: Ingress pod Twoją subdomeną, HTTPS z Let's Encrypt (cert-manager).
-# Podmień <klasa-ingress>, <login> i <DOMENA> (wartości od trenera na czacie; ClusterIssuer też od trenera).
+# Podmień <login> i <DOMENA> (wartości od trenera na czacie; ClusterIssuer też od trenera).
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -9,7 +9,7 @@ metadata:
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
-  ingressClassName: <klasa-ingress>
+  ingressClassName: traefik
   tls:
   - hosts:
       - todos-<login>.<DOMENA>

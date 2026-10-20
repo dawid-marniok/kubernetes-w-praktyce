@@ -1,16 +1,17 @@
-# cert-manager: ClusterIssuer dla Let's Encrypt (staging — certyfikaty testowe, bez limitów produkcji).
+# cert-manager: ClusterIssuer dla Let's Encrypt (produkcja — certyfikaty zaufane przez przeglądarki; tego używamy na szkoleniu).
 # Wymaga zainstalowanego cert-managera (obiekt klastrowy — tworzy administrator) i prawdziwej domeny wskazującej na kontroler.
-# Podmień <e-mail>. Produkcja: server https://acme-v02.api.letsencrypt.org/directory
+# Podmień <e-mail>. Do testów bez limitów produkcji: staging, server https://acme-staging-v02.api.letsencrypt.org/directory
+# (certyfikat testowy — przeglądarka go ostrzeże).
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
 metadata:
-  name: letsencrypt-staging
+  name: letsencrypt-prod
 spec:
   acme:
-    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    server: https://acme-v02.api.letsencrypt.org/directory
     email: <e-mail>
     privateKeySecretRef:
-      name: letsencrypt-staging
+      name: letsencrypt-prod-key
     solvers:
     - http01:
         ingress:

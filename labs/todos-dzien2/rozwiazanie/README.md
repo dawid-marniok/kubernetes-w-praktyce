@@ -23,7 +23,7 @@ kubectl create secret generic todos-mongo \
 kubectl label secret todos-mongo app.kubernetes.io/part-of=todos
 ```
 
-W plikach podmień `<REJESTR>` (api.yaml, web.yaml) oraz `<klasa-ingress>`, `<login>`, `<DOMENA>` (ingress.yaml). Potem w tej kolejności:
+W plikach podmień `<REJESTR>` (api.yaml, web.yaml) oraz `<login>`, `<DOMENA>` (ingress.yaml). Potem w tej kolejności:
 
 ```bash
 kubectl apply -f configmap.yaml

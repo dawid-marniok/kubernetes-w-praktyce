@@ -33,7 +33,7 @@ kubectl logs lab06-web
 - Na którym węźle działa pod i jaki ma IP?
 
 ### Krok 2. Trzy kolejne pody
-1. `lab06-duo` — dwa kontenery: `nginx` (`nginx:1.29`, port 80) i `busybox` (`busybox:1.37`, komenda `sleep 3600`). Wspólny wolumen `emptyDir`: busybox zapisuje `index.html`, nginx go serwuje.
+1. `lab06-duo` — dwa kontenery: `nginx` (`nginx:1.29`, port 80) i `busybox` (`busybox:1.37`, komenda, która zapisuje `index.html` do wspólnego wolumenu (np. zamontowanego w `/shared`), a potem `sleep 3600`, np. `sh -c 'echo "witaj z busyboxa" > /shared/index.html; sleep 3600'`). Wspólny wolumen `emptyDir`: busybox zapisuje `index.html`, nginx go serwuje.
    ```bash
    kubectl get pod lab06-duo                                  # READY 2/2
    kubectl exec lab06-duo -c nginx -- curl -s localhost       # treść z busyboxa

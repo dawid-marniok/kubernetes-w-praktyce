@@ -89,7 +89,7 @@ Dodatkowo zaloguj się darmowym kontem do Docker Hub (`docker login`): podnosi l
 | Linux / WSL | `curl -LO "https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && sudo install kubectl /usr/local/bin/` |
 
 ```bash
-kubectl version --client       # kubectl może różnić się od klastra o ±1 wersję; klaster ma [UZUPEŁNIJ: wersja EKS]
+kubectl version --client       # kubectl może różnić się od klastra o ±1 wersję; klaster ma 1.35 (EKS)
 ```
 
 ### 5. Dostęp do klastra
@@ -113,7 +113,7 @@ Sprawdzenie:
 kubectl config current-context                     # szkolenie
 kubectl config view --minify | grep namespace      # namespace: <login>
 kubectl auth whoami                                # Username: <login>
-kubectl get nodes                                  # [UZUPEŁNIJ: liczba] węzłów, STATUS Ready
+kubectl get nodes                                  # 3 węzły, STATUS Ready
 kubectl get pods                                   # No resources found in <login> namespace.
 kubectl auth can-i create deployments              # yes
 kubectl auth can-i create pods -n kube-system      # no — i tak ma być

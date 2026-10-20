@@ -5,7 +5,7 @@
 | `ingress.yaml` | host → Service; host z Twoim loginem do uzupełnienia |
 | `ingress-sciezki.yaml` | jeden host, dwie ścieżki (`Prefix`) |
 | `ingress-tls.yaml` | TLS z cert-managera (Let's Encrypt): adnotacja + sekcja `tls`; wariant z własnym Secretem w komentarzu |
-| `cluster-issuer.yaml` | cert-manager + Let's Encrypt (staging), solver HTTP-01 — obiekt klastrowy, tworzy administrator |
+| `cluster-issuer.yaml` | cert-manager + Let's Encrypt (produkcja, staging w komentarzu), solver HTTP-01 — obiekt klastrowy, tworzy administrator |
 
 Miejsca `<…>` są celowo niepoprawne — `kubectl apply` bez ich podmiany kończy się błędem walidacji.
 
