@@ -1,0 +1,12 @@
+# PVC na domyślnej StorageClass (bez storageClassName): EKS → gp3 (dysk EBS), kind → standard (local-path).
+# Klasa gp3 ma WaitForFirstConsumer: PVC jest Pending, dopóki nie użyje go pod (pod-z-pvc.yaml).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: przyklad-pvc
+spec:
+  accessModes: [ReadWriteOnce]   # RWO: jeden węzeł naraz; RWX: wiele węzłów (EFS, NFS); ROX: wiele, tylko odczyt; RWOP: jeden pod
+  # storageClassName: gp3        # konkretna klasa (kubectl get storageclass); brak pola = klasa domyślna
+  resources:
+    requests:
+      storage: 1Gi               # minimalny rozmiar; dysk EBS dostaje dokładnie tyle

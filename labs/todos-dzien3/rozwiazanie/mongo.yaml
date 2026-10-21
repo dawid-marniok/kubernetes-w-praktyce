@@ -1,0 +1,86 @@
+# ToDos · dzień 3: MongoDB jako StatefulSet z własnym dyskiem (PVC z volumeClaimTemplates).
+# Zamiast wczorajszego Deploymentu bez dysku. Przed apply usuń stary Deployment i Service mongo
+# (kubectl delete deploy mongo; kubectl delete svc mongo): Service ClusterIP nie da się zmienić na headless w miejscu.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo                    # ta nazwa jest w adresie bazy (Secret todos-mongo, klucz uri)
+  labels:
+    app.kubernetes.io/part-of: todos
+spec:
+  clusterIP: None                # headless: DNS mongo → IP poda, plus mongo-0.mongo
+  selector:
+    app: todos-mongo
+  ports:
+    - name: mongo
+      port: 27017
+      targetPort: mongo
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mongo
+  labels:
+    app: todos-mongo
+    app.kubernetes.io/part-of: todos
+spec:
+  serviceName: mongo             # headless Service wyżej
+  replicas: 1
+  selector:
+    matchLabels:
+      app: todos-mongo
+  template:
+    metadata:
+      labels:
+        app: todos-mongo
+        app.kubernetes.io/part-of: todos
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: mongo
+          image: mongo:7.0
+          ports:
+            - name: mongo
+              containerPort: 27017
+          env:
+            - name: MONGO_INITDB_ROOT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: todos-mongo
+                  key: username
+            - name: MONGO_INITDB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: todos-mongo
+                  key: password
+          readinessProbe:              # mongosh to cały Node.js: sonda kosztuje CPU, więc rzadziej i z zapasem czasu
+            exec:
+              command:
+                - mongosh
+                - --quiet
+                - --eval
+                - "db.adminCommand('ping')"
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 10
+          resources:                   # requests = limits dla CPU i pamięci → QoS Guaranteed
+            requests:
+              cpu: 300m
+              memory: 512Mi
+            limits:
+              cpu: 300m
+              memory: 512Mi
+          volumeMounts:
+            - name: data
+              mountPath: /data/db      # tu Mongo trzyma pliki bazy
+  volumeClaimTemplates:
+    - metadata:
+        name: data                     # PVC: data-mongo-0
+        labels:
+          app.kubernetes.io/part-of: todos
+      spec:
+        accessModes: [ReadWriteOnce]
+        # bez storageClassName: domyślna klasa klastra (EKS: gp3, kind: standard)
+        resources:
+          requests:
+            storage: 1Gi

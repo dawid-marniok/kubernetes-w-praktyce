@@ -10,7 +10,7 @@ metadata:
 spec:
   replicas: 3
   strategy:
-    type: Recreate
+    type: Recreate                 # bez pól maxSurge/maxUnavailable
   selector:
     matchLabels:
       app: przyklad-recreate

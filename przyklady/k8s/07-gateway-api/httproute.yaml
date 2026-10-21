@@ -1,6 +1,6 @@
 # HTTPRoute pisze zespół aplikacji: host + ścieżka → Service. Do Traefika nie odwołuje się wprost —
 # wskazuje Gateway (parentRefs), a Gateway przez gatewayClassName wskazuje kontroler.
-# Podmień <login> i <DOMENA> (te same co w gateway.yaml). Gateway w innym namespace: dopisz namespace w parentRefs.
+# Host taki sam jak w listenerze gateway.yaml. Gateway w innym namespace: dopisz namespace w parentRefs.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -8,8 +8,8 @@ metadata:
 spec:
   parentRefs:
   - name: przyklad-gw            # ./gateway.yaml — podpina się pod oba listenery (http i https)
-  hostnames:
-  - gw-<login>.<DOMENA>
+  hostnames:                     # musi pasować do hostname listenera; bez pola = host z listenera
+  - gw-trener.k8s.marniok.dev
   rules:
   - matches:
     - path:

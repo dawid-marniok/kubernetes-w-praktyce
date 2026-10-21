@@ -1,0 +1,53 @@
+# Headless Service + StatefulSet: pody przyklad-web-0..2, PVC www-przyklad-web-<numer>, DNS przyklad-web-0.przyklad-web.
+apiVersion: v1
+kind: Service
+metadata:
+  name: przyklad-web
+spec:
+  clusterIP: None                         # headless: daje podom stałe nazwy DNS przyklad-web-0.przyklad-web
+  selector:
+    app: przyklad-web
+  ports:
+  - name: http
+    port: 80
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: przyklad-web
+spec:
+  serviceName: przyklad-web               # headless Service, przez który pody dostają nazwy DNS
+  podManagementPolicy: OrderedReady       # OrderedReady (domyślnie): start po kolei 0→1→2; Parallel: wszystkie naraz
+  replicas: 3
+  persistentVolumeClaimRetentionPolicy:   # GA 1.32; co z PVC: Retain (zostają) albo Delete (usuwane)
+    whenDeleted: Retain                   # po usunięciu StatefulSetu
+    whenScaled: Retain                    # po zmniejszeniu liczby replik
+  selector:
+    matchLabels:
+      app: przyklad-web
+  template:
+    metadata:
+      labels:
+        app: przyklad-web
+    spec:
+      terminationGracePeriodSeconds: 10   # ile sekund po SIGTERM, zanim SIGKILL (domyślnie 30)
+      containers:
+      - name: nginx
+        image: nginx:1.29
+        ports:
+        - containerPort: 80
+          name: http
+        resources:
+          requests: {cpu: 50m, memory: 64Mi}
+          limits: {cpu: 200m, memory: 128Mi}
+        volumeMounts:
+        - name: www
+          mountPath: /usr/share/nginx/html
+  volumeClaimTemplates:                   # szablon PVC: każdy pod dostaje własny (www-przyklad-web-0, -1, -2), klasa domyślna gp3
+  - metadata:
+      name: www
+    spec:
+      accessModes: [ReadWriteOnce]
+      resources:
+        requests:
+          storage: 1Gi

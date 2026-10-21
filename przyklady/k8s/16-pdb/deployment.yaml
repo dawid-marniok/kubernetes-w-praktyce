@@ -1,0 +1,28 @@
+# 3 repliki rozłożone po węzłach, żeby drain jednego węzła dotknął tylko części z nich.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: przyklad-web
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: przyklad-web
+  template:
+    metadata:
+      labels:
+        app: przyklad-web
+    spec:
+      topologySpreadConstraints:
+      - maxSkew: 1                             # różnica liczby podów między węzłami najwyżej 1
+        topologyKey: kubernetes.io/hostname    # domena rozkładu: węzeł (topology.kubernetes.io/zone = strefa AZ)
+        whenUnsatisfiable: ScheduleAnyway      # ScheduleAnyway: staraj się; DoNotSchedule: raczej Pending niż nierówno
+        labelSelector:
+          matchLabels:
+            app: przyklad-web
+      containers:
+      - name: nginx
+        image: nginx:1.29
+        resources:
+          requests: {cpu: 20m, memory: 32Mi}
+          limits: {cpu: 100m, memory: 64Mi}

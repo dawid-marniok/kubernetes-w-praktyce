@@ -9,7 +9,7 @@ Nie musisz instalować wszystkiego od razu. Przed szkoleniem wystarczy Docker i 
 | dzień 1, lab04, opcjonalnie | Trivy | lokalny skan obrazu; bez niego skan zrobi ECR | lab04, sekcja o skanowaniu |
 | **dzień 2, rano** | kubectl, potem `aws login` i `aws eks update-kubeconfig` (nazwa klastra rano na czacie) | wszystkie laby dni 2–5 na wspólnym klastrze | punkty 4–5, karta dostępowa punkt 5 |
 | dzień 2, opcjonalnie | k9s, Headlamp albo rozszerzenie VS Code | podgląd klastra w oknie | punkt 6 |
-| **dzień 3, przed lab12** (najlepiej w przerwie 15:00) | kind ≥ 0.33 i lokalny klaster `szkolenie` (ok. 3 GB RAM, 5 GB dysku) | taint, `cordon`, `drain`, etykiety węzłów — na wspólnym klastrze węzłów nie zmieniasz | [`kind.md`](kind.md) |
+| dzień 3, po zajęciach, opcjonalnie | kind ≥ 0.33 i lokalny klaster `szkolenie` (ok. 3 GB RAM, 5 GB dysku) | taint, `cordon`, `drain`, PDB i etykiety węzłów krok po kroku: [`przyklady/k8s/15-affinity-taints/kind-taint-pdb-drain/`](../przyklady/k8s/15-affinity-taints/kind-taint-pdb-drain/); na wspólnym klastrze węzłów nie zmieniasz | [`kind.md`](kind.md) |
 | dzień 3, lab11 na kind, opcjonalnie | metrics-server na kind | `kubectl top` i HPA lokalnie | [`kind.md`](kind.md), punkt 3 |
 | **dzień 4, przed lab14** | Trivy i Kubescape, potem `trivy image --download-db-only` (kilkaset MB) | skanowanie obrazów i manifestów | lab14, sekcja „Zanim zaczniesz” |
 | dzień 4, zadania „na kind” | ten sam klaster kind z dnia 3 | RBAC klastrowy, NetworkPolicy między namespace'ami, CRD | [`kind.md`](kind.md) |

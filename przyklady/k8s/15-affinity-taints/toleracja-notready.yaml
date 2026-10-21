@@ -1,0 +1,16 @@
+# Własne toleracje dla węzła not-ready/unreachable: pod zostaje 60 s zamiast domyślnych 300 s, potem jest wyrzucany.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: przyklad-szybka-ewakuacja
+spec:
+  tolerations:          # NoExecute + tolerationSeconds: pod zostaje na węźle z tym taintem tyle sekund, potem jest wyrzucany
+  - {key: node.kubernetes.io/unreachable, operator: Exists, effect: NoExecute, tolerationSeconds: 60}
+  - {key: node.kubernetes.io/not-ready, operator: Exists, effect: NoExecute, tolerationSeconds: 60}
+  containers:
+  - name: app
+    image: busybox:1.37
+    command: ["sh", "-c", "sleep 3600"]
+    resources:
+      requests: {cpu: 10m, memory: 16Mi}
+      limits: {cpu: 100m, memory: 32Mi}

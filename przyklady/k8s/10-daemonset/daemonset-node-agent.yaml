@@ -1,0 +1,30 @@
+# DaemonSet bez hostPath: po jednym podzie na każdym węźle roboczym, pod zna swój węzeł (Downward API).
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: przyklad-node-agent
+spec:
+  selector:
+    matchLabels:
+      app: przyklad-node-agent
+  updateStrategy:
+    type: RollingUpdate          # RollingUpdate: wymiana węzeł po węźle; OnDelete: nowy pod dopiero po ręcznym usunięciu starego
+    rollingUpdate:
+      maxUnavailable: 1          # na ilu węzłach naraz agent może nie działać w trakcie aktualizacji
+  template:
+    metadata:
+      labels:
+        app: przyklad-node-agent
+    spec:
+      containers:
+      - name: agent
+        image: busybox:1.37
+        command: ["sh", "-c", "while true; do echo \"agent na węźle $NODE_NAME\"; sleep 60; done"]
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName   # Downward API: nazwa węzła, na którym działa pod
+        resources:
+          requests: {cpu: 10m, memory: 16Mi}
+          limits: {cpu: 50m, memory: 32Mi}

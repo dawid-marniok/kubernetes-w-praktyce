@@ -1,4 +1,5 @@
-# Przepisanie ścieżki w standardzie (w Ingressie to adnotacja kontrolera): /app1/x → /x w podzie.
+# Przepisanie ścieżki w standardzie (w Ingressie to adnotacja kontrolera): /app1/x → /x w podzie (app1 z ./aplikacje.yaml).
+# Ścieżka /app1 jest dłuższa niż / z httproute.yaml, więc oba route'y mogą działać naraz na tym samym hoście.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -7,17 +8,17 @@ spec:
   parentRefs:
   - name: przyklad-gw            # ./gateway.yaml
   hostnames:
-  - gw-<login>.<DOMENA>          # host musi pasować do listenera Gatewaya
+  - gw-trener.k8s.marniok.dev    # host musi pasować do listenera Gatewaya
   rules:
   - matches:
     - path:
-        type: PathPrefix
+        type: PathPrefix         # PathPrefix, Exact, RegularExpression
         value: /app1
     filters:
-    - type: URLRewrite
+    - type: URLRewrite           # inne filtry: RequestHeaderModifier, RequestRedirect, RequestMirror
       urlRewrite:
         path:
-          type: ReplacePrefixMatch
+          type: ReplacePrefixMatch   # podmień dopasowany prefiks; ReplaceFullPath: podmień całą ścieżkę
           replacePrefixMatch: /
     backendRefs:
     - name: app1

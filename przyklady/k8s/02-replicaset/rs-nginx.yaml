@@ -6,8 +6,8 @@ metadata:
   labels:
     app: przyklad-rs
 spec:
-  replicas: 3
-  selector:
+  replicas: 3                  # ile podów ma działać
+  selector:                    # które pody liczą się jako „moje” (także cudze, pasujące etykietami)
     matchLabels:
       app: przyklad-rs
   template:

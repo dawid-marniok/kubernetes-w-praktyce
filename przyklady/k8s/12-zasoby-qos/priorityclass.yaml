@@ -1,0 +1,9 @@
+# Tylko admin (zasób klastrowy): klasa priorytetu; pody z nią mogą wywłaszczyć pody o niższym priorytecie.
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: przyklad-prod-high
+value: 100000                              # im wyższa, tym ważniejszy pod; do 1 000 000 000 (wyżej tylko klasy systemowe)
+preemptionPolicy: PreemptLowerPriority     # Never = pierwszy w kolejce, ale nikogo nie wypycha
+globalDefault: false                       # true = klasa dla podów bez priorityClassName (tylko jedna w klastrze)
+description: "Produkcja: wyższy priorytet niż batch i testy"

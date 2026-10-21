@@ -5,4 +5,4 @@ metadata:
   name: przyklad-zewnetrzne-api
 spec:
   type: ExternalName
-  externalName: api.example.com
+  externalName: api.example.com   # nazwa DNS (nie IP), na którą wskaże CNAME

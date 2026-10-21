@@ -1,0 +1,13 @@
+# Guaranteed: requests = limits (CPU i pamięć) w każdym kontenerze → wyrzucany przy braku pamięci na końcu.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: przyklad-guaranteed
+spec:
+  containers:
+  - name: app
+    image: busybox:1.37
+    command: ["sh", "-c", "sleep 3600"]
+    resources:
+      requests: {cpu: 100m, memory: 64Mi}   # requests = limits dla CPU i pamięci → Guaranteed
+      limits: {cpu: 100m, memory: 64Mi}

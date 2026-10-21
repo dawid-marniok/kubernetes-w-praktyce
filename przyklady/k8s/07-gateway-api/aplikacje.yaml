@@ -1,0 +1,131 @@
+# Backendy do HTTPRoute z tego katalogu: web-v1 i web-v2 (canary), app1 (rewrite).
+# traefik/whoami odpowiada tekstem: Name (z WHOAMI_NAME), Hostname poda i ścieżka żądania (GET /…),
+# więc w curl od razu widać, która wersja odpowiedziała i jaką ścieżkę dostał pod.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-v1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web-v1
+  template:
+    metadata:
+      labels:
+        app: web-v1
+    spec:
+      containers:
+      - name: whoami
+        image: traefik/whoami:v1.11.0
+        env:
+        - name: WHOAMI_NAME
+          value: web-v1
+        ports:
+        - name: http
+          containerPort: 80
+        resources:
+          requests:
+            cpu: 10m
+            memory: 16Mi
+          limits:
+            cpu: 50m
+            memory: 32Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-v1
+spec:
+  selector:
+    app: web-v1
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-v2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web-v2
+  template:
+    metadata:
+      labels:
+        app: web-v2
+    spec:
+      containers:
+      - name: whoami
+        image: traefik/whoami:v1.11.0
+        env:
+        - name: WHOAMI_NAME
+          value: web-v2
+        ports:
+        - name: http
+          containerPort: 80
+        resources:
+          requests:
+            cpu: 10m
+            memory: 16Mi
+          limits:
+            cpu: 50m
+            memory: 32Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-v2
+spec:
+  selector:
+    app: web-v2
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: app1
+  template:
+    metadata:
+      labels:
+        app: app1
+    spec:
+      containers:
+      - name: whoami
+        image: traefik/whoami:v1.11.0
+        env:
+        - name: WHOAMI_NAME
+          value: app1
+        ports:
+        - name: http
+          containerPort: 80
+        resources:
+          requests:
+            cpu: 10m
+            memory: 16Mi
+          limits:
+            cpu: 50m
+            memory: 32Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app1
+spec:
+  selector:
+    app: app1
+  ports:
+  - name: http
+    port: 80
+    targetPort: http

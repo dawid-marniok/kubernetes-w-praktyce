@@ -1,0 +1,43 @@
+# Statyczny PV na istniejącym dysku EBS (np. dane przeniesione z innego systemu albo dysk odtworzony ze snapshotu).
+# PV tworzy TYLKO admin klastra: PersistentVolume to zasób klastrowy, a RBAC na persistentvolumes ma tylko admin.
+# Kursant tworzy tylko PVC (drugi obiekt w pliku). Bez pasującego PV taki PVC zostaje Pending.
+# Admin: dysk musi być w tej samej strefie AZ co któryś węzeł, np.
+#   aws ec2 create-volume --region eu-central-1 --availability-zone eu-central-1a --size 10 --volume-type gp3
+# Podmień vol-…, strefę i <NAMESPACE> (bez tego apply zwróci błąd walidacji).
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: przyklad-ebs-pv
+spec:
+  capacity:
+    storage: 10Gi                          # rozmiar dysku; PVC może prosić o tyle albo mniej
+  accessModes: [ReadWriteOnce]             # EBS: tylko RWO (montowany na jednym węźle naraz)
+  persistentVolumeReclaimPolicy: Retain    # Retain: po usunięciu PVC dysk zostaje, PV przechodzi w Released; Delete: sterownik usuwa dysk
+  storageClassName: ""                     # pusta klasa = PV statyczny, bez provisionera; PVC też musi mieć ""
+  csi:
+    driver: ebs.csi.aws.com
+    volumeHandle: vol-0123456789abcdef0    # ID istniejącego dysku EBS
+    fsType: ext4                           # pusty dysk sterownik sformatuje; dysk z danymi musi mieć już ten system plików
+  nodeAffinity:                            # EBS żyje w jednej AZ: pod z tym PV trafi tylko na węzeł z tej strefy
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: topology.kubernetes.io/zone
+          operator: In
+          values: [eu-central-1a]
+  claimRef:                                # opcjonalnie: PV zarezerwowany dla jednego PVC (namespace + nazwa), nikt inny go nie weźmie
+    namespace: <NAMESPACE>
+    name: przyklad-ebs-pvc
+---
+# To tworzy kursant w swoim namespace.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: przyklad-ebs-pvc
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: ""                     # "" = nie używaj klasy domyślnej (gp3), wiąż tylko z PV statycznym
+  volumeName: przyklad-ebs-pv              # opcjonalnie: wskazanie konkretnego PV po nazwie
+  resources:
+    requests:
+      storage: 10Gi

@@ -1,0 +1,27 @@
+# ToDos · dzień 3 (bez zmian od wczoraj): Ingress pod Twoją subdomeną, HTTPS z Let's Encrypt (cert-manager).
+# Podmień <login> i <DOMENA> (wartości od trenera na czacie; ClusterIssuer też od trenera).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: todos
+  labels:
+    app.kubernetes.io/part-of: todos
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+      - todos-<login>.<DOMENA>
+    secretName: todos-tls
+  rules:
+  - host: todos-<login>.<DOMENA>
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: web
+            port:
+              number: 80

@@ -9,11 +9,11 @@ metadata:
 spec:
   ingressClassName: traefik     # kubectl get ingressclass
   rules:
-  - host: <login>.<DOMENA>
+  - host: <login>.<DOMENA>      # bez host: reguła łapie każdy host (na wspólnym kontrolerze nie rób tego)
     http:
       paths:
       - path: /
-        pathType: Prefix
+        pathType: Prefix          # Prefix: ścieżka i wszystko pod nią (po segmentach); Exact: tylko dokładnie ta
         backend:
           service:
             name: przyklad-deploy        # ../05-service/clusterip.yaml

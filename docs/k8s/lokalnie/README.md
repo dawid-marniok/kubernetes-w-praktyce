@@ -2,7 +2,7 @@
 
 Po szkoleniu wspólny klaster znika. Jeśli chcesz dalej ćwiczyć albo nie masz dostępu do klastra, postaw Kubernetesa u siebie. Ten plik pomaga wybrać narzędzie, postawić klaster i przenieść na niego laby.
 
-Na szkoleniu używamy **kind** (lab12: tainty, drain). Instalację i nasz klaster z pliku `setup/kind/kind-szkolenie.yaml` opisuje [`setup/kind.md`](../../../setup/kind.md) — tu tego nie powtarzam, tylko uzupełniam.
+Na szkoleniu kind przydaje się tam, gdzie na wspólnym klastrze nie wolno ruszać węzłów (tainty, cordon, drain — [`przyklady/k8s/15-affinity-taints/kind-taint-pdb-drain/`](../../../przyklady/k8s/15-affinity-taints/kind-taint-pdb-drain/)), i jako plan B bez klastra. Instalację i nasz klaster z pliku `setup/kind/kind-szkolenie.yaml` opisuje [`setup/kind.md`](../../../setup/kind.md) — tu tego nie powtarzam, tylko uzupełniam.
 
 | Sekcja | Co w niej jest |
 |---|---|
@@ -396,4 +396,4 @@ Węzły lokalnego klastra mają architekturę laptopa: na Macu M to `arm64`, a w
 - [`setup/kind.md`](../../../setup/kind.md) — instalacja kind i klaster do labów ze szkolenia
 - [`podstawy/README.md`](../podstawy/README.md) — podstawy Kubernetesa i kubectl, konteksty
 - [`ingress-gateway/on-prem.md`](../ingress-gateway/on-prem.md) — Ingress, LoadBalancer i certyfikaty poza chmurą (MetalLB, własne CA)
-- [lab12](../../../labs/d3-lab12-affinity-taints/README.md) — affinity, tainty i drain na kind
+- [`przyklady/k8s/15-affinity-taints/kind-taint-pdb-drain/`](../../../przyklady/k8s/15-affinity-taints/kind-taint-pdb-drain/) — tainty, PDB i drain na wielowęzłowym kind

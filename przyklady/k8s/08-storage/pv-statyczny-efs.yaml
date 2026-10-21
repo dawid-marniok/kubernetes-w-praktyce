@@ -1,0 +1,31 @@
+# Statyczny PV na Amazon EFS (NFS): wiele podów na różnych węzłach i w różnych AZ zapisuje naraz (ReadWriteMany).
+# PV tworzy TYLKO admin klastra (zasób klastrowy, RBAC na persistentvolumes). Kursant tworzy tylko PVC.
+# ⚠ Na klastrze szkoleniowym sterownik EFS CSI (efs.csi.aws.com) NIE jest zainstalowany — plik do wglądu.
+# Wymaga: add-on aws-efs-csi-driver, system plików EFS z mount targetem w każdej podsieci węzłów, security group z NFS (TCP 2049).
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: przyklad-efs-pv
+spec:
+  capacity:
+    storage: 5Gi                           # EFS nie ma stałego rozmiaru (rośnie sam), ale pole jest wymagane
+  accessModes: [ReadWriteMany]             # RWX: montowany naraz na wielu węzłach
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""                     # PV statyczny, bez provisionera
+  csi:
+    driver: efs.csi.aws.com
+    volumeHandle: fs-0123456789abcdef0     # ID systemu plików EFS; z access pointem: fs-…::fsap-…
+  # bez nodeAffinity: EFS jest dostępny z każdej AZ w regionie
+---
+# To tworzy kursant w swoim namespace.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: przyklad-efs-pvc
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: ""
+  volumeName: przyklad-efs-pv
+  resources:
+    requests:
+      storage: 5Gi

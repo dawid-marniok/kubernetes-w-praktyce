@@ -8,7 +8,7 @@ metadata:
   labels:
     app: przyklad-restart-policy
 spec:
-  restartPolicy: OnFailure
+  restartPolicy: OnFailure     # Always (domyślnie): zawsze; OnFailure: tylko przy kodzie ≠ 0; Never: nigdy
   containers:
   - name: busybox
     image: busybox:1.37

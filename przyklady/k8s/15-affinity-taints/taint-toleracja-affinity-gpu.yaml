@@ -1,0 +1,35 @@
+# Węzeł tylko dla GPU: taint na węźle odpycha inne pody, toleracja pozwala tym podom wejść, nodeAffinity je tam ciągnie.
+# Węzeł (kind): kubectl taint nodes szkolenie-worker2 node-type=gpu:NoSchedule && kubectl label nodes szkolenie-worker2 node-type=gpu
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: przyklad-gpu-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: przyklad-gpu-app
+  template:
+    metadata:
+      labels:
+        app: przyklad-gpu-app
+    spec:
+      tolerations:
+      - key: node-type
+        operator: Equal              # Equal: klucz i wartość muszą pasować; Exists: wystarczy klucz
+        value: gpu
+        effect: NoSchedule           # musi pasować do efektu taintu: NoSchedule, PreferNoSchedule, NoExecute
+      affinity:                      # toleracja pozwala, affinity przyciąga: tylko węzeł GPU
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: node-type
+                operator: In
+                values: [gpu]
+      containers:
+      - name: nginx
+        image: nginx:1.29
+        resources:
+          requests: {cpu: 20m, memory: 32Mi}
+          limits: {cpu: 100m, memory: 64Mi}

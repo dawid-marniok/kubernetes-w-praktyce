@@ -25,19 +25,19 @@ spec:
           httpGet:
             path: /
             port: http
-          failureThreshold: 30
+          failureThreshold: 30     # 30 prób × 2 s = do 60 s na start
           periodSeconds: 2
-        readinessProbe:
+        readinessProbe:            # rollout czeka, aż nowy pod ją przejdzie, zanim usunie stary
           httpGet:
             path: /
             port: http
           periodSeconds: 5
-        livenessProbe:
+        livenessProbe:             # porażka = restart kontenera
           httpGet:
             path: /
             port: http
           periodSeconds: 10
-          timeoutSeconds: 2
+          timeoutSeconds: 2        # czas na odpowiedź (domyślnie 1 s)
         resources:
           requests:
             cpu: 50m

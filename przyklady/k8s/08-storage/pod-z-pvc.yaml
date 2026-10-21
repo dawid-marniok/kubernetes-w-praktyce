@@ -1,0 +1,22 @@
+# Pod montujący przyklad-pvc w /data. Dopiero on powoduje utworzenie dysku (WaitForFirstConsumer).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: przyklad-pod-pvc
+  labels:
+    app: przyklad-pod-pvc
+spec:
+  containers:
+  - name: app
+    image: busybox:1.37
+    command: ["sh", "-c", "sleep 3600"]
+    resources:
+      requests: {cpu: 10m, memory: 16Mi}
+      limits: {cpu: 100m, memory: 32Mi}
+    volumeMounts:
+    - name: data                 # nazwa z volumes poniżej
+      mountPath: /data           # gdzie wolumen pojawi się w kontenerze
+  volumes:
+  - name: data
+    persistentVolumeClaim:
+      claimName: przyklad-pvc    # PVC z tego samego namespace

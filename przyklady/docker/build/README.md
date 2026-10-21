@@ -1,4 +1,8 @@
-# Budowanie obrazów: przykłady Dockerfile
+# Przykłady: budowanie obrazów (Dockerfile)
+
+**Cel:** zbudować obraz z Dockerfile, uruchomić z niego kontener i zobaczyć, jak kolejność instrukcji wpływa na cache warstw i rozmiar obrazu.
+
+**Gdzie:** lokalnie, Docker Desktop (albo Docker Engine). Komendy wydajesz w katalogu danego przykładu (`cd przyklady/docker/build/<katalog>`).
 
 | Katalog | Co pokazuje | Obraz bazowy | Port |
 |---|---|---|---|
@@ -80,6 +84,14 @@ Wynik z przygotowania przykładu (fragment `docker build --progress=plain`, po z
 Projekt nie ma pakietów NuGet, więc sam `restore` trwa tu krótko (ok. 1,6 s). W prawdziwej aplikacji z kilkudziesięcioma pakietami ten krok zajmuje minuty i wtedy cache naprawdę oszczędza czas.
 
 Obrazy .NET od wersji 8 słuchają domyślnie na porcie **8080** i mają wbudowanego użytkownika bez uprawnień (`USER $APP_UID`).
+
+## Sprzątanie
+
+```bash
+docker rm -f moj-nginx node-app sample 2>/dev/null
+docker rmi moj-nginx:1.0 moj-nginx:1.1 moj-nginx:simple node-app:1.0 sample:multi sample:single pinger:1.0 2>/dev/null
+docker builder prune -f                  # cache budowania (zwalnia miejsce)
+```
 
 ## Dockerfile: najważniejsze instrukcje
 

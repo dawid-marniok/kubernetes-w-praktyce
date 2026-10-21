@@ -1,0 +1,15 @@
+# Quota tylko dla podów z wybranymi klasami priorytetu (scopeSelector).
+# Inne zakresy: Terminating, NotTerminating, BestEffort, NotBestEffort, PriorityClass, CrossNamespacePodAffinity.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: przyklad-quota-priorytet
+spec:
+  hard:
+    requests.cpu: "1"
+    pods: "5"
+  scopeSelector:                     # quota liczy tylko pody spełniające warunek
+    matchExpressions:
+    - scopeName: PriorityClass
+      operator: In                     # In, NotIn, Exists, DoesNotExist
+      values: ["przyklad-prod-high"]

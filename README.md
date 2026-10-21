@@ -7,7 +7,7 @@ Każdy temat to krótka teoria, pokaz prowadzącego i lab, który robisz samodzi
 
 1. Przed szkoleniem: Docker Desktop, git i klon tego repo — [`setup/README.md`](setup/README.md), część „Dzień 1”.
 2. Rano w dniu 2: `kubectl` i logowanie do klastra kontem AWS z karty dostępowej — [`setup/README.md`](setup/README.md), część „Dni 2–5”.
-3. Ćwiczenia z węzłami (taint, drain, etykiety węzłów) robisz na lokalnym klastrze kind — [`setup/kind.md`](setup/kind.md).
+3. Dla chętnych: ćwiczenia z węzłami (taint, drain, etykiety węzłów) na lokalnym klastrze kind — [`setup/kind.md`](setup/kind.md) i [`przyklady/k8s/15-affinity-taints/kind-taint-pdb-drain/`](przyklady/k8s/15-affinity-taints/kind-taint-pdb-drain/). Na wspólnym klastrze węzłów nie ruszamy.
 
 Laby z danego dnia pojawiają się w repo rano. Na start każdego dnia:
 
@@ -23,7 +23,7 @@ git stash pop
 |---|---|---|
 | 1 · Docker | Kontenery i podstawy · Sieci i dane · Obrazy i Dockerfile · Bezpieczeństwo i Compose | [lab01 — Docker: podstawy](labs/lab01-docker-podstawy/) · [lab02 — Sieci i wolumeny](labs/lab02-sieci-wolumeny/) · [lab03 — Dockerfile i rejestr](labs/lab03-dockerfile/) · [lab04 — Compose: ToDos](labs/lab04-compose-todos/) |
 | 2 · Kubernetes | Architektura i kubectl · Pod i Namespace · Deployment i konfiguracja · Service, Ingress, Gateway API | [lab05 — kubectl](labs/lab05-kubectl/) · [lab06 — Pod](labs/lab06-pod/) · [lab07 — Deployment, ConfigMap, Secret](labs/lab07-deployment-konfiguracja/) · [lab08 — Service i Ingress](labs/lab08-service-ingress/) · [ToDos · dzień 2](labs/todos-dzien2/) |
-| 3 · Kubernetes | Storage i StatefulSet · DaemonSet, Job, CronJob · Zasoby, QoS, autoskalowanie · Planowanie podów i utrzymanie | [lab09 — Storage i StatefulSet](labs/lab09-storage-statefulset/) · [lab10 — Job, CronJob, DaemonSet](labs/lab10-job-cronjob-daemonset/) · [lab11 — Zasoby, quota, HPA](labs/lab11-zasoby-quota-hpa/) · [lab12 — Affinity i taints](labs/lab12-affinity-taints/) (kind) |
+| 3 · Kubernetes | Storage i StatefulSet · DaemonSet, Job, CronJob · Zasoby, QoS, autoskalowanie · Planowanie podów i utrzymanie | [lab09 — Storage i StatefulSet](labs/lab09-storage-statefulset/) · [lab10 — Job, CronJob, DaemonSet](labs/lab10-job-cronjob-daemonset/) · [lab11 — Zasoby, quota, HPA](labs/lab11-zasoby-quota-hpa/) · [ToDos · dzień 3](labs/todos-dzien3/) |
 | 4 · Kubernetes | RBAC i ServiceAccount · Pod Security i admission · Sieć: CNI, NetworkPolicy, DNS · Rozszerzanie API | [lab13 — RBAC](labs/lab13-rbac/) · [lab14 — Skanowanie](labs/lab14-skanowanie/) · [lab15 — NetworkPolicy](labs/lab15-networkpolicy/) · [lab16 — Downward API i CRD](labs/lab16-downward-api-crd/) |
 | 5 · Kubernetes | Helm · Operatory · Monitoring i observability · Projekt końcowy ToDos | [lab17 — Helm](labs/lab17-helm/) · [lab18 — Operator CloudNativePG](labs/lab18-operator-cnpg/) · [lab19 — Observability](labs/lab19-observability/) · [lab20 — Projekt ToDos](labs/lab20-projekt-todos/) |
 

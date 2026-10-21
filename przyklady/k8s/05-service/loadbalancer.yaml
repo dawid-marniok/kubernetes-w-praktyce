@@ -11,7 +11,7 @@ metadata:
   #   service.beta.kubernetes.io/aws-load-balancer-type: nlb
   #   service.beta.kubernetes.io/aws-load-balancer-scheme: internal
 spec:
-  type: LoadBalancer
+  type: LoadBalancer    # chmura tworzy load balancer i wpisuje jego adres w status (EXTERNAL-IP)
   selector:
     app: przyklad-deploy
   ports:

@@ -1,0 +1,17 @@
+# PodDisruptionBudget: przy drain/upgrade węzła najwyżej 1 pod przyklad-web naraz może zostać wyrzucony.
+# PDB ogranicza tylko DOBROWOLNE zakłócenia, które idą przez Eviction API: kubectl drain, upgrade/wymiana węzłów,
+# zdejmowanie węzłów przez autoskaler. NIE chroni przed awarią węzła ani OOMKilled i NIE blokuje
+# kubectl delete pod ani rolling update Deploymentu (te nie używają Eviction API).
+# ALLOWED DISRUPTIONS = zdrowe pody − minAvailable (albo maxUnavailable − niezdrowe). 0 = drain czeka.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: przyklad-web-pdb
+spec:
+  maxUnavailable: 1             # ilu podów może naraz brakować: liczba albo procent ("25%")
+  # minAvailable: 2             # zamiennie: ile podów musi zostać; podajesz minAvailable ALBO maxUnavailable.
+                                # minAvailable = liczba replik (tu 3) → ALLOWED DISRUPTIONS 0 i drain zablokowany na zawsze
+  # unhealthyPodEvictionPolicy: AlwaysAllow   # pody niegotowe (np. CrashLoopBackOff) można wyrzucać zawsze; domyślnie IfHealthyBudget
+  selector:                     # które pody chroni (zwykle te same etykiety co selektor Deploymentu)
+    matchLabels:
+      app: przyklad-web

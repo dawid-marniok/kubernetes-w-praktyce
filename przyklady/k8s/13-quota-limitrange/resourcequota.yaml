@@ -1,0 +1,16 @@
+# Tylko admin namespace: suma zasobów i liczba obiektów w namespace. Taką quotę ma każdy uczestnik na klastrze szkoleniowym.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: przyklad-quota
+spec:
+  hard:
+    requests.cpu: "2"                # suma requests.cpu wszystkich podów w namespace
+    requests.memory: 4Gi
+    limits.cpu: "4"                  # suma limitów; przy quocie na limity każdy pod musi je mieć (albo LimitRange)
+    limits.memory: 8Gi
+    pods: "20"                       # liczba obiektów danego typu
+    services: "10"
+    services.loadbalancers: "0"      # 0 = Service typu LoadBalancer zabroniony
+    persistentvolumeclaims: "5"
+    count/jobs.batch: "10"           # count/<zasób>.<grupa>: limit dowolnego typu obiektów

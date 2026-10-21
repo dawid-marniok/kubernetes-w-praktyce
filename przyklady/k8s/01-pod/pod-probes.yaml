@@ -13,23 +13,23 @@ spec:
     ports:
     - name: http
       containerPort: 80
-    startupProbe:
-      httpGet:
+    startupProbe:              # dopóki nie przejdzie, readiness i liveness czekają; porażka po limicie = restart
+      httpGet:                 # inne typy: tcpSocket, exec (komenda, kod 0 = OK), grpc
         path: /
         port: http
-      failureThreshold: 30
-      periodSeconds: 2
-    readinessProbe:
+      failureThreshold: 30     # ile porażek z rzędu, zanim sonda uzna błąd (tu: 30 × 2 s = 60 s na start)
+      periodSeconds: 2         # co ile sekund sprawdzać (domyślnie 10)
+    readinessProbe:            # porażka = pod wypada z Service (EndpointSlice), bez restartu
       httpGet:
         path: /
         port: http
       periodSeconds: 5
-    livenessProbe:
+    livenessProbe:             # porażka = kubelet restartuje kontener
       httpGet:
         path: /
         port: http
       periodSeconds: 10
-      timeoutSeconds: 2
+      timeoutSeconds: 2        # ile czekać na odpowiedź (domyślnie 1 s)
     resources:
       requests:
         cpu: 50m

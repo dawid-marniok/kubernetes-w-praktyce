@@ -7,15 +7,15 @@ metadata:
   labels:
     app: przyklad-deploy
   annotations:
-    kubernetes.io/change-cause: "nginx 1.28"
+    kubernetes.io/change-cause: "nginx 1.28"   # opis rewizji w kubectl rollout history
 spec:
   replicas: 3
-  revisionHistoryLimit: 5
+  revisionHistoryLimit: 5          # ile starych ReplicaSetów trzymać do rollback (domyślnie 10)
   strategy:
-    type: RollingUpdate
+    type: RollingUpdate            # RollingUpdate (domyślnie): wymiana po kawałku; Recreate: wszystkie stare w dół, potem nowe
     rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
+      maxSurge: 1                  # ile podów ponad replicas wolno dołożyć w trakcie (liczba albo %, domyślnie 25%)
+      maxUnavailable: 0            # ilu podów może brakować do replicas w trakcie (liczba albo %, domyślnie 25%)
   selector:
     matchLabels:
       app: przyklad-deploy

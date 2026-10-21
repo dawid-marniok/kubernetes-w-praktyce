@@ -10,11 +10,11 @@ spec:
   - name: nginx
     image: nginx:1.29
     ports:
-    - containerPort: 80
+    - containerPort: 80          # informacyjnie: kontener i tak słucha, na czym chce
     resources:
-      requests:
-        cpu: 50m
-        memory: 32Mi
-      limits:
+      requests:                  # rezerwacja: scheduler szuka węzła z tyloma wolnymi zasobami
+        cpu: 50m                 # 1000m = 1 rdzeń
+        memory: 32Mi             # Mi/Gi = potęgi 1024
+      limits:                    # sufit: CPU ponad limit = dławienie, pamięć ponad limit = OOMKilled
         cpu: 100m
         memory: 64Mi

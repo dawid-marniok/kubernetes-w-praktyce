@@ -40,4 +40,4 @@ spec:
         memory: 32Mi
   volumes:
   - name: shared-data
-    emptyDir: {}
+    emptyDir: {}               # pusty katalog na czas życia poda; medium: Memory = w RAM (tmpfs)

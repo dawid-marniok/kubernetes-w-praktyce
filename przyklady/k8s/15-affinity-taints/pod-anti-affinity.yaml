@@ -1,0 +1,28 @@
+# podAntiAffinity required: każda replika na innym węźle. Replik więcej niż węzłów → nadmiarowe Pending.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: przyklad-nginx-distributed
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: przyklad-nginx-distributed
+  template:
+    metadata:
+      labels:
+        app: przyklad-nginx-distributed
+    spec:
+      affinity:
+        podAntiAffinity:                # odpycha od podów pasujących do labelSelector (tu: od własnych replik)
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                app: przyklad-nginx-distributed
+            topologyKey: kubernetes.io/hostname   # najwyżej 1 replika na węzeł; zone = najwyżej 1 na strefę
+      containers:
+      - name: nginx
+        image: nginx:1.29
+        resources:
+          requests: {cpu: 20m, memory: 32Mi}
+          limits: {cpu: 100m, memory: 64Mi}

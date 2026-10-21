@@ -1,0 +1,12 @@
+# Tylko admin namespace (na klastrze szkoleniowym zakłada prowadzący): wartości domyślne + min/max dla kontenera.
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: przyklad-limits
+spec:
+  limits:
+  - type: Container                          # Container (na kontener), Pod (suma w podzie), PersistentVolumeClaim (rozmiar PVC)
+    defaultRequest: {cpu: 100m, memory: 128Mi} # wstawiane jako requests, gdy kontener ich nie ma
+    default: {cpu: 500m, memory: 512Mi}        # wstawiane jako limits, gdy kontener ich nie ma
+    min: {cpu: 50m, memory: 64Mi}              # mniejsze requests → API odrzuca pod
+    max: {cpu: "2", memory: 2Gi}               # większe limits → API odrzuca pod

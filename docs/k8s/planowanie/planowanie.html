@@ -1,0 +1,1439 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Planowanie i serwis węzłów</title>
+<meta name="description" content="Dzień 3 — ściąga: jak scheduler wybiera węzeł (filtr, ocena, bind), affinity, spread, taints i tolerations, cordon, drain i PodDisruptionBudget na symulatorach.">
+<style>
+:root {
+  --navy: #012438;
+  --acc: #41C0F0;
+  --light: #EBF8FD;
+  --light2: #E1EDF8;
+
+  --bg: #ffffff;
+  --ink: #0f2535;
+  --muted: #557080;
+  --panel: var(--light);
+  --card: #ffffff;
+  --card-line: #b9d3e2;
+  --strong: var(--navy);
+  --on-strong: #ffffff;
+  --strong-title: var(--acc);
+  --head: #0a7aa8;
+  --line: #34505f;
+  --code-bg: var(--light2);
+  --row-alt: #f4fafd;
+  --border: #d5e4ed;
+
+  --ok: #1d7a44;
+  --ok-bg: #dcf2e4;
+  --bad: #b42318;
+  --bad-bg: #fde3df;
+  --warn: #8a5300;
+  --warn-bg: #fff0d4;
+  --used: #c3d6e2;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #08151e;
+    --ink: #e3eef4;
+    --muted: #9cb4c3;
+    --panel: #0f2532;
+    --card: #142f3f;
+    --card-line: #2c5065;
+    --strong: #0d4b70;
+    --on-strong: #ffffff;
+    --strong-title: #7fd6f7;
+    --head: #41C0F0;
+    --line: #a8c3d2;
+    --code-bg: #12293a;
+    --row-alt: #0d1f2b;
+    --border: #23404f;
+
+    --ok: #6fd99a;
+    --ok-bg: #12382a;
+    --bad: #ff9a8c;
+    --bad-bg: #4a1c18;
+    --warn: #ffcf70;
+    --warn-bg: #3d2e0e;
+    --used: #35586c;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px 64px; }
+header.hero { background: var(--navy); color: #fff; padding: 40px 0 32px; border-bottom: 6px solid var(--acc); }
+header.hero .wrap { padding-bottom: 0; }
+.kicker { color: var(--acc); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; font-size: 13px; margin: 0 0 6px; }
+.kicker a { color: var(--acc); }
+h1 { font-size: clamp(28px, 6vw, 44px); line-height: 1.15; margin: 0 0 12px; }
+.hero p.lead { max-width: 720px; margin: 0; color: #d6e9f3; font-size: 17px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0 0; padding: 0; list-style: none; }
+.chips li { background: rgba(65,192,240,.14); border: 1px solid rgba(65,192,240,.45); color: #e6f6fd; border-radius: 999px; padding: 3px 12px; font-size: 14px; }
+nav.toc { margin: 28px 0 8px; }
+nav.toc ol { display: flex; flex-wrap: wrap; gap: 6px 8px; padding: 0; margin: 0; list-style: none; counter-reset: toc; }
+nav.toc li { counter-increment: toc; }
+nav.toc a { display: inline-block; text-decoration: none; color: var(--ink); background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 4px 10px; font-size: 14px; }
+nav.toc a::before { content: counter(toc) ". "; color: var(--head); font-weight: 700; }
+nav.toc a:hover, nav.toc a:focus-visible { border-color: var(--acc); }
+section { margin-top: 48px; scroll-margin-top: 16px; }
+h2 { font-size: clamp(22px, 4.5vw, 28px); line-height: 1.25; margin: 0 0 10px; display: flex; gap: 12px; align-items: baseline; }
+h2 .n { color: var(--acc); font-weight: 800; font-size: 1.25em; line-height: 1; }
+h3 { font-size: 18px; margin: 24px 0 8px; }
+p { margin: 0 0 12px; }
+a { color: var(--head); }
+code, kbd, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: .9em; }
+:not(pre) > code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+pre { background: var(--code-bg); padding: 12px 14px; border-radius: 8px; overflow-x: auto; margin: 0 0 12px; }
+.key { border-left: 5px solid var(--acc); background: var(--panel); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; }
+.key strong { color: var(--ink); }
+.key.warnk { border-left-color: var(--bad); }
+figure { margin: 20px 0; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px; min-width: 0; }
+figcaption { font-size: 14px; color: var(--muted); margin-top: 8px; }
+@media (max-width: 640px) { figure { padding: 8px; margin-left: -4px; margin-right: -4px; } }
+.grid2 { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+.grid2 > * { min-width: 0; }
+@media (min-width: 820px) { .grid2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.tablewrap { overflow-x: auto; margin: 16px 0; border: 1px solid var(--border); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+thead th { background: var(--navy); color: #fff; font-size: 14px; }
+tbody tr:nth-child(even) { background: var(--row-alt); }
+tbody tr:last-child td { border-bottom: 0; }
+td:first-child { font-weight: 700; }
+@media (max-width: 640px) {
+  table.stack thead { display: none; }
+  table.stack, table.stack tbody, table.stack tr, table.stack td { display: block; width: 100%; }
+  table.stack tr { border-bottom: 1px solid var(--border); padding: 6px 0; }
+  table.stack td { border: 0; padding: 4px 12px; }
+  table.stack td[data-h]::before { content: attr(data-h); display: block; font-size: 12px; font-weight: 700; color: var(--head); text-transform: uppercase; letter-spacing: .05em; }
+}
+.cheat { display: grid; gap: 10px; grid-template-columns: 1fr; }
+@media (min-width: 760px) { .cheat { grid-template-columns: 1fr 1fr; } }
+.cheat div { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--bg); min-width: 0; }
+.cheat pre { margin: 0 0 6px; font-size: 14px; }
+.cheat p { margin: 0; font-size: 14px; color: var(--muted); }
+footer { margin-top: 56px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--border); padding-top: 16px; }
+
+/* --- sterowanie (wspólne) --- */
+.sim-controls { display: grid; gap: 12px 20px; grid-template-columns: minmax(0, 1fr); background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+@media (min-width: 720px) { .sim-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 980px) { .sim-controls.c3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.ctl { min-width: 0; }
+.ctl .cl, .ctl label.cl { display: flex; justify-content: space-between; gap: 8px; font-weight: 700; font-size: 15px; }
+.ctl output { font: 700 15px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--head); }
+.ctl small { display: block; color: var(--muted); font-size: 13px; line-height: 1.4; }
+input[type=range] { width: 100%; accent-color: var(--head); margin: 6px 0 2px; }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 4px; }
+.seg button { font: inherit; font-size: 13.5px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel); color: var(--ink); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--strong); color: var(--on-strong); border-color: var(--strong); }
+.seg button:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; }
+.seg button:disabled { opacity: .45; cursor: not-allowed; }
+.checks { display: flex; flex-direction: column; gap: 6px; font-size: 15px; margin-top: 6px; }
+.checks label { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; }
+.checks input { margin-top: 5px; accent-color: var(--head); width: 16px; height: 16px; flex: none; }
+.checks label.dis { opacity: .5; cursor: not-allowed; }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; align-items: center; }
+button.b { font: inherit; font-size: 15px; padding: 7px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--ink); cursor: pointer; }
+button.b.primary { background: var(--strong); color: var(--on-strong); border-color: var(--strong); font-weight: 700; }
+button.b:hover, button.b:focus-visible { border-color: var(--acc); }
+button.b:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; }
+button.b:disabled { opacity: .45; cursor: not-allowed; }
+.tickno { font-size: 14px; color: var(--muted); margin-left: auto; }
+.msg { margin: 10px 0 0; font-size: 14.5px; min-height: 3.2em; border-left: 4px solid var(--acc); padding: 6px 10px; background: var(--bg); border-radius: 0 6px 6px 0; }
+.msg.stuck { border-left-color: var(--bad); }
+.msg.done { border-left-color: var(--ok); }
+.msg p { margin: 0 0 6px; }
+.msg p:last-child { margin: 0; }
+pre.event { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--bad-bg); color: var(--bad); font-size: 13px; margin: 8px 0 0; padding: 8px 10px; }
+pre.event[hidden] { display: none; }
+pre.term { background: var(--navy); color: #d6e9f3; font-size: 12.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; min-height: 4.5em; }
+pre.term .cmd { color: var(--acc); font-weight: 700; }
+pre.term .er { color: #ffb4a8; }
+pre.term .wa { color: #ffd98a; }
+pre.term .okl { color: #8fe3b0; }
+pre.pdbt { font-size: 12px; margin: 0; white-space: pre; }
+
+/* --- pody --- */
+.pod-chip { display: inline-flex; align-items: center; justify-content: center; gap: 3px; min-width: 40px; height: 28px; padding: 0 7px; border-radius: 7px; font: 700 12px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; border: 2px solid transparent; transition: opacity .25s, background-color .25s; white-space: nowrap; }
+.pod-chip.web { background: var(--strong); color: var(--on-strong); }
+.pod-chip.app { background: var(--acc); color: var(--navy); }
+.pod-chip.cache { background: var(--ok-bg); color: var(--ok); border-color: var(--ok); }
+.pod-chip.ds { background: var(--panel); color: var(--muted); border: 1.5px solid var(--card-line); font-weight: 600; }
+.pod-chip.starting { background: var(--card); color: var(--muted); border: 2px dashed var(--head); }
+.pod-chip.term { opacity: .4; text-decoration: line-through; }
+.pod-chip.pend { background: transparent; color: var(--bad); border: 2px dotted var(--bad); }
+.pod-chip.fresh { box-shadow: 0 0 0 3px var(--acc); }
+.pod-chip.wait { background: transparent; color: var(--muted); border: 1.5px dashed var(--card-line); font-weight: 600; }
+.pod-chip.cur { background: var(--card); color: var(--head); border: 2px solid var(--head); }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 10px 0 0; padding: 0; list-style: none; font-size: 14px; color: var(--muted); }
+.legend li { display: flex; align-items: center; gap: 6px; }
+.legend .pod-chip { min-width: 36px; height: 24px; font-size: 11.5px; }
+.podlist { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; min-height: 28px; align-items: center; }
+.empty-note { font-size: 13px; color: var(--muted); font-style: italic; }
+
+/* --- węzły --- */
+.nodes { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); margin-top: 10px; }
+@media (min-width: 560px) { .nodes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 960px) { .nodes.n4 { grid-template-columns: repeat(4, minmax(0, 1fr)); } .nodes.n3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 560px) and (max-width: 959px) { .nodes.n3 > :last-child:nth-child(odd) { grid-column: 1 / -1; } }
+.ncard { border: 1.5px solid var(--card-line); border-radius: 10px; background: var(--card); padding: 10px 11px; min-width: 0; transition: background-color .25s, border-color .25s; }
+.ncard .nh { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.ncard .nn { font: 800 15px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.ncard .ns { font-size: 12px; color: var(--muted); }
+.ncard.out { border-color: var(--bad); border-style: dashed; background: var(--bad-bg); }
+.ncard.out .nn { text-decoration: line-through; color: var(--bad); }
+.ncard.pass { border-color: var(--ok); }
+.ncard.best { border-color: var(--ok); box-shadow: 0 0 0 2px var(--ok); }
+.ncard.win { border-color: var(--acc); box-shadow: 0 0 0 3px var(--acc); }
+.ncard.cordon { border-style: dashed; border-color: var(--warn); }
+.ncard.cordon .ns { color: var(--warn); font-weight: 700; }
+.lbls { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.lb { font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--code-bg); border-radius: 4px; padding: 0 5px; overflow-wrap: anywhere; }
+.lb.taint { background: var(--warn-bg); color: var(--warn); font-weight: 700; }
+.res { margin-top: 8px; display: grid; gap: 4px; }
+.rrow { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 6px; align-items: center; font-size: 12px; }
+.rrow > span:first-child { color: var(--muted); font-weight: 700; }
+.rbar { display: flex; height: 10px; background: var(--panel); border-radius: 5px; overflow: hidden; border: 1px solid var(--border); }
+.rbar i { display: block; height: 100%; }
+.rbar i.u { background: var(--used); }
+.rbar i.o { background: var(--acc); }
+.rbar i.g { background: repeating-linear-gradient(135deg, var(--head) 0 3px, transparent 3px 6px); opacity: .8; }
+.rbar i.g.over { background: repeating-linear-gradient(135deg, var(--bad) 0 3px, transparent 3px 6px); }
+.rtxt { grid-column: 2; font-size: 11.5px; color: var(--muted); line-height: 1.2; }
+.vd { margin-top: 8px; font-size: 13px; line-height: 1.4; min-height: 1.4em; }
+.vd .bad { color: var(--bad); font-weight: 700; }
+.vd .ok { color: var(--ok); font-weight: 700; }
+.vd code { font-size: 11.5px; display: inline; }
+.vd ul { margin: 2px 0 0; padding-left: 16px; }
+.vd .tot { font-weight: 800; font-family: ui-monospace, Menlo, monospace; }
+.pipe { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; padding: 0; list-style: none; }
+.pipe li { font-size: 13.5px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg); color: var(--muted); }
+.pipe li.on { background: var(--strong); color: var(--on-strong); border-color: var(--strong); font-weight: 700; }
+.pipe li.on.bad { background: var(--bad); border-color: var(--bad); color: #fff; }
+.queue { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13.5px; }
+.queue .ql { color: var(--muted); margin-right: 4px; }
+.side { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; min-width: 0; }
+.side h3 { margin: 0 0 6px; font-size: 16px; }
+details.yaml { margin-top: 10px; }
+details.yaml summary { cursor: pointer; font-weight: 700; font-size: 14.5px; color: var(--head); }
+details.yaml pre { margin-top: 8px; font-size: 12.5px; }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 10px 0; }
+.stat { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; min-width: 0; }
+.stat b { display: block; font: 800 20px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.stat span { display: block; font-size: 12.5px; color: var(--muted); line-height: 1.3; }
+.stat.warn b { color: var(--bad); }
+.stat.good b { color: var(--ok); }
+.flow { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; padding: 0; list-style: none; }
+.flow li { font-size: 13.5px; padding: 3px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--muted); }
+.flow li.on { background: var(--strong); color: var(--on-strong); border-color: var(--strong); font-weight: 700; }
+.flow li.past { color: var(--ink); border-color: var(--ok); }
+.pendrow { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13.5px; color: var(--muted); }
+.cards { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 720px) { .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.card { border: 1px solid var(--border); border-radius: 12px; background: var(--bg); padding: 14px; min-width: 0; }
+.card h3 { margin: 0 0 6px; }
+.card ul { margin: 0; padding-left: 20px; }
+.card li { margin-bottom: 4px; }
+.card.yes { border-top: 5px solid var(--ok); }
+.card.no { border-top: 5px solid var(--bad); }
+.formula { font: 700 15px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--code-bg); border-radius: 8px; padding: 10px 12px; overflow-wrap: anywhere; }
+.tag { display: inline-block; font-size: 12.5px; font-weight: 700; padding: 0 8px; border-radius: 999px; white-space: nowrap; }
+.tag.hard { background: var(--bad-bg); color: var(--bad); }
+.tag.soft { background: var(--ok-bg); color: var(--ok); }
+.tag.mid { background: var(--warn-bg); color: var(--warn); }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="kicker">Dzień 3 · ściąga · <a href="README.md">wersja tekstowa</a></p>
+    <h1>Planowanie podów i serwis węzłów</h1>
+    <p class="lead">Scheduler decyduje, na którym węźle startuje pod. Ty możesz mu podpowiadać (affinity, spread), a admin może węzły zamykać (taints). Druga połowa strony: jak zabrać węzeł spod działających podów bez przerwy w działaniu aplikacji.</p>
+    <ul class="chips" aria-label="Kontekst">
+      <li>filtr → ocena → bind</li>
+      <li>nodeSelector · affinity · spread</li>
+      <li>taints i tolerations</li>
+      <li>cordon · drain · PDB</li>
+      <li>Kubernetes 1.35</li>
+    </ul>
+  </div>
+</header>
+
+<main class="wrap">
+<nav class="toc" aria-label="Spis treści">
+  <ol>
+    <li><a href="#scheduler">Symulator schedulera</a></li>
+    <li><a href="#taints">Taints i tolerations</a></li>
+    <li><a href="#serwis">Serwis węzła: cordon i drain</a></li>
+    <li><a href="#pdb">Co robi PDB</a></li>
+    <li><a href="#kiedy">Kiedy co</a></li>
+    <li><a href="#sciaga">Komendy</a></li>
+  </ol>
+</nav>
+
+<!-- 1 ============================================================ -->
+<section id="scheduler">
+  <h2><span class="n">1</span> Symulator schedulera</h2>
+  <p>Scheduler bierze z kolejki pod bez węzła (<code>Pending</code>, puste <code>spec.nodeName</code>) i robi trzy kroki. <strong>Filtr</strong> odrzuca węzły, na których pod nie może stanąć. <strong>Ocena</strong> daje punkty pozostałym. <strong>Bind</strong> zapisuje w podzie węzeł z najlepszym wynikiem. Repliki idą po kolei, więc każda widzi te, które już stoją.</p>
+
+  <figure>
+    <div class="sim-controls c3" id="a-controls">
+      <div class="ctl">
+        <label class="cl" for="a-r">replicas <output id="a-r-out" for="a-r">3</output></label>
+        <input type="range" id="a-r" min="1" max="6" value="3">
+        <small>ile podów <code>web</code> ma powstać</small>
+      </div>
+      <div class="ctl">
+        <span class="cl">requests</span>
+        <div class="seg" data-k="req" role="group" aria-label="requests">
+          <button type="button" data-v="s" aria-pressed="false">100m / 128Mi</button>
+          <button type="button" data-v="m" aria-pressed="true">500m / 1Gi</button>
+          <button type="button" data-v="l" aria-pressed="false">1 CPU / 2Gi</button>
+          <button type="button" data-v="xl" aria-pressed="false">4 CPU / 4Gi</button>
+        </div>
+        <small>scheduler liczy requests, nie zużycie</small>
+      </div>
+      <div class="ctl">
+        <span class="cl">nodeSelector</span>
+        <div class="seg" data-k="sel" role="group" aria-label="nodeSelector">
+          <button type="button" data-v="none" aria-pressed="true">brak</button>
+          <button type="button" data-v="ssd" aria-pressed="false">disktype: ssd</button>
+          <button type="button" data-v="gpu" aria-pressed="false">gpu: "true"</button>
+        </div>
+        <small>węzeł musi mieć wszystkie etykiety</small>
+      </div>
+      <div class="ctl">
+        <span class="cl">nodeAffinity required</span>
+        <div class="seg" data-k="aff" role="group" aria-label="nodeAffinity required">
+          <button type="button" data-v="none" aria-pressed="true">brak</button>
+          <button type="button" data-v="zone" aria-pressed="false">zone In [a]</button>
+          <button type="button" data-v="nvme" aria-pressed="false">disktype In [nvme]</button>
+        </div>
+        <small>twardy warunek, jak nodeSelector, ale z operatorami</small>
+      </div>
+      <div class="ctl">
+        <span class="cl">nodeAffinity preferred</span>
+        <div class="seg" data-k="pref" role="group" aria-label="nodeAffinity preferred">
+          <button type="button" data-v="none" aria-pressed="true">brak</button>
+          <button type="button" data-v="ssd" aria-pressed="false">disktype=ssd</button>
+          <button type="button" data-v="gpu" aria-pressed="false">gpu=true</button>
+        </div>
+        <small>tylko punkty w ocenie (weight: 50)</small>
+      </div>
+      <div class="ctl">
+        <span class="cl">podAntiAffinity (hostname)</span>
+        <div class="seg" data-k="anti" role="group" aria-label="podAntiAffinity">
+          <button type="button" data-v="none" aria-pressed="true">brak</button>
+          <button type="button" data-v="pref" aria-pressed="false">preferred</button>
+          <button type="button" data-v="req" aria-pressed="false">required</button>
+        </div>
+        <small>„nie stawiaj mnie obok innej repliki web”</small>
+      </div>
+      <div class="ctl">
+        <span class="cl">topologySpreadConstraints</span>
+        <div class="seg" data-k="spread" role="group" aria-label="topologySpreadConstraints">
+          <button type="button" data-v="none" aria-pressed="true">brak</button>
+          <button type="button" data-v="host" aria-pressed="false">hostname · DoNotSchedule</button>
+          <button type="button" data-v="zone" aria-pressed="false">zone · ScheduleAnyway</button>
+        </div>
+        <small>maxSkew: 1, liczone dla podów app=web</small>
+      </div>
+      <div class="ctl">
+        <span class="cl">tolerations</span>
+        <div class="checks">
+          <label><input type="checkbox" id="a-tol"> <span>toleracja <code>dedicated=gpu:NoSchedule</code></span></label>
+        </div>
+        <small>przepustka na wezel-3</small>
+      </div>
+    </div>
+
+    <div class="btns">
+      <button type="button" class="b primary" id="a-step">krok dalej →</button>
+      <button type="button" class="b" id="a-play">odtwarzaj</button>
+      <button type="button" class="b" id="a-all">do końca</button>
+      <button type="button" class="b" id="a-reset">od nowa</button>
+      <span class="tickno" id="a-tick" aria-live="polite">krok 0</span>
+    </div>
+
+    <div class="side">
+      <ol class="pipe" id="a-pipe" aria-label="Etap">
+        <li data-p="queue">kolejka</li>
+        <li data-p="filter">1 · filtr</li>
+        <li data-p="score">2 · ocena</li>
+        <li data-p="bind">3 · bind</li>
+        <li data-p="pending">Pending</li>
+      </ol>
+      <div class="queue" id="a-queue"></div>
+      <div class="nodes n4" id="a-nodes"></div>
+      <div class="msg" id="a-msg" aria-live="polite"></div>
+      <pre class="event" id="a-event" hidden></pre>
+      <details class="yaml">
+        <summary>YAML z obecnych ustawień</summary>
+        <pre id="a-yaml"></pre>
+      </details>
+    </div>
+
+    <ul class="legend" aria-label="Legenda">
+      <li><span class="rbar" style="width:46px"><i class="u" style="width:100%"></i></span> zajęte przez inne pody</li>
+      <li><span class="rbar" style="width:46px"><i class="o" style="width:100%"></i></span> repliki web</li>
+      <li><span class="rbar" style="width:46px"><i class="g" style="width:100%"></i></span> requests kolejnego poda</li>
+      <li><span class="lb taint">taint</span> taint węzła</li>
+    </ul>
+    <figcaption><code>zone: a</code> to skrót etykiety <code>topology.kubernetes.io/zone=eu-central-1a</code>. Punkty są uproszczone: prawdziwy scheduler normalizuje wynik każdej wtyczki do 0–100, mnoży przez jej wagę, a przy remisie losuje. Kolejność decyzji i komunikaty są jak w klastrze. W prawdziwym evencie po kropce jest jeszcze część <code>preemption: …</code>.</figcaption>
+  </figure>
+
+  <div class="grid2">
+    <div class="key" style="margin:0"><strong>Spróbuj:</strong> zaznacz toleracji i nic więcej. Pierwsza replika trafia na wezel-3 z GPU, bo ma najwięcej wolnego miejsca. Toleracja nie przyciąga, tylko przestaje odpychać. Potem ustaw <code>nodeSelector gpu: "true"</code> bez toleracji: wszystkie repliki Pending.</div>
+    <div class="key" style="margin:0"><strong>Pułapka spreadu:</strong> <code>hostname · DoNotSchedule</code> przy 4 replikach daje Pending, choć miejsca jest dużo. wezel-3 z taintem dalej liczy się jako domena z zerem podów (domyślnie <code>nodeTaintsPolicy: Ignore</code>), więc na pozostałych węzłach może stać najwyżej po jednym. Zaznacz toleracji: wezel-3 się wypełnia i blokada znika.</div>
+  </div>
+  <p style="margin-top:16px">Reguły z <code>…IgnoredDuringExecution</code> działają tylko przy planowaniu. Zmiana etykiet węzła nie przesuwa działających podów. Przenosi je dopiero nowy rollout albo descheduler.</p>
+</section>
+
+<!-- 2 ============================================================ -->
+<section id="taints">
+  <h2><span class="n">2</span> Taints i tolerations</h2>
+  <p>Affinity to reguła poda: „chcę tam”. Taint to reguła węzła: „nikogo tu nie chcę, chyba że ma przepustkę”. Przepustka to toleracja w podzie. Na wezel-2 działa już pod <code>web</code> (bez toleracji). Wybierz efekt taintu i ustawienia <code>gpu-app</code> (3 repliki), potem idź krokami.</p>
+
+  <figure>
+    <div class="sim-controls">
+      <div class="ctl">
+        <span class="cl">efekt taintu na wezel-2</span>
+        <div class="seg" data-k="eff" id="b-eff" role="group" aria-label="efekt taintu">
+          <button type="button" data-v="NoSchedule" aria-pressed="true">NoSchedule</button>
+          <button type="button" data-v="PreferNoSchedule" aria-pressed="false">PreferNoSchedule</button>
+          <button type="button" data-v="NoExecute" aria-pressed="false">NoExecute</button>
+        </div>
+        <small><code>kubectl taint nodes wezel-2 dedicated=gpu:&lt;efekt&gt;</code></small>
+      </div>
+      <div class="ctl">
+        <span class="cl">pody gpu-app</span>
+        <div class="checks">
+          <label><input type="checkbox" id="b-tol"> <span>toleracja <code>dedicated=gpu</code> (ten sam efekt)</span></label>
+          <label id="b-secs-l"><input type="checkbox" id="b-secs"> <span><code>tolerationSeconds: 60</code> (tylko NoExecute)</span></label>
+          <label><input type="checkbox" id="b-aff"> <span>nodeAffinity required <code>gpu=true</code></span></label>
+        </div>
+      </div>
+    </div>
+
+    <div class="btns">
+      <button type="button" class="b primary" id="b-step">krok dalej →</button>
+      <button type="button" class="b" id="b-play">odtwarzaj</button>
+      <button type="button" class="b" id="b-reset">od nowa</button>
+      <span class="tickno" id="b-tick" aria-live="polite">krok 0</span>
+    </div>
+
+    <div class="side">
+      <ol class="flow" id="b-flow" aria-label="Kroki">
+        <li>0 · start</li>
+        <li>1 · taint</li>
+        <li>2 · wdrożenie gpu-app</li>
+        <li>3 · po 60 s</li>
+      </ol>
+      <div class="nodes n3" id="b-nodes"></div>
+      <div class="pendrow" id="b-pend"></div>
+      <div class="msg" id="b-msg" aria-live="polite"></div>
+      <pre class="event" id="b-event" hidden></pre>
+    </div>
+    <ul class="legend" aria-label="Legenda">
+      <li><span class="pod-chip web">web</span> zwykły pod, bez toleracji</li>
+      <li><span class="pod-chip app">gpu</span> pod gpu-app</li>
+      <li><span class="pod-chip starting">web</span> zastępca startuje</li>
+      <li><span class="pod-chip web term">web</span> wyrzucony</li>
+      <li><span class="pod-chip pend">gpu</span> Pending</li>
+    </ul>
+  </figure>
+
+  <div class="tablewrap">
+    <table class="stack">
+      <thead><tr><th>Efekt</th><th>Nowe pody bez toleracji</th><th>Działające pody bez toleracji</th><th>Typowe użycie</th></tr></thead>
+      <tbody>
+        <tr><td data-h="Efekt">NoSchedule</td><td data-h="Nowe pody bez toleracji">nie wejdą (odpadają na filtrze)</td><td data-h="Działające pody bez toleracji">zostają</td><td data-h="Typowe użycie">węzły dedykowane (GPU, zespół), control plane</td></tr>
+        <tr><td data-h="Efekt">PreferNoSchedule</td><td data-h="Nowe pody bez toleracji">scheduler unika węzła (minus w ocenie), ale gdy nie ma innego, postawi</td><td data-h="Działające pody bez toleracji">zostają</td><td data-h="Typowe użycie">„tu tylko, jeśli trzeba”, np. węzły spot</td></tr>
+        <tr><td data-h="Efekt">NoExecute</td><td data-h="Nowe pody bez toleracji">nie wejdą</td><td data-h="Działające pody bez toleracji"><strong>wyrzucone od razu</strong>; z toleracją i <code>tolerationSeconds</code> po tym czasie</td><td data-h="Typowe użycie">awaria węzła: Kubernetes sam zakłada <code>not-ready</code> i <code>unreachable</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+<pre>tolerations:
+- key: dedicated
+  operator: Equal          # Exists = dowolna wartość klucza
+  value: gpu
+  effect: NoSchedule       # puste effect = każdy efekt
+# NoExecute: tolerationSeconds: 60 = zostań jeszcze 60 s, potem wyjdź</pre>
+  <div class="key"><strong>Zapamiętaj:</strong> toleracja pozwala, nie przyciąga. Węzeł tylko dla GPU, a GPU tylko na nim = taint na węźle + toleracja w podzie + nodeAffinity w podzie. Każdy pod dostaje automatycznie toleracje <code>node.kubernetes.io/not-ready</code> i <code>unreachable</code> (NoExecute, 300 s): tyle czeka, zanim zostanie wyrzucony z padniętego węzła.</div>
+</section>
+
+<!-- 3 ============================================================ -->
+<section id="serwis">
+  <h2><span class="n">3</span> Serwis węzła: cordon, drain, uncordon</h2>
+  <p>Węzeł trzeba czasem wyłączyć: łatki, upgrade, wymiana maszyny. <code>cordon</code> zamyka go dla nowych podów. <code>drain</code> wyrzuca działające pody przez <strong>Eviction API</strong>, czyli z poszanowaniem PodDisruptionBudget. <code>uncordon</code> otwiera węzeł z powrotem. Ustaw liczbę replik <code>web</code> i PDB i zobacz, kiedy drain przechodzi, a kiedy stoi na zawsze.</p>
+
+  <figure>
+    <div class="sim-controls c3">
+      <div class="ctl">
+        <label class="cl" for="c-r">replicas web <output id="c-r-out" for="c-r">4</output></label>
+        <input type="range" id="c-r" min="1" max="6" value="4">
+        <small>rozłożone po kolei: wezel-1, 2, 3, 1, …</small>
+      </div>
+      <div class="ctl">
+        <span class="cl">PodDisruptionBudget web-pdb</span>
+        <div class="seg" data-k="pdb" role="group" aria-label="PodDisruptionBudget">
+          <button type="button" data-v="none" aria-pressed="false">brak</button>
+          <button type="button" data-v="min1" aria-pressed="false">minAvailable: 1</button>
+          <button type="button" data-v="min2" aria-pressed="false">minAvailable: 2</button>
+          <button type="button" data-v="min3" aria-pressed="false">minAvailable: 3</button>
+          <button type="button" data-v="max1" aria-pressed="true">maxUnavailable: 1</button>
+        </div>
+      </div>
+      <div class="ctl">
+        <span class="cl">flagi kubectl drain</span>
+        <div class="checks">
+          <label><input type="checkbox" id="c-ids" checked> <span><code>--ignore-daemonsets</code></span></label>
+          <label><input type="checkbox" id="c-ede" checked> <span><code>--delete-emptydir-data</code></span></label>
+        </div>
+      </div>
+    </div>
+
+    <div class="btns">
+      <button type="button" class="b primary" id="c-step">krok dalej →</button>
+      <button type="button" class="b" id="c-play">odtwarzaj</button>
+      <button type="button" class="b" id="c-reset">od nowa</button>
+      <span class="tickno" id="c-tick" aria-live="polite">krok 0</span>
+    </div>
+
+    <div class="side">
+      <ol class="flow" id="c-flow" aria-label="Etapy">
+        <li>start</li>
+        <li>cordon</li>
+        <li>drain</li>
+        <li>prace</li>
+        <li>uncordon</li>
+      </ol>
+      <div class="stats">
+        <div class="stat" id="c-ready-box"><b id="c-ready">4</b><span>gotowych web</span></div>
+        <div class="stat" id="c-allowed-box"><b id="c-allowed">1</b><span>ALLOWED DISRUPTIONS</span></div>
+        <div class="stat" id="c-min-box"><b id="c-min">4</b><span>najmniej gotowych w trakcie</span></div>
+      </div>
+      <div class="nodes n3" id="c-nodes"></div>
+      <div class="msg" id="c-msg" aria-live="polite"></div>
+      <div class="grid2" style="margin-top:10px; gap:10px">
+        <div><div class="ns" style="font-size:13px;color:var(--muted);margin-bottom:4px">terminal</div><pre class="term" id="c-log" aria-live="polite"></pre></div>
+        <div><div class="ns" style="font-size:13px;color:var(--muted);margin-bottom:4px"><code>kubectl get pdb</code></div><pre class="pdbt" id="c-pdb"></pre></div>
+      </div>
+    </div>
+    <ul class="legend" aria-label="Legenda">
+      <li><span class="pod-chip web">web</span> replika web, gotowa</li>
+      <li><span class="pod-chip starting">web</span> zastępca startuje</li>
+      <li><span class="pod-chip web term">web</span> eviction, kończy działanie</li>
+      <li><span class="pod-chip cache">cache</span> pod z emptyDir</li>
+      <li><span class="pod-chip ds">kube-proxy</span> pod DaemonSetu</li>
+    </ul>
+    <figcaption>Jeden krok to jedna runda: zastępcy, którzy startowali, są gotowi, wyrzucone pody znikają, a drain próbuje wyrzucić to, co zostało. Odrzucone eviction (HTTP 429) <code>kubectl drain</code> ponawia co 5 s, bez końca albo do <code>--timeout</code>.</figcaption>
+  </figure>
+
+  <div class="grid2">
+    <div class="key" style="margin:0"><strong>Spróbuj:</strong> 1 replika i <code>minAvailable: 1</code>: drain nigdy nie skończy. Potem 1 replika bez PDB: drain przejdzie, ale przez chwilę nie działa żadna replika. PDB nie dodaje replik. Pilnuje tylko tempa wyrzucania.</div>
+    <div class="key" style="margin:0"><strong>Po uncordon</strong> pody nie wracają same. Węzeł jest pusty, aż powstaną nowe pody. Wyrównanie: <code>kubectl rollout restart deployment web</code> (albo descheduler).</div>
+  </div>
+
+  <div class="tablewrap">
+    <table class="stack">
+      <thead><tr><th>Co jest na węźle</th><th>Co robi drain</th><th>Flaga</th></tr></thead>
+      <tbody>
+        <tr><td data-h="Co jest na węźle">Pod Deploymentu, StatefulSetu</td><td data-h="Co robi drain">eviction z poszanowaniem PDB; kontroler tworzy zastępcę na innym węźle</td><td data-h="Flaga">—</td></tr>
+        <tr><td data-h="Co jest na węźle">Pod DaemonSetu</td><td data-h="Co robi drain">bez flagi: odmowa <code>cannot delete DaemonSet-managed Pods</code>. Z flagą zostaje, bo DaemonSet i tak postawiłby go z powrotem</td><td data-h="Flaga"><code>--ignore-daemonsets</code></td></tr>
+        <tr><td data-h="Co jest na węźle">Pod z <code>emptyDir</code></td><td data-h="Co robi drain">bez flagi: odmowa <code>cannot delete Pods with local storage</code>. Z flagą: eviction, <strong>dane z emptyDir przepadają</strong></td><td data-h="Flaga"><code>--delete-emptydir-data</code></td></tr>
+        <tr><td data-h="Co jest na węźle">Goły pod bez kontrolera</td><td data-h="Co robi drain">odmowa; z flagą usunięty i nikt go nie odtworzy</td><td data-h="Flaga"><code>--force</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="key"><strong>Na EKS</strong> nie robisz tego ręcznie przy upgrade: managed node group sama tworzy nowe węzły, robi cordon i drain starych z poszanowaniem PDB i usuwa je. Według dokumentacji AWS, gdy pody nie dają się wyrzucić przez ok. 15 minut, aktualizacja kończy się błędem <code>PodEvictionFailure</code>, chyba że wymusisz ją opcją <code>force</code> (wtedy PDB jest pomijany). Cluster Autoscaler i Karpenter też drenują węzły przy zmniejszaniu klastra i też respektują PDB.</div>
+</section>
+
+<!-- 4 ============================================================ -->
+<section id="pdb">
+  <h2><span class="n">4</span> Co robi PodDisruptionBudget</h2>
+  <p>PDB to umowa między aplikacją a tymi, którzy obsługują klaster: „z tych podów naraz może zniknąć najwyżej tyle”. Sprawdza ją <strong>tylko Eviction API</strong>. Wszystko, co usuwa pody inną drogą albo psuje się samo, PDB omija.</p>
+
+  <div class="cards">
+    <article class="card yes">
+      <h3>PDB działa: dobrowolne zakłócenia przez Eviction API</h3>
+      <ul>
+        <li><code>kubectl drain</code></li>
+        <li>upgrade puli węzłów (EKS managed node group, AKS, GKE)</li>
+        <li>zmniejszanie klastra: Cluster Autoscaler, konsolidacja w Karpenterze</li>
+        <li>każde narzędzie, które wysyła <code>POST …/pods/&lt;pod&gt;/eviction</code></li>
+      </ul>
+    </article>
+    <article class="card no">
+      <h3>PDB nie pomoże</h3>
+      <ul>
+        <li>awaria węzła, kernel panic, wyłączona instancja, przerwanie spot</li>
+        <li>OOMKill, crash kontenera, wywłaszczenie przez kubelet przy braku pamięci lub dysku</li>
+        <li><code>kubectl delete pod</code>, <code>kubectl delete deployment</code>, <code>kubectl scale</code></li>
+        <li>rolling update Deploymentu (tempo ustawiają <code>maxSurge</code> i <code>maxUnavailable</code>)</li>
+        <li>preemption przez pody z wyższym PriorityClass: PDB tylko „w miarę możliwości”</li>
+      </ul>
+    </article>
+  </div>
+
+  <h3>Jak liczy</h3>
+  <div class="formula">disruptionsAllowed = currentHealthy − desiredHealthy</div>
+  <ul>
+    <li><code>minAvailable: 2</code> → desiredHealthy = 2. <code>maxUnavailable: 1</code> → desiredHealthy = replicas − 1. Procent zaokrąglany jest w górę.</li>
+    <li><code>currentHealthy</code> to pody gotowe (Ready), które nie są w trakcie usuwania. Pod, który dopiero startuje, się nie liczy.</li>
+    <li>Każda udana eviction zmniejsza budżet o jeden. Gdy wynosi 0, eviction dostaje <code>429 Too Many Requests</code> i drain czeka.</li>
+    <li><code>minAvailable</code> ≥ replicas albo 1 replika z <code>minAvailable: 1</code> = budżet 0 na zawsze. Drain nigdy nie przejdzie. Dla PDB potrzebujesz co najmniej 2 replik, a bezpieczny wybór to zwykle <code>maxUnavailable: 1</code>.</li>
+    <li>Jeden pod nie powinien pasować do dwóch PDB: eviction kończy się wtedy błędem.</li>
+  </ul>
+<pre>$ kubectl get pdb
+NAME      MIN AVAILABLE   MAX UNAVAILABLE   ALLOWED DISRUPTIONS   AGE
+web-pdb   N/A             1                 1                     3d
+$ kubectl get pdb web-pdb -o jsonpath='{.status}'
+{"currentHealthy":3,"desiredHealthy":2,"disruptionsAllowed":1,"expectedPods":3,...}</pre>
+  <p><code>ALLOWED DISRUPTIONS</code> równe 0 przez dłuższy czas oznacza, że drain i upgrade węzłów utkną. Sprawdzaj to przed pracami na klastrze.</p>
+
+  <h3>Pody, które nie są gotowe: unhealthyPodEvictionPolicy</h3>
+  <p>Co z podem, który działa, ale nie przechodzi readiness (np. <code>CrashLoopBackOff</code>)? Decyduje pole <code>spec.unhealthyPodEvictionPolicy</code>:</p>
+  <div class="tablewrap">
+    <table class="stack">
+      <thead><tr><th>Wartość</th><th>Niegotowy pod można wyrzucić</th><th>Skutek</th></tr></thead>
+      <tbody>
+        <tr><td data-h="Wartość">IfHealthyBudget <small>(domyślnie)</small></td><td data-h="Niegotowy pod można wyrzucić">tylko gdy aplikacja ma pełny budżet: <code>currentHealthy ≥ desiredHealthy</code></td><td data-h="Skutek">gdy zdrowych jest za mało, zepsuty pod też blokuje drain</td></tr>
+        <tr><td data-h="Wartość">AlwaysAllow</td><td data-h="Niegotowy pod można wyrzucić">zawsze, niezależnie od budżetu</td><td data-h="Skutek">zepsute pody nie blokują serwisu węzła; zalecane dla większości aplikacji</td></tr>
+      </tbody>
+    </table>
+  </div>
+<pre>apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web-pdb
+spec:
+  maxUnavailable: 1                       # albo minAvailable: 2 (jedno z dwóch)
+  unhealthyPodEvictionPolicy: AlwaysAllow
+  selector:
+    matchLabels: {app: web}</pre>
+</section>
+
+<!-- 5 ============================================================ -->
+<section id="kiedy">
+  <h2><span class="n">5</span> Kiedy co</h2>
+  <p>Zasada kciuka: zaczynaj od reguł miękkich. Twarde reguły dają Pending albo wiszący drain w najgorszym momencie, czyli wtedy, gdy padnie węzeł.</p>
+  <div class="tablewrap">
+    <table class="stack">
+      <thead><tr><th>Mechanizm</th><th>Gdzie</th><th>Odpowiada na pytanie</th><th>Siła</th><th>Uważaj</th></tr></thead>
+      <tbody>
+        <tr><td data-h="Mechanizm">nodeSelector</td><td data-h="Gdzie">pod</td><td data-h="Odpowiada na pytanie">na jakich węzłach wolno (równość etykiet)</td><td data-h="Siła"><span class="tag hard">twardo</span></td><td data-h="Uważaj">brak pasującego węzła = Pending</td></tr>
+        <tr><td data-h="Mechanizm">nodeAffinity</td><td data-h="Gdzie">pod</td><td data-h="Odpowiada na pytanie">gdzie musi (<code>required</code>) albo gdzie woli (<code>preferred</code>); operatory <code>In</code>, <code>NotIn</code>, <code>Exists</code>, <code>Gt</code>, <code>Lt</code></td><td data-h="Siła"><span class="tag hard">twardo</span> <span class="tag soft">miękko</span></td><td data-h="Uważaj">kilka <code>nodeSelectorTerms</code> = LUB, kilka <code>matchExpressions</code> = I</td></tr>
+        <tr><td data-h="Mechanizm">podAffinity</td><td data-h="Gdzie">pod</td><td data-h="Odpowiada na pytanie">obok kogo (np. aplikacja przy swoim cache'u)</td><td data-h="Siła"><span class="tag hard">twardo</span> <span class="tag soft">miękko</span></td><td data-h="Uważaj">kosztowne obliczeniowo w dużych klastrach</td></tr>
+        <tr><td data-h="Mechanizm">podAntiAffinity</td><td data-h="Gdzie">pod</td><td data-h="Odpowiada na pytanie">nie obok kogo (repliki na różnych węzłach lub strefach)</td><td data-h="Siła"><span class="tag hard">twardo</span> <span class="tag soft">miękko</span></td><td data-h="Uważaj"><code>required</code>: więcej replik niż węzłów = Pending</td></tr>
+        <tr><td data-h="Mechanizm">topologySpreadConstraints</td><td data-h="Gdzie">pod</td><td data-h="Odpowiada na pytanie">jak równo rozłożyć repliki po węzłach lub strefach (<code>maxSkew</code>)</td><td data-h="Siła"><span class="tag hard">DoNotSchedule</span> <span class="tag soft">ScheduleAnyway</span></td><td data-h="Uważaj">węzły z taintem liczą się jako domeny (<code>nodeTaintsPolicy: Ignore</code>)</td></tr>
+        <tr><td data-h="Mechanizm">taints / tolerations</td><td data-h="Gdzie">taint: węzeł (admin) · toleracja: pod</td><td data-h="Odpowiada na pytanie">kogo węzeł nie wpuszcza; kto ma przepustkę</td><td data-h="Siła"><span class="tag hard">NoSchedule</span> <span class="tag soft">PreferNoSchedule</span> <span class="tag hard">NoExecute</span></td><td data-h="Uważaj">toleracja nie przyciąga; do przypięcia potrzebna też affinity</td></tr>
+        <tr><td data-h="Mechanizm">PriorityClass</td><td data-h="Gdzie">klaster (admin) · <code>priorityClassName</code> w podzie</td><td data-h="Odpowiada na pytanie">kto pierwszy w kolejce i kogo wolno wywłaszczyć, gdy brak miejsca</td><td data-h="Siła"><span class="tag mid">wywłaszcza</span></td><td data-h="Uważaj">preemption szanuje PDB tylko w miarę możliwości</td></tr>
+        <tr><td data-h="Mechanizm">PodDisruptionBudget</td><td data-h="Gdzie">namespace aplikacji</td><td data-h="Odpowiada na pytanie">ile podów naraz może zniknąć przy drain i upgrade</td><td data-h="Siła"><span class="tag mid">tylko Eviction API</span></td><td data-h="Uważaj"><code>minAvailable</code> = replicas blokuje drain na zawsze</td></tr>
+        <tr><td data-h="Mechanizm">cordon / drain / uncordon</td><td data-h="Gdzie">węzeł (admin)</td><td data-h="Odpowiada na pytanie">jak bezpiecznie zabrać węzeł spod podów</td><td data-h="Siła"><span class="tag mid">operacja</span></td><td data-h="Uważaj">po uncordon pody nie wracają same</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Przykłady: węzły tylko dla GPU = taint + toleracja + nodeAffinity. Repliki aplikacji produkcyjnej = spread po strefie i po hostname z <code>ScheduleAnyway</code> plus PDB z <code>maxUnavailable: 1</code>. <code>nodeName</code> w podzie omija scheduler całkowicie, więc używaj go tylko do debugowania.</p>
+</section>
+
+<!-- 6 ============================================================ -->
+<section id="sciaga">
+  <h2><span class="n">6</span> Ściąga: komendy</h2>
+  <p>Etykiety, tainty, cordon i drain zmienia administrator klastra. Na wspólnym klastrze dostaniesz <code>Forbidden</code>, więc ćwiczysz na kind (<code>kubectl config use-context kind-szkolenie</code>).</p>
+  <div class="cheat">
+    <div><pre>kubectl get nodes -L disktype,topology.kubernetes.io/zone
+kubectl label nodes szkolenie-worker disktype=ssd
+kubectl label nodes szkolenie-worker disktype-</pre><p>Etykiety węzłów: podgląd jako kolumny, dodanie, usunięcie (minus na końcu).</p></div>
+    <div><pre>kubectl taint nodes szkolenie-worker2 dedicated=gpu:NoSchedule
+kubectl taint nodes szkolenie-worker2 dedicated=gpu:NoSchedule-
+kubectl describe nodes | grep Taints</pre><p>Założenie i zdjęcie taintu, lista taintów wszystkich węzłów.</p></div>
+    <div><pre>kubectl get pods -o wide -w
+kubectl get events --field-selector reason=FailedScheduling</pre><p>Kolumna <code>NODE</code> na żywo; powody Pending, np. <code>0/3 nodes are available: …</code>.</p></div>
+    <div><pre>kubectl describe pod &lt;pod&gt;</pre><p>Sekcja <code>Events</code> na dole: pełny komunikat schedulera z liczbą węzłów odrzuconych z każdego powodu.</p></div>
+    <div><pre>kubectl cordon szkolenie-worker
+kubectl drain szkolenie-worker --ignore-daemonsets \
+  --delete-emptydir-data --timeout=5m
+kubectl uncordon szkolenie-worker</pre><p>Serwis węzła. <code>drain</code> sam robi cordon. Bez <code>--timeout</code> czeka bez końca.</p></div>
+    <div><pre>kubectl create pdb web-pdb --selector=app=web --max-unavailable=1
+kubectl get pdb
+kubectl describe pdb web-pdb</pre><p>PDB z linii poleceń; kolumna <code>ALLOWED DISRUPTIONS</code>; status z liczbą zdrowych podów.</p></div>
+  </div>
+  <p style="margin-top:16px">Gotowe manifesty: <a href="../../../przyklady/k8s/15-affinity-taints/">przyklady/k8s/15-affinity-taints/</a> (affinity, anti-affinity, spread, taints) i <a href="../../../przyklady/k8s/16-pdb/">przyklady/k8s/16-pdb/</a> (PDB i drain). Klaster kind: <a href="../lokalnie/README.md">lokalnie/README.md</a>.</p>
+</section>
+
+<footer>Kubernetes w praktyce · Dzień 3 · stan na październik 2026 (Kubernetes 1.35). Wersja tekstowa: <a href="README.md">README.md</a>.</footer>
+</main>
+
+<script>
+(function (root) {
+  'use strict';
+  var L = {};
+
+  /* ================= logika: symulator schedulera ================= */
+  var A_NODES = [
+    { name: 'wezel-1', zone: 'a', disk: 'ssd', gpu: false, taints: [], cpu: 2000, mem: 8192, ucpu: 600, umem: 2048 },
+    { name: 'wezel-2', zone: 'b', disk: 'hdd', gpu: false, taints: [], cpu: 2000, mem: 4096, ucpu: 200, umem: 1024 },
+    { name: 'wezel-3', zone: 'c', disk: 'ssd', gpu: true, taints: [{ key: 'dedicated', value: 'gpu', effect: 'NoSchedule' }], cpu: 4000, mem: 16384, ucpu: 500, umem: 4096 },
+    { name: 'wezel-4', zone: 'a', disk: 'hdd', gpu: false, taints: [{ key: 'spot', value: 'true', effect: 'PreferNoSchedule' }], cpu: 2000, mem: 4096, ucpu: 1100, umem: 2048 }
+  ];
+  var REQ = {
+    s: { cpu: 100, mem: 128, y: '{cpu: 100m, memory: 128Mi}' },
+    m: { cpu: 500, mem: 1024, y: '{cpu: 500m, memory: 1Gi}' },
+    l: { cpu: 1000, mem: 2048, y: '{cpu: "1", memory: 2Gi}' },
+    xl: { cpu: 4000, mem: 4096, y: '{cpu: "4", memory: 4Gi}' }
+  };
+  var SEL_TXT = { ssd: 'disktype: ssd', gpu: 'gpu: "true"' };
+  var AFF_TXT = { zone: 'zone In [a]', nvme: 'disktype In [nvme]' };
+
+  function fmtCpu(m) { return (m >= 1000 && m % 1000 === 0) ? (m / 1000) + ' CPU' : m + 'm'; }
+  function fmtMem(mi) { return (mi >= 1024 && mi % 1024 === 0) ? (mi / 1024) + 'Gi' : mi + 'Mi'; }
+  function selOK(n, c) { if (c.sel === 'ssd') return n.disk === 'ssd'; if (c.sel === 'gpu') return n.gpu; return true; }
+  function reqOK(n, c) { if (c.aff === 'zone') return n.zone === 'a'; if (c.aff === 'nvme') return n.disk === 'nvme'; return true; }
+  function tolerates(t, c) { return !!c.tol && t.key === 'dedicated' && t.effect === 'NoSchedule'; }
+  function hardTaint(n, c) {
+    for (var i = 0; i < n.taints.length; i++) {
+      var t = n.taints[i];
+      if (t.effect !== 'PreferNoSchedule' && !tolerates(t, c)) return t;
+    }
+    return null;
+  }
+  function softTaint(n, c) {
+    for (var i = 0; i < n.taints.length; i++) {
+      var t = n.taints[i];
+      if (t.effect === 'PreferNoSchedule' && !tolerates(t, c)) return t;
+    }
+    return null;
+  }
+  function cntOn(placed, i) { var k = 0; placed.forEach(function (x) { if (x === i) k++; }); return k; }
+  function cntZone(placed, z) { var k = 0; placed.forEach(function (x) { if (A_NODES[x].zone === z) k++; }); return k; }
+  function freeOf(i, c, placed) {
+    var n = A_NODES[i], r = REQ[c.req], k = cntOn(placed, i);
+    return { cpu: n.cpu - n.ucpu - k * r.cpu, mem: n.mem - n.umem - k * r.mem, k: k };
+  }
+
+  // Filtr: kolejność wtyczek jak w domyślnym profilu (TaintToleration, NodeAffinity,
+  // NodeResourcesFit, PodTopologySpread, InterPodAffinity). Pierwsza porażka kończy sprawdzanie węzła.
+  function aFilter(i, c, placed) {
+    var n = A_NODES[i], t = hardTaint(n, c);
+    if (t) return { ok: false, plugin: 'TaintToleration', short: 'taint bez toleracji', why: 'taint bez toleracji: ' + t.key + '=' + t.value + ':' + t.effect,
+      ev: ['node(s) had untolerated taint {' + t.key + ': ' + t.value + '}'] };
+    if (!selOK(n, c)) return { ok: false, plugin: 'NodeAffinity', short: 'nie pasuje nodeSelector', why: 'nie pasuje nodeSelector (' + SEL_TXT[c.sel] + ')',
+      ev: ["node(s) didn't match Pod's node affinity/selector"] };
+    if (!reqOK(n, c)) return { ok: false, plugin: 'NodeAffinity', short: 'nie pasuje nodeAffinity', why: 'nie pasuje nodeAffinity (' + AFF_TXT[c.aff] + ')',
+      ev: ["node(s) didn't match Pod's node affinity/selector"] };
+    var r = REQ[c.req], f = freeOf(i, c, placed), why = [], ev = [];
+    if (f.cpu < r.cpu) { why.push('za mało CPU: wolne ' + fmtCpu(f.cpu) + ', potrzeba ' + fmtCpu(r.cpu)); ev.push('Insufficient cpu'); }
+    if (f.mem < r.mem) { why.push('za mało pamięci: wolne ' + fmtMem(f.mem) + ', potrzeba ' + fmtMem(r.mem)); ev.push('Insufficient memory'); }
+    if (why.length) return { ok: false, plugin: 'NodeResourcesFit', short: ev.length === 2 ? 'za mało CPU i pamięci' : (ev[0] === 'Insufficient cpu' ? 'za mało CPU' : 'za mało pamięci'), why: why.join('; '), ev: ev };
+    if (c.spread === 'host') {
+      // domeny = węzły pasujące do nodeSelector/nodeAffinity (nodeAffinityPolicy: Honor);
+      // tainty się nie liczą (nodeTaintsPolicy: Ignore), więc węzeł z taintem też jest domeną
+      var min = Infinity, minI = -1;
+      A_NODES.forEach(function (m, j) {
+        if (selOK(m, c) && reqOK(m, c)) { var x = cntOn(placed, j); if (x < min) { min = x; minI = j; } }
+      });
+      var skew = f.k + 1 - min;
+      if (skew > 1) return { ok: false, plugin: 'PodTopologySpread', minI: minI, short: 'spread przekroczyłby maxSkew',
+        why: 'spread: tu byłoby ' + (f.k + 1) + ', na ' + A_NODES[minI].name + ' jest ' + min + ' (różnica ' + skew + ' > maxSkew 1)',
+        ev: ["node(s) didn't match pod topology spread constraints"] };
+    }
+    if (c.anti === 'req' && f.k > 0) return { ok: false, plugin: 'InterPodAffinity', short: 'anti-affinity: jest już replika', why: 'stoi tu już replika web (anti-affinity required)',
+      ev: ["node(s) didn't match pod anti-affinity rules"] };
+    return { ok: true };
+  }
+
+  function aScore(i, c, placed) {
+    var n = A_NODES[i], r = REQ[c.req], f = freeOf(i, c, placed);
+    var res = Math.round(((f.cpu - r.cpu) / n.cpu + (f.mem - r.mem) / n.mem) / 2 * 100);
+    var parts = [{ t: 'wolne zasoby po starcie', v: res }];
+    if ((c.pref === 'ssd' && n.disk === 'ssd') || (c.pref === 'gpu' && n.gpu)) parts.push({ t: 'nodeAffinity preferred', v: 50 });
+    if (softTaint(n, c)) parts.push({ t: 'taint PreferNoSchedule', v: -50 });
+    if (c.anti === 'pref' && f.k) parts.push({ t: 'anti-affinity preferred (' + f.k + ' tutaj)', v: -100 * f.k });
+    if (c.spread === 'zone') { var z = cntZone(placed, n.zone); if (z) parts.push({ t: 'spread po strefie (' + z + ' w strefie ' + n.zone + ')', v: -40 * z }); }
+    if (c.spread === 'none' && f.k) parts.push({ t: 'domyślny spread (' + f.k + ' tutaj)', v: -30 * f.k });
+    var total = 0; parts.forEach(function (p) { total += p.v; });
+    return { total: total, parts: parts };
+  }
+
+  function eventMsg(filt) {
+    var m = {}, keys = [];
+    filt.forEach(function (f) {
+      if (f.ok) return;
+      f.ev.forEach(function (e) { if (!m[e]) { m[e] = 0; keys.push(e); } m[e]++; });
+    });
+    var arr = keys.map(function (k) { return m[k] + ' ' + k; }).sort();
+    return '0/' + filt.length + ' nodes are available: ' + arr.join(', ') + '.';
+  }
+
+  function placedOf(s) { return s.pods.filter(function (p) { return p >= 0; }); }
+
+  function aInit(c) { return { c: c, cur: -1, phase: 'start', pods: [], filt: null, scores: null, win: -1, ev: '', tie: false, steps: 0 }; }
+  function aStep(s) {
+    if (s.phase === 'done') return false;
+    s.steps++;
+    var placed = placedOf(s);
+    if (s.phase === 'start' || s.phase === 'bind' || s.phase === 'pending') {
+      if (s.cur + 1 >= s.c.R) { s.phase = 'done'; s.filt = null; s.scores = null; s.win = -1; return true; }
+      s.cur++; s.phase = 'filter'; s.scores = null; s.win = -1; s.tie = false;
+      s.filt = A_NODES.map(function (n, i) { return aFilter(i, s.c, placed); });
+      return true;
+    }
+    if (s.phase === 'filter') {
+      var ok = [];
+      s.filt.forEach(function (f, i) { if (f.ok) ok.push(i); });
+      if (!ok.length) { s.phase = 'pending'; s.pods.push(-1); s.ev = eventMsg(s.filt); return true; }
+      s.phase = 'score';
+      s.scores = A_NODES.map(function (n, i) { return s.filt[i].ok ? aScore(i, s.c, placed) : null; });
+      var best = -Infinity, win = -1, nBest = 0;
+      ok.forEach(function (i) { var v = s.scores[i].total; if (v > best) { best = v; win = i; nBest = 1; } else if (v === best) nBest++; });
+      s.win = win; s.tie = nBest > 1;
+      return true;
+    }
+    if (s.phase === 'score') { s.phase = 'bind'; s.pods.push(s.win); return true; }
+    return false;
+  }
+
+  L.A_NODES = A_NODES; L.aFilter = aFilter; L.aScore = aScore; L.aInit = aInit; L.aStep = aStep; L.eventMsg = eventMsg;
+
+  /* ================= logika: tainty i toleracje ================= */
+  var B_NODES = ['wezel-1', 'wezel-2', 'wezel-3'];
+  function bHard(c) { return c.eff === 'NoSchedule' || c.eff === 'NoExecute'; }
+  function bAlive(list, j) { var k = 0; list.forEach(function (p) { if (p.n === j && p.st !== 'term' && p.st !== 'pend') k++; }); return k; }
+  function bFilterApp(j, c) {
+    if (j === 1 && bHard(c) && !c.tol) return { ok: false, ev: ['node(s) had untolerated taint {dedicated: gpu}'] };
+    if (c.aff && j !== 1) return { ok: false, ev: ["node(s) didn't match Pod's node affinity/selector"] };
+    return { ok: true };
+  }
+  function bPlaceApp(c, list) {
+    var best = -1, bs = -Infinity, filt = [];
+    for (var j = 0; j < 3; j++) {
+      var f = bFilterApp(j, c); filt.push(f);
+      if (!f.ok) continue;
+      var sc = -30 * bAlive(list, j) - ((j === 1 && c.eff === 'PreferNoSchedule' && !c.tol) ? 50 : 0);
+      if (sc > bs) { bs = sc; best = j; }
+    }
+    return { n: best, ev: best < 0 ? eventMsg(filt) : '' };
+  }
+  function bPlaceWeb(c, list) { // web nie ma toleracji
+    var best = -1, bs = -Infinity;
+    for (var j = 0; j < 3; j++) {
+      if (j === 1 && bHard(c)) continue;
+      var sc = -30 * bAlive(list, j) - ((j === 1 && c.eff === 'PreferNoSchedule') ? 50 : 0);
+      if (sc > bs) { bs = sc; best = j; }
+    }
+    return best;
+  }
+  function bInit(c) {
+    return { c: c, t: 0, taint: false, done: false, ev: '',
+      web: [{ n: 0, st: 'ready' }, { n: 1, st: 'ready' }, { n: 2, st: 'ready' }], app: [], evicted: 0, cycled: [] };
+  }
+  function bStep(s) {
+    if (s.done) return false;
+    var c = s.c;
+    if (s.t === 0) {
+      s.t = 1; s.taint = true;
+      if (c.eff === 'NoExecute') {
+        s.web.forEach(function (p) { if (p.n === 1) { p.st = 'term'; s.evicted++; } });
+        for (var e = 0; e < s.evicted; e++) s.web.push({ n: bPlaceWeb(c, s.web), st: 'starting' });
+      }
+      return true;
+    }
+    if (s.t === 1) {
+      s.t = 2;
+      s.web = s.web.filter(function (p) { return p.st !== 'term'; });
+      s.web.forEach(function (p) { if (p.st === 'starting') p.st = 'ready'; });
+      for (var k = 0; k < 3; k++) {
+        var pl = bPlaceApp(c, s.app);
+        if (pl.n < 0) { s.app.push({ n: -1, st: 'pend' }); s.ev = pl.ev; }
+        else s.app.push({ n: pl.n, st: 'ready' });
+      }
+      return true;
+    }
+    if (s.t === 2) {
+      s.t = 3; s.done = true;
+      if (c.eff === 'NoExecute' && c.tol && c.secs) {
+        var gone = 0;
+        s.app.forEach(function (p) { if (p.n === 1 && p.st === 'ready') { p.st = 'term'; gone++; } });
+        s.evicted = gone;
+        for (var g = 0; g < gone; g++) {
+          var pl2 = bPlaceApp(c, s.app);
+          s.app.push({ n: pl2.n, st: pl2.n < 0 ? 'pend' : 'starting' });
+          s.cycled.push(pl2.n);
+        }
+      }
+      return true;
+    }
+    return false;
+  }
+  L.bInit = bInit; L.bStep = bStep;
+
+  /* ================= logika: cordon, drain, PDB ================= */
+  var SUF = ['x2k9p', 'm4tqz', 'r8bnc', 'h7wqd', 'p3lzv', 't9cfn', 'b5gxk', 'w2mjr', 'k8vdn', 'q4zht', 'f6rpl', 'n1ycs'];
+  var C_NODES = ['wezel-1', 'wezel-2', 'wezel-3'];
+  var DS_SUF = ['8xk2d', 'fq7lm', 'zt4vb'];
+  function cDesired(s) {
+    var p = s.c.pdb;
+    if (p === 'none') return null;
+    if (p === 'max1') return s.c.R - 1;
+    return Number(p.slice(3));
+  }
+  function cHealthy(s) { var k = 0; s.pods.forEach(function (p) { if (p.app === 'web' && p.st === 'ready') k++; }); return k; }
+  function cAllowed(s) { var d = cDesired(s); return d === null ? null : Math.max(0, cHealthy(s) - d); }
+  function cInit(c) {
+    var s = { c: c, phase: 'start', cordon: false, log: [], pods: [], minReady: c.R, n: 0, round: 0, stepNo: 0, last: {} };
+    for (var k = 0; k < c.R; k++) s.pods.push({ app: 'web', n: k % 3, st: 'ready', name: 'web-7c6d8f9b4d-' + SUF[s.n++] });
+    s.pods.push({ app: 'cache', n: 0, st: 'ready', name: 'cache-5f8b7d6c9-zr4tw' });
+    for (var j = 0; j < 3; j++) s.pods.push({ app: 'ds', n: j, st: 'ready', name: 'kube-proxy-' + DS_SUF[j] });
+    return s;
+  }
+  function cPick(s, app) {
+    var best = -1, bc = Infinity;
+    for (var j = 0; j < 3; j++) {
+      if (j === 0 && s.cordon) continue;
+      var k = 0; s.pods.forEach(function (p) { if (p.app === app && p.n === j && p.st !== 'term') k++; });
+      if (k < bc) { bc = k; best = j; }
+    }
+    return best;
+  }
+  function cNewName(s, app) { return app === 'web' ? 'web-7c6d8f9b4d-' + SUF[s.n++ % SUF.length] : 'cache-5f8b7d6c9-' + SUF[s.n++ % SUF.length]; }
+
+  function cRound(s, first) {
+    var r = { promoted: [], removed: [], evicted: [], blocked: [], repl: [] };
+    s.pods.forEach(function (p) { p.fresh = false; });
+    if (!first) {
+      s.pods.forEach(function (p) { if (p.st === 'starting') { p.st = 'ready'; r.promoted.push(p); } });
+      s.pods = s.pods.filter(function (p) {
+        if (p.st === 'term') { r.removed.push(p); s.log.push({ c: 'okl', t: 'pod/' + p.name + ' evicted' }); return false; }
+        return true;
+      });
+    }
+    var left = s.pods.filter(function (p) { return p.n === 0 && p.app !== 'ds'; });
+    if (!left.length) {
+      s.log.push({ c: 'okl', t: 'node/wezel-1 drained' });
+      s.phase = 'drained'; s.last = r; return r;
+    }
+    left.forEach(function (p) {
+      if (p.st === 'term') return;
+      if (p.app === 'web' && s.c.pdb !== 'none' && cAllowed(s) <= 0) { r.blocked.push(p); return; }
+      p.st = 'term';
+      s.log.push({ c: '', t: 'evicting pod sklep/' + p.name });
+      r.evicted.push(p);
+      var nn = cPick(s, p.app);
+      var np = { app: p.app, n: nn, st: 'starting', name: cNewName(s, p.app), fresh: true, emptied: p.app === 'cache' };
+      s.pods.push(np); r.repl.push(np);
+    });
+    r.blocked.forEach(function (p) {
+      s.log.push({ c: 'er', t: 'error when evicting pods/"' + p.name + '" -n "sklep" (will retry after 5s): Cannot evict pod as it would violate the pod\'s disruption budget.' });
+    });
+    s.minReady = Math.min(s.minReady, cHealthy(s));
+    var webStarting = s.pods.some(function (p) { return p.app === 'web' && p.st === 'starting'; });
+    if (r.blocked.length && cAllowed(s) === 0 && !webStarting) {
+      s.phase = 'blocked';
+      // dokończ pozostałe pody (cache), żeby stan był czytelny
+      s.pods.forEach(function (p) { if (p.st === 'starting') p.st = 'ready'; });
+      s.pods = s.pods.filter(function (p) {
+        if (p.st === 'term') { s.log.push({ c: 'okl', t: 'pod/' + p.name + ' evicted' }); return false; }
+        return true;
+      });
+    }
+    s.last = r;
+    return r;
+  }
+
+  function cStep(s) {
+    var c = s.c;
+    if (s.phase === 'done' || s.phase === 'blocked' || s.phase === 'error') return false;
+    s.stepNo++;
+    if (s.phase === 'start') {
+      s.cordon = true; s.phase = 'cordoned';
+      s.log.push({ c: 'cmd', t: '$ kubectl cordon wezel-1' }, { c: '', t: 'node/wezel-1 cordoned' });
+      return true;
+    }
+    if (s.phase === 'cordoned') {
+      var flags = (c.ids ? ' --ignore-daemonsets' : '') + (c.ede ? ' --delete-emptydir-data' : '');
+      s.log.push({ c: 'cmd', t: '$ kubectl drain wezel-1' + flags }, { c: '', t: 'node/wezel-1 already cordoned' });
+      var errs = [];
+      if (!c.ids) errs.push('cannot delete DaemonSet-managed Pods (use --ignore-daemonsets to ignore): kube-system/kube-proxy-' + DS_SUF[0]);
+      if (!c.ede) errs.push('cannot delete Pods with local storage (use --delete-emptydir-data to override): sklep/cache-5f8b7d6c9-zr4tw');
+      if (errs.length) {
+        s.log.push({ c: 'er', t: 'error: unable to drain node "wezel-1" due to error: ' + errs.join(', ') + ', continuing command...' });
+        s.phase = 'error'; return true;
+      }
+      s.log.push({ c: 'wa', t: 'Warning: ignoring DaemonSet-managed Pods: kube-system/kube-proxy-' + DS_SUF[0] });
+      s.phase = 'draining'; s.round = 1;
+      cRound(s, true);
+      return true;
+    }
+    if (s.phase === 'draining') { s.round++; cRound(s, false); return true; }
+    if (s.phase === 'drained') {
+      s.phase = 'maint'; s.pods.forEach(function (p) { p.fresh = false; });
+      s.log.push({ c: 'cmd', t: '# prace: łatki, upgrade kubeleta, restart' });
+      return true;
+    }
+    if (s.phase === 'maint') {
+      s.cordon = false; s.phase = 'done';
+      s.log.push({ c: 'cmd', t: '$ kubectl uncordon wezel-1' }, { c: '', t: 'node/wezel-1 uncordoned' });
+      return true;
+    }
+    return false;
+  }
+  L.cInit = cInit; L.cStep = cStep; L.cHealthy = cHealthy; L.cAllowed = cAllowed; L.cDesired = cDesired;
+
+  if (typeof document === 'undefined') { root.PLAN = L; return; }
+
+  /* ================= DOM: wspólne ================= */
+  var $ = function (id) { return document.getElementById(id); };
+  function el(tag, cls, txt) { var e = document.createElement(tag); if (cls) e.className = cls; if (txt !== undefined) e.textContent = txt; return e; }
+  function esc(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function code(t) { return '<code>' + esc(t) + '</code>'; }
+  function segInit(box, onChange) {
+    box.addEventListener('click', function (e) {
+      var b = e.target.closest('button[data-v]');
+      if (!b || b.disabled) return;
+      box.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+      onChange(box.getAttribute('data-k'), b.getAttribute('data-v'));
+    });
+  }
+  function segVal(box) { var b = box.querySelector('button[aria-pressed="true"]'); return b ? b.getAttribute('data-v') : null; }
+  function player(btnStep, btnPlay, stepFn, finishedFn, ms) {
+    var timer = null;
+    function stop() { if (timer) { clearInterval(timer); timer = null; } btnPlay.textContent = 'odtwarzaj'; btnPlay.setAttribute('aria-pressed', 'false'); }
+    function tick() { stepFn(); if (finishedFn()) stop(); }
+    btnStep.addEventListener('click', function () { stop(); stepFn(); });
+    btnPlay.addEventListener('click', function () {
+      if (timer) { stop(); return; }
+      if (finishedFn()) return;
+      btnPlay.textContent = 'pauza'; btnPlay.setAttribute('aria-pressed', 'true');
+      tick();
+      if (!finishedFn()) timer = setInterval(tick, ms);
+    });
+    return { stop: stop };
+  }
+  function podChip(cls, label, title) { var s = el('span', 'pod-chip ' + cls, label); s.title = title; s.setAttribute('aria-label', 'pod ' + title); return s; }
+
+  /* ================= DOM: symulator schedulera ================= */
+  var aCfg = { R: 3, req: 'm', sel: 'none', aff: 'none', pref: 'none', anti: 'none', spread: 'none', tol: false };
+  var aS, aPl;
+  var aCtl = $('a-controls');
+
+  function aYaml(c) {
+    var y = ['spec:', '  replicas: ' + c.R, '  selector: {matchLabels: {app: web}}', '  template:', '    metadata: {labels: {app: web}}', '    spec:'];
+    if (c.sel !== 'none') y.push('      nodeSelector:', '        ' + SEL_TXT[c.sel]);
+    var a = [];
+    if (c.aff !== 'none' || c.pref !== 'none') {
+      a.push('        nodeAffinity:');
+      if (c.aff !== 'none') a.push('          requiredDuringSchedulingIgnoredDuringExecution:', '            nodeSelectorTerms:', '            - matchExpressions:',
+        c.aff === 'zone' ? '              - {key: topology.kubernetes.io/zone, operator: In, values: [eu-central-1a]}' : '              - {key: disktype, operator: In, values: [nvme]}');
+      if (c.pref !== 'none') a.push('          preferredDuringSchedulingIgnoredDuringExecution:', '          - weight: 50', '            preference:', '              matchExpressions:',
+        c.pref === 'ssd' ? '              - {key: disktype, operator: In, values: [ssd]}' : '              - {key: gpu, operator: In, values: ["true"]}');
+    }
+    if (c.anti === 'req') a.push('        podAntiAffinity:', '          requiredDuringSchedulingIgnoredDuringExecution:', '          - labelSelector:', '              matchLabels: {app: web}', '            topologyKey: kubernetes.io/hostname');
+    if (c.anti === 'pref') a.push('        podAntiAffinity:', '          preferredDuringSchedulingIgnoredDuringExecution:', '          - weight: 100', '            podAffinityTerm:', '              labelSelector:', '                matchLabels: {app: web}', '              topologyKey: kubernetes.io/hostname');
+    if (a.length) { y.push('      affinity:'); y = y.concat(a); }
+    if (c.tol) y.push('      tolerations:', '      - {key: dedicated, operator: Equal, value: gpu, effect: NoSchedule}');
+    if (c.spread !== 'none') y.push('      topologySpreadConstraints:', '      - maxSkew: 1',
+      c.spread === 'host' ? '        topologyKey: kubernetes.io/hostname' : '        topologyKey: topology.kubernetes.io/zone',
+      c.spread === 'host' ? '        whenUnsatisfiable: DoNotSchedule' : '        whenUnsatisfiable: ScheduleAnyway',
+      '        labelSelector:', '          matchLabels: {app: web}');
+    y.push('      containers:', '      - name: web', '        image: nginx:1.29', '        resources:', '          requests: ' + REQ[c.req].y);
+    return y.join('\n');
+  }
+
+  function aReset() {
+    if (aPl) aPl.stop();
+    aCfg.R = Number($('a-r').value); $('a-r-out').textContent = aCfg.R;
+    aCfg.tol = $('a-tol').checked;
+    aS = aInit(Object.assign({}, aCfg));
+    $('a-yaml').textContent = aYaml(aCfg);
+    aRender();
+  }
+  function aDone() { return aS.phase === 'done'; }
+  function aDoStep() { if (aStep(aS)) aRender(); }
+
+  function resRow(lbl, alloc, used, ours, ghost, unit) {
+    var row = el('div', 'rrow');
+    row.appendChild(el('span', '', lbl));
+    var bar = el('span', 'rbar');
+    function seg(cls, v) { var i = el('i', cls); i.style.width = Math.max(0, Math.min(100, v / alloc * 100)) + '%'; bar.appendChild(i); }
+    seg('u', used); seg('o', ours);
+    var free = alloc - used - ours;
+    if (ghost) seg('g' + (ghost > free ? ' over' : ''), Math.min(ghost, free));
+    row.appendChild(bar);
+    var fmt = unit === 'cpu' ? fmtCpu : fmtMem;
+    row.appendChild(el('span', 'rtxt', 'wolne ' + fmt(free) + ' z ' + fmt(alloc) + (ghost ? ' · pod chce ' + fmt(ghost) : '')));
+    return row;
+  }
+
+  function aRender() {
+    var s = aS, c = s.c, placed = placedOf(s);
+    var ph = s.phase;
+    var active = ph === 'filter' || ph === 'score';
+    // etap
+    $('a-pipe').querySelectorAll('li').forEach(function (li) {
+      var p = li.getAttribute('data-p');
+      var on = (p === ph) || (p === 'queue' && (ph === 'start' || ph === 'done'));
+      li.className = on ? ('on' + (p === 'pending' ? ' bad' : '')) : '';
+    });
+    // kolejka
+    var q = $('a-queue'); q.textContent = '';
+    q.appendChild(el('span', 'ql', 'pody:'));
+    for (var k = 0; k < c.R; k++) {
+      var nm = 'web-' + (k + 1);
+      if (k < s.pods.length) {
+        if (s.pods[k] >= 0) q.appendChild(podChip('web' + (k === s.pods.length - 1 && ph === 'bind' ? ' fresh' : ''), nm + ' → ' + A_NODES[s.pods[k]].name.replace('wezel-', 'w'), nm + ' na ' + A_NODES[s.pods[k]].name));
+        else q.appendChild(podChip('pend', nm + ' Pending', nm + ' Pending'));
+      } else if (k === s.cur && active) q.appendChild(podChip('cur', nm, nm + ', teraz planowany'));
+      else q.appendChild(podChip('wait', nm, nm + ', czeka w kolejce'));
+    }
+    // węzły
+    var box = $('a-nodes'); box.textContent = '';
+    var r = REQ[c.req];
+    A_NODES.forEach(function (n, i) {
+      var f = s.filt ? s.filt[i] : null;
+      var cls = 'ncard';
+      if ((ph === 'filter' || ph === 'pending' || ph === 'score' || ph === 'bind') && f) {
+        if (!f.ok) cls += ' out';
+        else if (ph === 'score') cls += (i === s.win ? ' best' : ' pass');
+        else if (ph === 'bind') cls += (i === s.win ? ' win' : '');
+        else cls += ' pass';
+      }
+      var card = el('div', cls);
+      var h = el('div', 'nh'); h.appendChild(el('span', 'nn', n.name));
+      h.appendChild(el('span', 'ns', 'zone: ' + n.zone)); card.appendChild(h);
+      var lb = el('div', 'lbls');
+      lb.appendChild(el('span', 'lb', 'disktype=' + n.disk));
+      if (n.gpu) lb.appendChild(el('span', 'lb', 'gpu=true'));
+      n.taints.forEach(function (t) { lb.appendChild(el('span', 'lb taint', t.key + '=' + t.value + ':' + t.effect)); });
+      card.appendChild(lb);
+      var k2 = cntOn(placed, i);
+      var resBox = el('div', 'res');
+      resBox.appendChild(resRow('CPU', n.cpu, n.ucpu, k2 * r.cpu, active ? r.cpu : 0, 'cpu'));
+      resBox.appendChild(resRow('RAM', n.mem, n.umem, k2 * r.mem, active ? r.mem : 0, 'mem'));
+      card.appendChild(resBox);
+      var pl = el('div', 'podlist');
+      s.pods.forEach(function (p, idx) {
+        if (p === i) pl.appendChild(podChip('web' + (ph === 'bind' && idx === s.pods.length - 1 ? ' fresh' : ''), 'web-' + (idx + 1), 'web-' + (idx + 1) + ' na ' + n.name));
+      });
+      if (!pl.childNodes.length) pl.appendChild(el('span', 'empty-note', 'brak podów web'));
+      card.appendChild(pl);
+      var vd = el('div', 'vd');
+      if (f && (ph === 'filter' || ph === 'pending' || ph === 'score' || ph === 'bind')) {
+        if (!f.ok) vd.innerHTML = '<span class="bad">✗ ' + esc(f.why) + '</span><br>' + code(f.plugin + ': ' + f.ev.join(', '));
+        else if (ph === 'filter') vd.innerHTML = '<span class="ok">✓ przechodzi filtr</span>';
+        else if ((ph === 'score' || ph === 'bind') && s.scores && s.scores[i]) {
+          var sc = s.scores[i];
+          var html = '<span class="' + (i === s.win ? 'ok' : '') + '">' + (i === s.win ? (ph === 'bind' ? '→ bind: tu startuje web-' + (s.cur + 1) : '★ najlepszy wynik') : 'ocena') + '</span><ul>';
+          sc.parts.forEach(function (p) { html += '<li>' + esc(p.t) + ' <b>' + (p.v >= 0 ? '+' : '') + p.v + '</b></li>'; });
+          html += '</ul><span class="tot">= ' + sc.total + ' pkt</span>';
+          vd.innerHTML = html;
+        }
+      }
+      card.appendChild(vd);
+      box.appendChild(card);
+    });
+    // komunikat
+    var msg = $('a-msg'), ev = $('a-event'), name = 'web-' + (s.cur + 1);
+    msg.className = 'msg';
+    ev.hidden = true;
+    if (ph === 'start') {
+      msg.innerHTML = '<p>Deployment <code>web</code> chce ' + c.R + ' ' + (c.R === 1 ? 'pod' : (c.R < 5 ? 'pody' : 'podów')) + ' po ' + esc(fmtCpu(r.cpu)) + ' CPU i ' + esc(fmtMem(r.mem)) + ' pamięci. Wszystkie czekają w kolejce schedulera. Naciśnij „krok dalej”.</p>';
+    } else if (ph === 'filter') {
+      var outs = [], oks = [];
+      s.filt.forEach(function (f, i) { if (f.ok) oks.push(A_NODES[i].name); else outs.push(A_NODES[i].name + ' (' + f.short + ')'); });
+      msg.innerHTML = '<p><strong>' + name + ', filtr.</strong> ' + (outs.length ? 'Odpadają: ' + esc(outs.join(', ')) + '. ' : 'Żaden węzeł nie odpada. ') +
+        (oks.length ? 'Zostają: ' + esc(oks.join(', ')) + '.' : 'Nie zostaje żaden.') + '</p>' + aHint(s);
+    } else if (ph === 'score') {
+      var list = [];
+      s.scores.forEach(function (sc, i) { if (sc) list.push(A_NODES[i].name + ' ' + sc.total); });
+      msg.innerHTML = '<p><strong>' + name + ', ocena.</strong> ' + esc(list.join(' · ')) + ' pkt. Wygrywa <strong>' + A_NODES[s.win].name + '</strong>.' +
+        (s.tie ? ' Remis: prawdziwy scheduler losuje spośród najlepszych, tu bierzemy pierwszy.' : '') +
+        (s.scores.filter(Boolean).length === 1 ? ' Jest tylko jeden kandydat, więc ocena niczego nie zmienia.' : '') + '</p>';
+    } else if (ph === 'bind') {
+      msg.innerHTML = '<p><strong>' + name + ', bind.</strong> Scheduler zapisuje w podzie <code>spec.nodeName: ' + A_NODES[s.win].name + '</code>. Kubelet na tym węźle pobiera obraz i uruchamia kontener.</p>';
+    } else if (ph === 'pending') {
+      msg.className = 'msg stuck';
+      msg.innerHTML = '<p><strong>' + name + ' zostaje Pending.</strong> Żaden węzeł nie przeszedł filtra. W <code>kubectl describe pod</code> zobaczysz event <code>FailedScheduling</code>:</p>' + aHint(s);
+      ev.textContent = 'Warning  FailedScheduling  default-scheduler  ' + s.ev; ev.hidden = false;
+    } else if (ph === 'done') {
+      var dist = A_NODES.map(function (n, i) { return n.name + ': ' + cntOn(placed, i); }).join(' · ');
+      var pend = s.pods.filter(function (p) { return p < 0; }).length;
+      msg.className = 'msg ' + (pend ? 'stuck' : 'done');
+      msg.innerHTML = '<p><strong>Koniec.</strong> ' + esc(dist) + (pend ? ' · Pending: ' + pend + '. Scheduler będzie ponawiał, ale bez zmian w klastrze (nowy węzeł, mniejsze requests, inne reguły) nic się nie zmieni.' : '. Wszystkie pody mają węzeł.') + '</p>';
+      if (pend) { ev.textContent = 'Warning  FailedScheduling  default-scheduler  ' + s.ev; ev.hidden = false; }
+    }
+    $('a-tick').textContent = 'krok ' + s.steps + (ph === 'done' ? ' · koniec' : '');
+    $('a-step').disabled = aDone(); $('a-play').disabled = aDone(); $('a-all').disabled = aDone();
+  }
+
+  function aHint(s) {
+    var c = s.c, f = s.filt, h = [];
+    var by = {}; f.forEach(function (x) { if (!x.ok) by[x.plugin] = (by[x.plugin] || 0) + 1; });
+    var anyOk = f.some(function (x) { return x.ok; });
+    if (!anyOk) {
+      if (c.sel === 'gpu' && !c.tol) h.push('nodeSelector ciągnie pod na wezel-3, ale taint go nie wpuszcza. Węzeł GPU wymaga pary: toleracja + selektor/affinity.');
+      if (c.aff === 'nvme') h.push('Żaden węzeł nie ma <code>disktype=nvme</code>. Reguła <code>required</code> bez pasującego węzła to Pending na zawsze. Reguła <code>preferred</code> w tej sytuacji nic by nie blokowała.');
+      if (by.InterPodAffinity) h.push('<code>required</code> anti-affinity: najwyżej jedna replika na węzeł. Więcej replik niż pasujących węzłów = Pending. Lepiej <code>preferred</code> albo spread z <code>ScheduleAnyway</code>.');
+      if (by.NodeResourcesFit && !by.InterPodAffinity && !by.PodTopologySpread) h.push('Scheduler sumuje <code>requests</code> podów na węźle, nie patrzy na zużycie. Nawet przy 20% CPU w <code>kubectl top nodes</code> pod może się nie zmieścić.');
+    }
+    var sp = f.filter(function (x) { return x.plugin === 'PodTopologySpread'; })[0];
+    if (sp && A_NODES[sp.minI].taints.some(function (t) { return t.effect !== 'PreferNoSchedule' && !tolerates(t, c); })) {
+      h.push('Spread porównuje z ' + A_NODES[sp.minI].name + ', który ma 0 podów, bo pody tam nie wejdą przez taint. Domyślnie <code>nodeTaintsPolicy: Ignore</code>: węzeł z taintem i tak jest domeną. Ustaw <code>nodeTaintsPolicy: Honor</code> albo dodaj toleracji.');
+    } else if (sp) {
+      h.push('Spread <code>DoNotSchedule</code>: na żadnym węźle nie może być o więcej niż 1 pod więcej niż na najmniej obsadzonym.');
+    }
+    return h.map(function (x) { return '<p>' + x + '</p>'; }).join('');
+  }
+
+  if (aCtl) {
+    aCtl.querySelectorAll('.seg').forEach(function (b) { segInit(b, function (k, v) { aCfg[k] = v; aReset(); }); });
+    $('a-r').addEventListener('input', aReset);
+    $('a-tol').addEventListener('change', aReset);
+    $('a-reset').addEventListener('click', aReset);
+    $('a-all').addEventListener('click', function () { aPl.stop(); var g = 0; while (!aDone() && g++ < 200) aStep(aS); aRender(); });
+    aPl = player($('a-step'), $('a-play'), aDoStep, aDone, 1100);
+    aReset();
+  }
+
+  /* ================= DOM: tainty ================= */
+  var bCfg = { eff: 'NoSchedule', tol: false, secs: false, aff: false };
+  var bS, bPl;
+  function bReset() {
+    if (bPl) bPl.stop();
+    bCfg.eff = segVal($('b-eff'));
+    bCfg.tol = $('b-tol').checked; bCfg.aff = $('b-aff').checked;
+    var ne = bCfg.eff === 'NoExecute';
+    $('b-secs').disabled = !ne || !bCfg.tol;
+    $('b-secs-l').classList.toggle('dis', !ne || !bCfg.tol);
+    bCfg.secs = $('b-secs').checked && ne && bCfg.tol;
+    bS = bInit(Object.assign({}, bCfg));
+    bRender();
+  }
+  function bDone() { return bS.done; }
+  function bDoStep() { if (bStep(bS)) bRender(); }
+  function bRender() {
+    var s = bS, c = s.c;
+    $('b-flow').querySelectorAll('li').forEach(function (li, i) { li.className = i === s.t ? 'on' : (i < s.t ? 'past' : ''); });
+    var box = $('b-nodes'); box.textContent = '';
+    B_NODES.forEach(function (name, j) {
+      var card = el('div', 'ncard' + (j === 1 && s.taint && c.eff !== 'PreferNoSchedule' ? ' cordon' : ''));
+      var h = el('div', 'nh'); h.appendChild(el('span', 'nn', name)); card.appendChild(h);
+      var lb = el('div', 'lbls');
+      if (j === 1) lb.appendChild(el('span', 'lb', 'gpu=true'));
+      if (j === 1 && s.taint) lb.appendChild(el('span', 'lb taint', 'dedicated=gpu:' + c.eff));
+      if (!lb.childNodes.length) lb.appendChild(el('span', 'lb', 'bez taintów'));
+      card.appendChild(lb);
+      var pl = el('div', 'podlist');
+      s.web.forEach(function (p) {
+        if (p.n !== j) return;
+        var cls = p.st === 'term' ? 'web term' : (p.st === 'starting' ? 'starting' : 'web');
+        pl.appendChild(podChip(cls, 'web', 'web, ' + ({ term: 'wyrzucony', starting: 'zastępca startuje', ready: 'działa' })[p.st]));
+      });
+      s.app.forEach(function (p) {
+        if (p.n !== j) return;
+        var cls = p.st === 'term' ? 'app term' : (p.st === 'starting' ? 'starting' : 'app');
+        pl.appendChild(podChip(cls, 'gpu', 'gpu-app, ' + ({ term: 'wyrzucony po tolerationSeconds', starting: 'zastępca startuje', ready: 'działa' })[p.st]));
+      });
+      if (!pl.childNodes.length) pl.appendChild(el('span', 'empty-note', 'brak podów'));
+      card.appendChild(pl);
+      box.appendChild(card);
+    });
+    var pend = $('b-pend'); pend.textContent = '';
+    var pn = s.app.filter(function (p) { return p.st === 'pend'; });
+    if (pn.length) {
+      pend.appendChild(el('span', '', 'bez węzła:'));
+      pn.forEach(function () { pend.appendChild(podChip('pend', 'gpu', 'gpu-app Pending')); });
+    }
+    var msg = $('b-msg'), ev = $('b-event');
+    msg.className = 'msg'; ev.hidden = true;
+    var onW2 = s.app.filter(function (p) { return p.n === 1 && p.st === 'ready'; }).length;
+    var html = '';
+    if (s.t === 0) {
+      html = '<p>Trzy węzły, na każdym po jednym podzie <code>web</code>. wezel-2 ma etykietę <code>gpu=true</code>, ale na razie bez taintu. Naciśnij „krok dalej”: admin zakłada taint <code>dedicated=gpu:' + c.eff + '</code>.</p>';
+    } else if (s.t === 1) {
+      if (c.eff === 'NoSchedule') html = '<p><code>NoSchedule</code>: pod <code>web</code> na wezel-2 działa dalej. Ten efekt dotyczy tylko nowych podów.</p>';
+      else if (c.eff === 'PreferNoSchedule') html = '<p><code>PreferNoSchedule</code>: nic się nie dzieje z działającymi podami. Scheduler będzie wezel-2 unikał, ale nie zabrania.</p>';
+      else html = '<p><code>NoExecute</code> wyrzuca też działające pody bez toleracji: <code>web</code> z wezel-2 kończy działanie, a ReplicaSet tworzy zastępcę na innym węźle. Bez PDB i bez ostrzeżenia, więc nie zakładaj NoExecute „na próbę”.</p>';
+    } else if (s.t >= 2) {
+      var dist = B_NODES.map(function (n, j) { return n + ': ' + bAlive(s.app, j); }).join(' · ');
+      if (s.t === 2) {
+        html = '<p>Wdrożenie <code>gpu-app</code> (3 repliki). Rozkład: ' + esc(dist) + (pn.length ? ' · Pending: ' + pn.length : '') + '.</p>';
+        if (pn.length) {
+          msg.className = 'msg stuck';
+          html += '<p>nodeAffinity wpuszcza tylko na wezel-2, a taint bez toleracji go zamyka. Nie ma węzła, który przejdzie oba warunki.</p>';
+          ev.textContent = 'Warning  FailedScheduling  default-scheduler  ' + s.ev; ev.hidden = false;
+        } else if (c.aff && (c.tol || c.eff === 'PreferNoSchedule')) {
+          msg.className = 'msg done';
+          html += c.tol ? '<p>Toleracja (wolno) + nodeAffinity (musi) = wszystkie repliki na wezel-2, a pody bez toleracji dalej tam nie wejdą. Tak buduje się węzły dedykowane.</p>'
+            : '<p>nodeAffinity <code>required</code> to filtr, a <code>PreferNoSchedule</code> tylko obniża ocenę. Jedynym kandydatem jest wezel-2, więc pody stają tam nawet bez toleracji.</p>';
+        } else if (c.tol) {
+          html += '<p><strong>Toleracja to przepustka, nie magnes.</strong> Pody <code>gpu-app</code> mogą wejść na wezel-2, ale scheduler rozkłada je po wszystkich węzłach: na wezel-2 trafił ' + onW2 + ' z 3. Żeby przypiąć je do GPU, dodaj nodeAffinity <code>gpu=true</code>.</p>';
+        } else if (c.eff === 'PreferNoSchedule') {
+          html += '<p><code>PreferNoSchedule</code>: wezel-2 dostaje minus w ocenie, więc scheduler wybiera inne węzły. Gdyby na nich zabrakło miejsca, pod i tak trafiłby na wezel-2.</p>';
+        } else {
+          html += '<p>Bez toleracji wezel-2 odpada już na filtrze. Pody stają na pozostałych węzłach.</p>';
+        }
+      } else {
+        msg.className = 'msg done';
+        if (c.eff === 'NoExecute' && c.tol && c.secs && s.evicted) {
+          msg.className = 'msg stuck';
+          var back = s.cycled.filter(function (n) { return n === 1; }).length;
+          html = '<p><strong>Minęło 60 s:</strong> ' + (s.evicted === 1 ? 'pod <code>gpu-app</code> z wezel-2 wyrzucony' : s.evicted + ' pody <code>gpu-app</code> z wezel-2 wyrzucone') + ', bo <code>tolerationSeconds</code> się skończył. ' +
+            (back ? (s.evicted === 1 ? 'Zastępca trafia' : 'Zastępcy trafiają') + ' z powrotem na wezel-2 (toleracja dalej pasuje do planowania) i za 60 s historia się powtórzy. ' : 'Zastępcy stają na innych węzłach. ') +
+            '</p><p><code>tolerationSeconds</code> służy do przeczekania krótkiej awarii, nie do stałej pracy na węźle. Tak działają domyślne toleracje <code>not-ready</code> i <code>unreachable</code> (300 s).</p>';
+        } else if (c.eff === 'NoExecute' && c.tol) {
+          html = '<p>Minęło 60 s. Toleracja bez <code>tolerationSeconds</code> znaczy „zostań bez końca”: pody <code>gpu-app</code> na wezel-2 działają dalej. Zaznacz <code>tolerationSeconds: 60</code> i powtórz.</p>';
+        } else if (c.eff === 'NoExecute') {
+          html = '<p>Minęło 60 s i nic nowego: pody bez toleracji wyleciały od razu przy zakładaniu taintu, a nowe tam nie wejdą.</p>';
+        } else {
+          html = '<p>Minęło 60 s i bez zmian. <code>' + c.eff + '</code> nigdy nie wyrzuca działających podów. Do tego służy <code>NoExecute</code> albo drain.</p>';
+        }
+        html = '<p>Rozkład gpu-app: ' + esc(B_NODES.map(function (n, j) { return n + ': ' + bAlive(s.app, j); }).join(' · ')) + '.</p>' + html;
+        if (pn.length) { ev.textContent = 'Warning  FailedScheduling  default-scheduler  ' + s.ev; ev.hidden = false; }
+      }
+    }
+    msg.innerHTML = html;
+    $('b-tick').textContent = 'krok ' + s.t + (s.done ? ' · koniec' : '');
+    $('b-step').disabled = bDone(); $('b-play').disabled = bDone();
+  }
+  if ($('b-eff')) {
+    segInit($('b-eff'), function () { bReset(); });
+    ['b-tol', 'b-secs', 'b-aff'].forEach(function (id) { $(id).addEventListener('change', bReset); });
+    $('b-reset').addEventListener('click', bReset);
+    bPl = player($('b-step'), $('b-play'), bDoStep, bDone, 1600);
+    bReset();
+  }
+
+  /* ================= DOM: drain ================= */
+  var cCfg = { R: 4, pdb: 'max1', ids: true, ede: true };
+  var cS, cPl;
+  var PH_IDX = { start: 0, cordoned: 1, draining: 2, error: 2, blocked: 2, drained: 2, maint: 3, done: 4 };
+  function cReset() {
+    if (cPl) cPl.stop();
+    cCfg.R = Number($('c-r').value); $('c-r-out').textContent = cCfg.R;
+    cCfg.ids = $('c-ids').checked; cCfg.ede = $('c-ede').checked;
+    cS = cInit(Object.assign({}, cCfg));
+    cRender();
+  }
+  function cDone() { return cS.phase === 'done' || cS.phase === 'blocked' || cS.phase === 'error'; }
+  function cDoStep() { if (cStep(cS)) cRender(); }
+  function pdbTable(s) {
+    var p = s.c.pdb;
+    if (p === 'none') return '$ kubectl get pdb\nNo resources found in sklep namespace.';
+    var min = p === 'max1' ? 'N/A' : p.slice(3), max = p === 'max1' ? '1' : 'N/A';
+    function pad(t, n) { t = String(t); while (t.length < n) t += ' '; return t; }
+    return '$ kubectl get pdb\n' + pad('NAME', 10) + pad('MIN AVAILABLE', 16) + pad('MAX UNAVAILABLE', 18) + pad('ALLOWED DISRUPTIONS', 22) + 'AGE\n' +
+      pad('web-pdb', 10) + pad(min, 16) + pad(max, 18) + pad(cAllowed(s), 22) + '12m';
+  }
+  function cRender() {
+    var s = cS, c = s.c;
+    var idx = PH_IDX[s.phase];
+    $('c-flow').querySelectorAll('li').forEach(function (li, i) {
+      li.className = i === idx ? 'on' : (i < idx || s.phase === 'done' ? 'past' : '');
+    });
+    var hl = cHealthy(s), al = cAllowed(s), des = cDesired(s);
+    $('c-ready').textContent = hl + '/' + c.R;
+    $('c-ready-box').className = 'stat' + (hl === 0 ? ' warn' : '');
+    $('c-allowed').textContent = al === null ? '—' : al;
+    $('c-allowed-box').className = 'stat' + (al === 0 ? ' warn' : (al > 0 ? ' good' : ''));
+    $('c-min').textContent = s.minReady;
+    $('c-min-box').className = 'stat' + (s.minReady === 0 ? ' warn' : '');
+    var box = $('c-nodes'); box.textContent = '';
+    C_NODES.forEach(function (name, j) {
+      var cord = j === 0 && s.cordon;
+      var card = el('div', 'ncard' + (cord ? ' cordon' : ''));
+      var h = el('div', 'nh'); h.appendChild(el('span', 'nn', name));
+      h.appendChild(el('span', 'ns', cord ? 'Ready,SchedulingDisabled' : 'Ready')); card.appendChild(h);
+      if (cord) { var lb = el('div', 'lbls'); lb.appendChild(el('span', 'lb taint', 'node.kubernetes.io/unschedulable:NoSchedule')); card.appendChild(lb); }
+      var pl = el('div', 'podlist');
+      s.pods.forEach(function (p) {
+        if (p.n !== j) return;
+        var lbl = p.app === 'ds' ? 'kube-proxy' : p.app;
+        var cls = p.app === 'ds' ? 'ds' : (p.st === 'starting' ? 'starting' : p.app + (p.st === 'term' ? ' term' : ''));
+        if (p.fresh) cls += ' fresh';
+        var st = p.st === 'term' ? 'eviction, kończy działanie' : (p.st === 'starting' ? 'startuje, jeszcze nie Ready' : 'Ready');
+        if (p.emptied) lbl = 'cache ∅';
+        pl.appendChild(podChip(cls, lbl, p.name + ', ' + st + (p.emptied ? ', pusty emptyDir' : '')));
+      });
+      card.appendChild(pl);
+      box.appendChild(card);
+    });
+    // log
+    var lg = $('c-log'); lg.innerHTML = '';
+    var lines = s.log.slice(-14);
+    if (!lines.length) lg.innerHTML = '<span class="cmd">$</span> ';
+    lines.forEach(function (l, i) { var sp = el('span', l.c, l.t); lg.appendChild(sp); if (i < lines.length - 1) lg.appendChild(document.createTextNode('\n')); });
+    $('c-pdb').textContent = pdbTable(s);
+    // komunikat
+    var msg = $('c-msg'); msg.className = 'msg';
+    var onW1 = s.pods.filter(function (p) { return p.app === 'web' && p.n === 0; }).length;
+    var pdbTxt = c.pdb === 'none' ? 'brak PDB' : (c.pdb === 'max1' ? 'PDB maxUnavailable: 1' : 'PDB minAvailable: ' + c.pdb.slice(3));
+    var html = '';
+    var r = s.last || {};
+    if (s.phase === 'start') {
+      html = '<p>Deployment <code>web</code>: ' + c.R + ' ' + (c.R === 1 ? 'replika' : 'replik' + (c.R < 5 ? 'i' : '')) + ', na wezel-1 ' + onW1 + '. ' + pdbTxt +
+        (des !== null ? ' → desiredHealthy = ' + des + ', ALLOWED DISRUPTIONS = ' + hl + ' − ' + des + ' = ' + al + '.' : '.') +
+        ' Na wezel-1 są też <code>cache</code> z emptyDir i <code>kube-proxy</code> z DaemonSetu.</p>' +
+        (al === 0 ? '<p>Budżet już teraz wynosi 0. Zgadnij, co zrobi drain.</p>' : '');
+    } else if (s.phase === 'cordoned') {
+      html = '<p><code>kubectl cordon wezel-1</code>: węzeł dostaje <code>SchedulingDisabled</code> (taint <code>node.kubernetes.io/unschedulable</code>). Nowe pody tam nie trafią. Działające pody działają dalej.</p>';
+    } else if (s.phase === 'error') {
+      msg.className = 'msg stuck';
+      html = '<p>Drain odmawia, zanim cokolwiek wyrzuci. ' + (!c.ids ? 'Podu DaemonSetu nie da się przenieść: DaemonSet postawiłby go z powrotem, więc musisz go świadomie pominąć (<code>--ignore-daemonsets</code>). ' : '') +
+        (!c.ede ? 'Pod <code>cache</code> ma emptyDir, którego dane zginą razem z podem: zgoda to <code>--delete-emptydir-data</code>. ' : '') +
+        'Węzeł zostaje zcordonowany, bo cordon sam się nie cofa.</p>';
+    } else if (s.phase === 'draining' || s.phase === 'blocked') {
+      var parts = [];
+      if (r.promoted && r.promoted.length) parts.push('Gotowi zastępcy: ' + r.promoted.length + '.');
+      if (r.removed && r.removed.length) parts.push('Zniknęły z wezel-1: ' + r.removed.length + '.');
+      if (r.evicted && r.evicted.length) parts.push('Eviction: ' + r.evicted.map(function (p) { return p.app; }).join(', ') + '; zastępcy startują na ' +
+        r.repl.map(function (p) { return C_NODES[p.n]; }).filter(function (v, i, a) { return a.indexOf(v) === i; }).join(' i ') + '.');
+      if (r.blocked && r.blocked.length) parts.push('PDB odrzuca ' + r.blocked.length + ' (429): drain ponowi za 5 s.');
+      html = '<p><strong>Runda ' + s.round + '.</strong> ' + parts.join(' ') + '</p>';
+      if (s.phase === 'draining' && r.blocked && r.blocked.length) html += '<p>Kolejna eviction będzie możliwa, gdy zastępca stanie się Ready i <code>currentHealthy</code> znów wzrośnie.</p>';
+      if (r.repl && r.repl.some(function (p) { return p.emptied; })) html += '<p><code>cache</code> startuje od nowa z pustym emptyDir: dane przepadły.</p>';
+      if (hl === 0) html += '<p><strong>W tej chwili nie działa żadna replika web.</strong> ' + (c.pdb === 'none' ? 'Bez PDB drain wyrzuca wszystko naraz.' : 'PDB na to pozwolił, bo przy 1 replice maxUnavailable: 1 oznacza zero wymaganych podów.') + '</p>';
+      if (s.phase === 'blocked') {
+        msg.className = 'msg stuck';
+        var why = c.R === 1 && des === 1 ? '1 replika z minAvailable: 1 to sprzeczność: jedynej repliki nigdy nie wolno ruszyć.'
+          : (des >= c.R ? 'minAvailable (' + des + ') ≥ replicas (' + c.R + '): Deployment nie stworzy nadmiarowego poda, więc zdrowych nigdy nie będzie więcej niż ' + c.R + '.' : '');
+        html += '<p><strong>Drain stoi na zawsze.</strong> ALLOWED DISRUPTIONS = ' + hl + ' − ' + des + ' = 0 i nic tego nie zmieni. ' + why +
+          ' kubectl drain ponawia eviction co 5 s bez końca (albo do <code>--timeout</code>), a upgrade puli węzłów na EKS po ok. 15 min kończy się błędem. ' +
+          'Wyjście: <code>maxUnavailable: 1</code>, więcej replik albo świadome obejście PDB (<code>kubectl drain --disable-eviction</code>).</p>';
+      }
+    } else if (s.phase === 'drained') {
+      msg.className = 'msg done';
+      html = '<p><code>node/wezel-1 drained</code>. Na węźle został tylko pod DaemonSetu. Najmniej gotowych replik web w trakcie: ' + s.minReady + ' z ' + c.R + '.' +
+        (s.minReady === 0 ? ' Była przerwa w działaniu: PDB nie chroni, gdy pozwala na zero podów albo go nie ma.' : '') + '</p>';
+    } else if (s.phase === 'maint') {
+      html = '<p>Węzeł pusty: łatki, upgrade kubeleta, restart. Na EKS managed node group robi to sama: dodaje nowe węzły, drenuje stare z poszanowaniem PDB i je usuwa.</p>';
+    } else if (s.phase === 'done') {
+      msg.className = 'msg done';
+      html = '<p><code>kubectl uncordon wezel-1</code>: węzeł znów przyjmuje nowe pody. <strong>Działające pody nie wracają same</strong>, wezel-1 stoi pusty, aż coś nowego powstanie. Wyrównanie: <code>kubectl rollout restart deployment web</code>.</p>';
+    }
+    msg.innerHTML = html;
+    $('c-tick').textContent = 'krok ' + s.stepNo + (cDone() ? ' · koniec' : '');
+    $('c-step').disabled = cDone(); $('c-play').disabled = cDone();
+  }
+  if ($('c-r')) {
+    document.querySelectorAll('#serwis .seg').forEach(function (b) { segInit(b, function (k, v) { cCfg[k] = v; cReset(); }); });
+    $('c-r').addEventListener('input', cReset);
+    ['c-ids', 'c-ede'].forEach(function (id) { $(id).addEventListener('change', cReset); });
+    $('c-reset').addEventListener('click', cReset);
+    cPl = player($('c-step'), $('c-play'), cDoStep, cDone, 1400);
+    cReset();
+  }
+})(this);
+</script>
+</body>
+</html>

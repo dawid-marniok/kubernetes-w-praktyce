@@ -23,19 +23,20 @@ spec:
           - sh
           - -c
           - "env | grep -E 'LOG_LEVEL|DB_PASSWORD'; cat /etc/app/app.properties; sleep 3600"
-        envFrom:
+        envFrom:                   # każdy klucz ConfigMapy = zmienna o tej samej nazwie
         - configMapRef:
             name: przyklad-config
         env:
         - name: DB_PASSWORD
           valueFrom:
-            secretKeyRef:
+            secretKeyRef:          # jeden klucz z Secretu; dla ConfigMapy: configMapKeyRef
               name: przyklad-db
               key: password
         volumeMounts:
         - name: config
           mountPath: /etc/app
           readOnly: true
+          # subPath: app.properties  # montuje jeden plik bez zasłaniania katalogu, ale wtedy plik się NIE odświeża
         resources:
           requests:
             cpu: 10m
@@ -47,6 +48,6 @@ spec:
       - name: config
         configMap:
           name: przyklad-config
-          items:
+          items:                   # tylko wybrane klucze; bez items każdy klucz = plik
           - key: app.properties
-            path: app.properties
+            path: app.properties   # nazwa pliku w mountPath

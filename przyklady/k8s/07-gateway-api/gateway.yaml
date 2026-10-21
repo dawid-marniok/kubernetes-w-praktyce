@@ -1,5 +1,6 @@
 # Gateway = wejście, które stawia zespół platformy: porty, hosty, TLS i to, kto może się podpiąć.
-# Podmień <login> i <DOMENA> (na kind: cały host gw-<login>.local, bez listenera https).
+# Host gw-trener.k8s.marniok.dev (wildcard *.k8s.marniok.dev → NLB Traefika). Kursant: gw-<login>.k8s.marniok.dev
+# (host musi być unikalny na wspólnym Traefiku). Na kind: cały host gw-<login>.local, bez listenera https.
 # Traefik: listener musi mieć port entrypointu Traefika (z chartu: 8000 = web, 8443 = websecure), nie 80/443.
 # Certyfikat zamawia cert-manager na podstawie adnotacji (wymaga w cert-managerze config.enableGatewayAPI: true)
 # i zapisuje go w Secrecie z certificateRefs. Wyzwanie HTTP-01 rozwiązuje ClusterIssuer jak dla Ingressu.
@@ -13,18 +14,18 @@ spec:
   gatewayClassName: traefik      # kubectl get gatewayclass
   listeners:
   - name: http
-    protocol: HTTP
-    port: 8000
-    hostname: gw-<login>.<DOMENA>
+    protocol: HTTP               # HTTP, HTTPS, TLS, TCP, UDP (TCP/UDP/TLS w Traefiku z dodatkowymi entrypointami)
+    port: 8000                   # port entrypointu Traefika (web), nie 80
+    hostname: gw-trener.k8s.marniok.dev   # tylko ten host; bez pola = dowolny
     allowedRoutes:
       namespaces:
-        from: Same               # tylko HTTPRoute z tego samego namespace (wspólna brama: All)
+        from: Same               # Same: routy z namespace Gatewaya; All: z każdego; Selector: z namespace'ów z etykietą
   - name: https
     protocol: HTTPS
     port: 8443
-    hostname: gw-<login>.<DOMENA>
+    hostname: gw-trener.k8s.marniok.dev
     tls:
-      mode: Terminate
+      mode: Terminate            # Terminate: TLS kończy się na bramie; Passthrough: szyfrowany ruch idzie do poda (TLSRoute)
       certificateRefs:
       - name: przyklad-gw-tls    # Secret utworzy cert-manager
     allowedRoutes:

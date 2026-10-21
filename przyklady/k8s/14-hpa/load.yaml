@@ -1,0 +1,28 @@
+# Generator obciążenia: pod w pętli bez przerwy pobiera stronę z http://hpa-service (wget), więc nginx zużywa CPU.
+# Service rozkłada ruch na wszystkie repliki hpa-test, także te dołożone przez HPA.
+# Za słabo? kubectl scale deploy load --replicas=3. Koniec obciążenia: kubectl delete -f load.yaml.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: load
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: load
+  template:
+    metadata:
+      labels:
+        app: load
+    spec:
+      containers:
+      - name: load
+        image: busybox:1.37
+        command: ["sh", "-c", "while true; do wget -q -O- http://hpa-service >/dev/null; done"]
+        resources:
+          requests:
+            cpu: 50m
+            memory: 16Mi
+          limits:
+            cpu: 500m
+            memory: 32Mi

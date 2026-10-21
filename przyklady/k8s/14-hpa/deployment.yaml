@@ -1,0 +1,26 @@
+# Aplikacja pod HPA. Bez pola replicas: liczbą replik rządzi HPA (replicas w pliku nadpisywałoby HPA przy każdym apply).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hpa-test
+spec:
+  selector:
+    matchLabels:
+      app: hpa-test
+  template:
+    metadata:
+      labels:
+        app: hpa-test
+    spec:
+      containers:
+      - name: web
+        image: nginx:1.29
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            cpu: 20m          # od requestu HPA liczy procent; mały request → szybko widać wysoki procent
+            memory: 64Mi
+          limits:
+            cpu: 100m         # pod może zużyć do 500% requestu, więc TARGETS potrafi pokazać np. 300%/50%
+            memory: 128Mi

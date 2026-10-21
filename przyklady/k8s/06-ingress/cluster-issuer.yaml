@@ -10,9 +10,9 @@ spec:
   acme:
     server: https://acme-v02.api.letsencrypt.org/directory
     email: <e-mail>
-    privateKeySecretRef:
+    privateKeySecretRef:            # Secret na klucz konta ACME (tworzy cert-manager)
       name: letsencrypt-prod-key
     solvers:
-    - http01:
+    - http01:                       # HTTP-01: Let's Encrypt pobiera token z http://<host>/.well-known/…; DNS-01 potrzebny do wildcardów
         ingress:
           ingressClassName: traefik     # kubectl get ingressclass

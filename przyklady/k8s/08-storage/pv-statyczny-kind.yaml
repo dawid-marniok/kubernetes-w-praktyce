@@ -1,0 +1,26 @@
+# Tylko kind/lokalnie: statyczny PV na hostPath i PVC, który się z nim zwiąże (ta sama klasa, brak provisionera).
+# PV jest zasobem klastrowym: na EKS utworzy go tylko admin (przykład na prawdziwym dysku: pv-statyczny-ebs.yaml).
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: przyklad-local-pv
+spec:
+  capacity:
+    storage: 2Gi                          # deklarowany rozmiar (hostPath go nie pilnuje)
+  accessModes: [ReadWriteOnce]
+  persistentVolumeReclaimPolicy: Retain   # po usunięciu PVC PV zostaje jako Released (dane też)
+  storageClassName: przyklad-local        # klasa bez obiektu StorageClass: tylko etykieta do dopasowania PV ↔ PVC
+  hostPath:                               # katalog na węźle (kontenerze kind), nie na laptopie
+    path: /tmp/przyklad-local-pv
+    type: DirectoryOrCreate               # utwórz katalog, jeśli go nie ma; inne: Directory, File, FileOrCreate
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: przyklad-local-pvc
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: przyklad-local        # ta sama klasa co w PV
+  resources:
+    requests:
+      storage: 1Gi

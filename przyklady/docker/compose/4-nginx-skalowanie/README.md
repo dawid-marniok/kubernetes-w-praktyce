@@ -1,5 +1,9 @@
 # Skalowanie usługi za nginx
 
+**Cel:** uruchomić usługę w kilku replikach i rozdzielić między nie ruch przez nginx; zmieniać liczbę replik w locie.
+
+**Gdzie:** lokalnie, Docker Desktop. Komendy wydajesz w tym katalogu (`cd przyklady/docker/compose/4-nginx-skalowanie`).
+
 Ta sama lista zakupów co w `3-shoppinglist`, ale usługa `web` działa w kilku replikach, a ruch rozdziela między nie nginx.
 
 ```

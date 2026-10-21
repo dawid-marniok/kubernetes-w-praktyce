@@ -1,0 +1,51 @@
+# Baza na PVC jako Deployment z 1 repliką — tylko do nauki (dane przeżywają restart poda). Na produkcję: operator.
+# Hasło-atrapa; w prawdziwym wdrożeniu Secret.
+# PVC bez storageClassName → klasa domyślna (EKS: gp3, dysk EBS w strefie AZ węzła, na którym wystartuje pod).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: przyklad-pg-data
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: przyklad-postgres
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate                  # RWO: stary pod odpina dysk, zanim nowy go podepnie
+  selector:
+    matchLabels:
+      app: przyklad-postgres
+  template:
+    metadata:
+      labels:
+        app: przyklad-postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:17
+        env:
+        - {name: POSTGRES_DB, value: demo}
+        - {name: POSTGRES_USER, value: demo}
+        - {name: POSTGRES_PASSWORD, value: changeme-demo}
+        - {name: PGDATA, value: /var/lib/postgresql/data/pgdata}   # świeży dysk ext4 (EBS) ma lost+found, a initdb chce pustego katalogu
+        readinessProbe:
+          exec:
+            command: ["pg_isready", "-U", "demo", "-d", "demo"]
+          periodSeconds: 5
+        resources:
+          requests: {cpu: 100m, memory: 256Mi}
+          limits: {cpu: 500m, memory: 512Mi}
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: przyklad-pg-data

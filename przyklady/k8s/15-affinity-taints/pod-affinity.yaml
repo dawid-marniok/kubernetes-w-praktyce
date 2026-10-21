@@ -1,0 +1,34 @@
+# podAffinity: backend musi stać na tym samym węźle co frontend (np. cache obok aplikacji).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: przyklad-frontend
+  labels:
+    app: przyklad-frontend
+spec:
+  containers:
+  - name: web
+    image: nginx:1.29
+    resources:
+      requests: {cpu: 20m, memory: 32Mi}
+      limits: {cpu: 100m, memory: 64Mi}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: przyklad-backend
+spec:
+  affinity:
+    podAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:   # albo preferred… z weight: tylko preferencja
+      - labelSelector:
+          matchLabels:
+            app: przyklad-frontend
+        topologyKey: kubernetes.io/hostname   # „obok” = ten sam węzeł; topology.kubernetes.io/zone = ta sama strefa AZ
+  containers:
+  - name: backend
+    image: busybox:1.37
+    command: ["sh", "-c", "sleep 3600"]
+    resources:
+      requests: {cpu: 10m, memory: 16Mi}
+      limits: {cpu: 100m, memory: 32Mi}

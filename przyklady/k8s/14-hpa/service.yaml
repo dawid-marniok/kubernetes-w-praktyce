@@ -1,0 +1,12 @@
+# ClusterIP: generator obciążenia (load.yaml) działa w klastrze i odpytuje http://hpa-service.
+# LoadBalancer na wspólnym EKS dałby publiczny load balancer AWS (i koszt) — niepotrzebny.
+apiVersion: v1
+kind: Service
+metadata:
+  name: hpa-service
+spec:
+  selector:
+    app: hpa-test
+  ports:
+  - port: 80
+    targetPort: 80

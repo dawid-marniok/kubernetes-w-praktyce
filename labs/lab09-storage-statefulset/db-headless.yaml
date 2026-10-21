@@ -1,0 +1,12 @@
+# Headless Service dla StatefulSetu db (krok 2). clusterIP: None → rekordy DNS db-0.db, db-1.db, …
+apiVersion: v1
+kind: Service
+metadata:
+  name: db
+spec:
+  clusterIP: None
+  selector:
+    app: db
+  ports:
+  - name: http
+    port: 80

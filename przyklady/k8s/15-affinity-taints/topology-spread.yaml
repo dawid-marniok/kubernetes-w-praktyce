@@ -1,0 +1,28 @@
+# topologySpreadConstraints: repliki równo po węzłach. Łagodniejsze niż anti-affinity: działa też przy większej liczbie replik niż węzłów.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: przyklad-nginx-spread
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: przyklad-nginx-spread
+  template:
+    metadata:
+      labels:
+        app: przyklad-nginx-spread
+    spec:
+      topologySpreadConstraints:
+      - maxSkew: 1                             # różnica liczby podów między domenami najwyżej 1
+        topologyKey: kubernetes.io/hostname    # domena: węzeł; topology.kubernetes.io/zone = strefa AZ
+        whenUnsatisfiable: ScheduleAnyway      # ScheduleAnyway: staraj się, ale uruchom; DoNotSchedule: raczej Pending
+        labelSelector:                         # które pody liczyć (zwykle własne repliki)
+          matchLabels:
+            app: przyklad-nginx-spread
+      containers:
+      - name: nginx
+        image: nginx:1.29
+        resources:
+          requests: {cpu: 20m, memory: 32Mi}
+          limits: {cpu: 100m, memory: 64Mi}

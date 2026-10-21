@@ -1,0 +1,30 @@
+# nodeAffinity preferred: woli węzły environment=production, ale bez nich uruchomi się gdziekolwiek.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: przyklad-nginx-preferred
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: przyklad-nginx-preferred
+  template:
+    metadata:
+      labels:
+        app: przyklad-nginx-preferred
+    spec:
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:  # tylko preferencja: dodatkowe punkty w ocenie węzła
+          - weight: 100                 # 1–100: waga tej preferencji względem innych
+            preference:
+              matchExpressions:
+              - key: environment
+                operator: In
+                values: [production]
+      containers:
+      - name: nginx
+        image: nginx:1.29
+        resources:
+          requests: {cpu: 20m, memory: 32Mi}
+          limits: {cpu: 100m, memory: 64Mi}

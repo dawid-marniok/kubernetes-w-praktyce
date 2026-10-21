@@ -1,0 +1,20 @@
+# Ten CronJob ma błąd: w logu zobaczysz dosłownie "$(date)" zamiast daty. Znajdź go i popraw (krok 4).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: hello-cronjob
+spec:
+  schedule: "* * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: hello
+            image: busybox:1.37
+            command: ["/bin/sh", "-c"]
+            args: ["echo 'Scheduled task executed at $(date)'"]
+            resources:
+              requests: {cpu: 10m, memory: 16Mi}
+              limits: {cpu: 100m, memory: 32Mi}

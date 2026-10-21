@@ -1,0 +1,29 @@
+# nodeAffinity required: pody tylko na węzłach z etykietą disktype=ssd. Brak takiego węzła → Pending.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: przyklad-nginx-ssd
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: przyklad-nginx-ssd
+  template:
+    metadata:
+      labels:
+        app: przyklad-nginx-ssd
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:   # twardy warunek przy planowaniu; już działających podów nie rusza
+            nodeSelectorTerms:          # kilka termów = OR, kilka wyrażeń w jednym termie = AND
+            - matchExpressions:
+              - key: disktype
+                operator: In            # In, NotIn, Exists, DoesNotExist, Gt, Lt
+                values: [ssd]
+      containers:
+      - name: nginx
+        image: nginx:1.29
+        resources:
+          requests: {cpu: 20m, memory: 32Mi}
+          limits: {cpu: 100m, memory: 64Mi}

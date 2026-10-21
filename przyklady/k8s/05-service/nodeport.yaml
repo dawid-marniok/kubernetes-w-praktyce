@@ -12,3 +12,4 @@ spec:
   - name: http
     port: 80
     targetPort: http
+    # nodePort: 30080   # 30000–32767; bez pola klaster wybierze wolny port (zalecane)

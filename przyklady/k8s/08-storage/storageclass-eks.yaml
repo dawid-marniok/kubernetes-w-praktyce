@@ -1,0 +1,21 @@
+# Tylko admin klastra: StorageClass to zasób klastrowy (kursant dostanie Forbidden). Kursant tylko wybiera klasę w PVC (storageClassName).
+# Na klastrze szkoleniowym domyślna jest gp3 (reclaimPolicy Delete). Ta klasa zostawia dysk po usunięciu PVC i jest szybsza.
+# Sterowniki CSI w innych chmurach: disk.csi.azure.com (AKS), pd.csi.storage.gke.io (GKE).
+# Provisionery in-tree (kubernetes.io/aws-ebs, azure-disk, gce-pd) usunięto z Kubernetesa — nie używaj ich.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: przyklad-gp3-retain
+  # annotations:
+  #   storageclass.kubernetes.io/is-default-class: "true"   # klasa domyślna (dla PVC bez storageClassName); w klastrze tylko jedna
+provisioner: ebs.csi.aws.com            # sterownik EBS CSI (add-on EKS), tworzy dyski EBS
+parameters:                             # parametry sterownika, każdy CSI ma własne
+  type: gp3                             # typ dysku EBS: gp3, gp2, io2, st1, sc1
+  iops: "6000"                          # gp3: domyślnie 3000
+  throughput: "250"                     # gp3: MiB/s, domyślnie 125
+  encrypted: "true"                     # szyfrowanie KMS (klucz aws/ebs albo własny w kmsKeyId)
+  fsType: ext4                          # system plików: ext4 albo xfs
+reclaimPolicy: Retain                   # Retain: po usunięciu PVC dysk i PV zostają (sprząta admin); Delete: dysk znika razem z PVC
+allowVolumeExpansion: true              # wolno powiększyć PVC (zwiększasz requests.storage); zmniejszyć się nie da
+volumeBindingMode: WaitForFirstConsumer # dysk powstaje dopiero dla poda, w strefie AZ jego węzła;
+                                        # Immediate: od razu przy PVC (dysk może trafić do innej AZ niż pod)

@@ -1,0 +1,14 @@
+# Klaster kind do ćwiczenia: 1 control-plane + 2 workery. Węzły: szkolenie-control-plane, szkolenie-worker, szkolenie-worker2.
+#   kind create cluster --name szkolenie --config kind-config.yaml
+# Ten sam układ węzłów co setup/kind/kind-szkolenie.yaml, tylko bez przekierowań portów.
+# Masz już klaster „szkolenie” z setup/kind.md? Użyj go, nie twórz drugiego.
+# Obraz węzła zbudowany dla kind v0.33.0 (starszy kind może go nie uruchomić).
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+- role: control-plane
+  image: kindest/node:v1.35.8@sha256:07b2536e30b803ed61d1677a79df6115f798ce64c80f9e22f6ed45afd09323c0
+- role: worker
+  image: kindest/node:v1.35.8@sha256:07b2536e30b803ed61d1677a79df6115f798ce64c80f9e22f6ed45afd09323c0
+- role: worker
+  image: kindest/node:v1.35.8@sha256:07b2536e30b803ed61d1677a79df6115f798ce64c80f9e22f6ed45afd09323c0

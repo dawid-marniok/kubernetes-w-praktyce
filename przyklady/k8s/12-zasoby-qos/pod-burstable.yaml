@@ -1,0 +1,13 @@
+# Burstable: jest request albo limit, ale nie wszędzie równe. Najczęstsza klasa.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: przyklad-burstable
+spec:
+  containers:
+  - name: app
+    image: busybox:1.37
+    command: ["sh", "-c", "sleep 3600"]
+    resources:
+      requests: {cpu: 50m, memory: 64Mi}    # requests < limits → Burstable
+      limits: {cpu: 200m, memory: 128Mi}

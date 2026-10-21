@@ -1,0 +1,21 @@
+# Job: przetwarza 5 obrazów w jednym podzie, ponawia porażki (backoffLimit), sprząta się po 10 min (TTL).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: przyklad-thumbnails
+spec:
+  completions: 1                   # ile podów musi skończyć się sukcesem (domyślnie 1)
+  parallelism: 1                   # ile podów działa naraz (domyślnie 1; 0 = Job wstrzymany)
+  backoffLimit: 3                  # ile porażek (restartów kontenera albo podów z błędem), zanim Job = Failed; domyślnie 6
+  activeDeadlineSeconds: 300       # limit czasu całego Joba: po 5 min pody są zabijane, Job = Failed (DeadlineExceeded)
+  ttlSecondsAfterFinished: 600     # 10 min po końcu (sukces albo porażka) Job i jego pody znikają; bez pola zostają na zawsze
+  template:
+    spec:
+      restartPolicy: OnFailure     # OnFailure: restart kontenera w tym samym podzie; Never: porażka = nowy pod; Always niedozwolone
+      containers:
+      - name: thumbnails
+        image: busybox:1.37
+        command: ["sh", "-c", "echo \"start $(date +%T)\"; for i in 1 2 3 4 5; do echo \"obraz $i\"; sleep 2; done; echo koniec"]
+        resources:
+          requests: {cpu: 10m, memory: 16Mi}
+          limits: {cpu: 100m, memory: 32Mi}

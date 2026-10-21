@@ -1,0 +1,41 @@
+# Tylko kind (hostPath blokuje Pod Security baseline): agent widzi logi kontenerów w /var/log/pods
+# (containerd; nie /var/lib/docker/containers — dockershim usunięty w 1.24) i działa też na control-plane.
+# Zabawka: tylko liczy katalogi. „tail -F /var/log/pods/*/*/*.log” czytałby też własny log → pętla.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: przyklad-log-agent
+spec:
+  selector:
+    matchLabels:
+      app: przyklad-log-agent
+  template:
+    metadata:
+      labels:
+        app: przyklad-log-agent
+    spec:
+      tolerations:
+      - key: node-role.kubernetes.io/control-plane     # klucz "master" usunięto w 1.25
+        operator: Exists                               # Exists: dowolna wartość taintu
+        effect: NoSchedule
+      containers:
+      - name: agent
+        image: busybox:1.37
+        command: ["sh", "-c", "while true; do echo \"$NODE_NAME: $(ls /var/log/pods | wc -l) katalogów z logami podów\"; sleep 60; done"]
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        resources:
+          requests: {cpu: 10m, memory: 16Mi}
+          limits: {cpu: 100m, memory: 64Mi}
+        volumeMounts:
+        - name: pods
+          mountPath: /var/log/pods
+          readOnly: true
+      volumes:
+      - name: pods
+        hostPath:                    # katalog z węzła; daje dostęp do węzła, dlatego blokuje go Pod Security baseline
+          path: /var/log/pods
+          type: Directory            # musi istnieć; DirectoryOrCreate: utwórz, jeśli brak

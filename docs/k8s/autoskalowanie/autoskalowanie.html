@@ -1,0 +1,1362 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Autoskalowanie w Kubernetesie</title>
+<meta name="description" content="Dzień 3 — ściąga: HPA (z symulatorem), KEDA, VPA, in-place resize i autoskalowanie węzłów. Jak działają, czym się różnią, kiedy którego użyć.">
+<style>
+:root {
+  --navy: #012438;
+  --acc: #41C0F0;
+  --light: #EBF8FD;
+  --light2: #E1EDF8;
+
+  --bg: #ffffff;
+  --ink: #0f2535;
+  --muted: #557080;
+  --panel: var(--light);
+  --card: #ffffff;
+  --card-line: #b9d3e2;
+  --strong: var(--navy);
+  --on-strong: #ffffff;
+  --strong-title: var(--acc);
+  --head: #0a7aa8;
+  --line: #34505f;
+  --code-bg: var(--light2);
+  --row-alt: #f4fafd;
+  --border: #d5e4ed;
+  --pod-ink: var(--navy);
+
+  --ok: #1d7a44;
+  --ok-bg: #dcf2e4;
+  --bad: #b42318;
+  --bad-bg: #fde3df;
+  --warn: #8a5a00;
+  --warn-bg: #fdf0d2;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #08151e;
+    --ink: #e3eef4;
+    --muted: #9cb4c3;
+    --panel: #0f2532;
+    --card: #142f3f;
+    --card-line: #2c5065;
+    --strong: #0d4b70;
+    --on-strong: #ffffff;
+    --strong-title: #7fd6f7;
+    --head: #41C0F0;
+    --line: #a8c3d2;
+    --code-bg: #12293a;
+    --row-alt: #0d1f2b;
+    --border: #23404f;
+
+    --ok: #6fd99a;
+    --ok-bg: #12382a;
+    --bad: #ff9a8c;
+    --bad-bg: #4a1c18;
+    --warn: #f5c56b;
+    --warn-bg: #3a2c0c;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px 64px; }
+header.hero {
+  background: var(--navy);
+  color: #fff;
+  padding: 40px 0 32px;
+  border-bottom: 6px solid var(--acc);
+}
+header.hero .wrap { padding-bottom: 0; }
+.kicker { color: var(--acc); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; font-size: 13px; margin: 0 0 6px; }
+.kicker a { color: var(--acc); }
+h1 { font-size: clamp(28px, 6vw, 44px); line-height: 1.15; margin: 0 0 12px; }
+.hero p.lead { max-width: 720px; margin: 0; color: #d6e9f3; font-size: 17px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0 0; padding: 0; list-style: none; }
+.chips li { background: rgba(65,192,240,.14); border: 1px solid rgba(65,192,240,.45); color: #e6f6fd; border-radius: 999px; padding: 3px 12px; font-size: 14px; }
+nav.toc { margin: 28px 0 8px; }
+nav.toc ol { display: flex; flex-wrap: wrap; gap: 6px 8px; padding: 0; margin: 0; list-style: none; counter-reset: toc; }
+nav.toc li { counter-increment: toc; }
+nav.toc a { display: inline-block; text-decoration: none; color: var(--ink); background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 4px 10px; font-size: 14px; }
+nav.toc a::before { content: counter(toc) ". "; color: var(--head); font-weight: 700; }
+nav.toc a:hover, nav.toc a:focus-visible { border-color: var(--acc); }
+section { margin-top: 48px; scroll-margin-top: 16px; }
+h2 { font-size: clamp(22px, 4.5vw, 28px); line-height: 1.25; margin: 0 0 10px; display: flex; gap: 12px; align-items: baseline; }
+h2 .n { color: var(--acc); font-weight: 800; font-size: 1.25em; line-height: 1; }
+h3 { font-size: 18px; margin: 24px 0 8px; }
+p { margin: 0 0 12px; }
+ul, ol { padding-left: 22px; }
+li { margin-bottom: 4px; }
+a { color: var(--head); }
+code, kbd, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: .9em; }
+:not(pre) > code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+pre { background: var(--code-bg); padding: 12px 14px; border-radius: 8px; overflow-x: auto; margin: 0 0 12px; font-size: 14px; line-height: 1.5; }
+.key { border-left: 5px solid var(--acc); background: var(--panel); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; }
+.key strong { color: var(--ink); }
+.key.bad { border-left-color: var(--bad); }
+.key p:last-child, .key ul:last-child { margin-bottom: 0; }
+figure { margin: 20px 0; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
+figure .scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+figure svg { display: block; width: 100%; height: auto; }
+figcaption { font-size: 14px; color: var(--muted); margin-top: 8px; }
+figcaption .hint { display: none; }
+@media (max-width: 640px) {
+  figure { padding: 8px; margin-left: -4px; margin-right: -4px; }
+  figure .scroll svg.wide { min-width: 760px; }
+  figcaption .hint { display: inline; }
+}
+.grid2 { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+.grid2 > * { min-width: 0; }
+@media (min-width: 820px) { .grid2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.tablewrap { overflow-x: auto; margin: 16px 0; border: 1px solid var(--border); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+thead th { background: var(--navy); color: #fff; font-size: 14px; }
+tbody tr:nth-child(even) { background: var(--row-alt); }
+tbody tr:last-child td { border-bottom: 0; }
+td:first-child { font-weight: 700; }
+table.cmp { font-size: 14px; }
+table.cmp td { min-width: 120px; }
+@media (max-width: 760px) {
+  table.stack thead { display: none; }
+  table.stack, table.stack tbody, table.stack tr, table.stack td { display: block; width: 100%; min-width: 0; }
+  table.stack tr { border-bottom: 1px solid var(--border); padding: 6px 0; }
+  table.stack td { border: 0; padding: 4px 12px; }
+  table.stack td:first-child { font-size: 16px; color: var(--head); }
+  table.stack td[data-h]::before { content: attr(data-h); display: block; font-size: 12px; font-weight: 700; color: var(--head); text-transform: uppercase; letter-spacing: .05em; }
+  table.stack td:first-child::before { display: none; }
+}
+.yes { color: var(--ok); font-weight: 700; }
+.no { color: var(--bad); font-weight: 700; }
+.cheat { display: grid; gap: 10px; grid-template-columns: 1fr; }
+@media (min-width: 760px) { .cheat { grid-template-columns: 1fr 1fr; } }
+.cheat div { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--bg); min-width: 0; }
+.cheat pre { margin: 0 0 6px; font-size: 13.5px; }
+.cheat p { margin: 0; font-size: 14px; color: var(--muted); }
+footer { margin-top: 56px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--border); padding-top: 16px; }
+.js-only[hidden] { display: none; }
+
+/* --- SVG --- */
+svg text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; fill: var(--ink); font-size: 14px; }
+svg .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+svg .b { font-weight: 700; }
+svg .s { font-size: 12.5px; fill: var(--muted); }
+svg .h { font-size: 13px; font-weight: 800; letter-spacing: .06em; fill: var(--head); }
+svg .ttl { font-size: 16px; font-weight: 800; fill: var(--strong-title); }
+svg .on { fill: var(--on-strong); }
+svg .on.s { fill: var(--on-strong); opacity: .85; }
+svg .pod-t { fill: var(--pod-ink); font-weight: 700; font-size: 12.5px; }
+svg .panel2 { fill: var(--panel); stroke: var(--card-line); stroke-width: 1; }
+svg .box { fill: var(--card); stroke: var(--card-line); stroke-width: 1.2; }
+svg .strong { fill: var(--strong); }
+svg .pod { fill: var(--acc); }
+svg .pod-off { fill: var(--card); stroke: var(--head); stroke-width: 1.5; stroke-dasharray: 4 3; }
+svg .ln { fill: none; stroke: var(--line); stroke-width: 1.8; }
+svg .ln.dash { stroke-dasharray: 6 5; }
+svg .mk { fill: var(--line); }
+svg .num circle { fill: var(--strong); stroke: var(--acc); stroke-width: 2; }
+svg .num text { fill: #fff; font-weight: 800; font-size: 14px; }
+svg .lbl { font-size: 12.5px; fill: var(--muted); font-style: italic; }
+svg .formula { font-size: 14px; font-weight: 700; fill: var(--head); }
+
+/* podświetlanie kroków na diagramach */
+.flow .step, .flow .num { transition: opacity .2s; }
+.flow.has-active .step { opacity: .18; }
+.flow.has-active .num { opacity: .35; }
+.flow[data-active="1"] .s1, .flow[data-active="2"] .s2, .flow[data-active="3"] .s3,
+.flow[data-active="4"] .s4, .flow[data-active="5"] .s5, .flow[data-active="6"] .s6 { opacity: 1; }
+.flow[data-active="1"] .s1 .ln, .flow[data-active="2"] .s2 .ln, .flow[data-active="3"] .s3 .ln,
+.flow[data-active="4"] .s4 .ln, .flow[data-active="5"] .s5 .ln, .flow[data-active="6"] .s6 .ln { stroke: var(--acc); stroke-width: 3.4; }
+.flow[data-active="1"] .num.s1 circle, .flow[data-active="2"] .num.s2 circle, .flow[data-active="3"] .num.s3 circle,
+.flow[data-active="4"] .num.s4 circle, .flow[data-active="5"] .num.s5 circle, .flow[data-active="6"] .num.s6 circle { fill: var(--acc); }
+.flow[data-active="1"] .num.s1 text, .flow[data-active="2"] .num.s2 text, .flow[data-active="3"] .num.s3 text,
+.flow[data-active="4"] .num.s4 text, .flow[data-active="5"] .num.s5 text, .flow[data-active="6"] .num.s6 text { fill: var(--navy); }
+.js .flow .num { cursor: pointer; }
+
+ol.steps { list-style: none; padding: 0; margin: 12px 0 0; counter-reset: st; display: grid; gap: 8px; }
+ol.steps li { counter-increment: st; position: relative; padding: 10px 14px 10px 52px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); margin: 0; }
+ol.steps li::before { content: counter(st); position: absolute; left: 12px; top: 10px; width: 28px; height: 28px; border-radius: 50%; background: var(--strong); color: #fff; font-weight: 800; display: grid; place-items: center; font-size: 15px; border: 2px solid var(--acc); }
+.js ol.steps li { cursor: pointer; }
+ol.steps li.on { border-color: var(--acc); box-shadow: 0 0 0 2px var(--acc) inset; }
+ol.steps li.on::before { background: var(--acc); color: var(--navy); }
+ol.steps li:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; }
+.stepnav { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 0; }
+.stepnav button { font: inherit; font-size: 14px; padding: 6px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--ink); cursor: pointer; }
+.stepnav button:hover, .stepnav button:focus-visible { border-color: var(--acc); }
+.stepnav[hidden] { display: none; }
+
+/* --- pody (wspólne) --- */
+.pod-chip {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 26px; height: 26px; padding: 0 4px; border-radius: 6px;
+  font: 700 11px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: var(--acc); color: var(--navy); border: 2px solid transparent;
+  transition: width .3s, height .3s;
+}
+.pod-chip.starting { background: var(--card); color: var(--head); border: 2px dashed var(--head); }
+.pod-chip.big { min-width: 44px; height: 40px; }
+.pod-chip.off { background: transparent; color: var(--muted); border: 2px dashed var(--card-line); }
+.node-chip { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 30px; border-radius: 6px; background: var(--strong); color: var(--on-strong); font: 700 11px/1 ui-monospace, Menlo, monospace; }
+.node-chip.new { background: transparent; color: var(--head); border: 2px dashed var(--head); }
+
+/* --- 1. przegląd --- */
+.modes { display: grid; gap: 12px; grid-template-columns: 1fr; }
+@media (min-width: 640px) { .modes { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 960px) { .modes { grid-template-columns: repeat(3, 1fr); } }
+.mode { border: 1px solid var(--border); border-radius: 12px; background: var(--bg); padding: 12px 14px; min-width: 0; }
+.mode h3 { margin: 0 0 2px; font-size: 17px; }
+.mode .tag { font-size: 13px; color: var(--muted); margin: 0 0 8px; }
+.mode p { font-size: 14.5px; margin: 8px 0 0; }
+.vis { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; background: var(--panel); border-radius: 8px; padding: 8px 10px; min-height: 56px; }
+.vis .arr { color: var(--muted); font-weight: 700; padding: 0 4px; }
+.vis .cap { font-size: 12px; color: var(--muted); width: 100%; }
+.vis .q { font: 700 11.5px/1 ui-monospace, Menlo, monospace; color: var(--head); border: 1.5px solid var(--card-line); background: var(--card); border-radius: 5px; padding: 6px 6px; }
+
+/* --- symulator HPA --- */
+.sim-controls { display: grid; gap: 12px 20px; grid-template-columns: 1fr; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+@media (min-width: 600px) { .sim-controls { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 900px) { .sim-controls { grid-template-columns: repeat(3, 1fr); } }
+.ctl { min-width: 0; }
+.ctl label, .ctl .lab { display: flex; justify-content: space-between; gap: 8px; font-weight: 700; font-size: 15px; }
+.ctl output { font: 700 15px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--head); }
+.ctl small { display: block; color: var(--muted); font-size: 13px; line-height: 1.4; }
+input[type=range] { width: 100%; accent-color: var(--head); margin: 6px 0 2px; }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 2px; }
+.seg button { font: inherit; font-size: 14px; padding: 4px 11px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel); color: var(--ink); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--strong); color: var(--on-strong); border-color: var(--strong); }
+.seg button:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; align-items: center; }
+button.b {
+  font: inherit; font-size: 15px; padding: 7px 16px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--panel); color: var(--ink); cursor: pointer;
+}
+button.b.primary { background: var(--strong); color: var(--on-strong); border-color: var(--strong); font-weight: 700; }
+button.b:hover, button.b:focus-visible { border-color: var(--acc); }
+button.b:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; }
+button.b:disabled { opacity: .45; cursor: not-allowed; }
+.tickno { font-size: 14px; color: var(--muted); margin-left: auto; }
+.simout { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+.stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin: 0 0 10px; }
+@media (min-width: 640px) { .stats { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.stat { background: var(--panel); border-radius: 8px; padding: 6px 8px; min-width: 0; }
+.stat b { display: block; font: 800 19px/1.25 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+.stat span { display: block; font-size: 12.5px; color: var(--muted); line-height: 1.3; }
+.stat.warn b { color: var(--bad); }
+.formula-box { font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--code-bg); border-radius: 8px; padding: 10px 12px; overflow-wrap: anywhere; }
+.formula-box .res { color: var(--head); font-weight: 800; }
+.formula-box .dim { color: var(--muted); }
+.podrow { display: flex; flex-wrap: wrap; gap: 5px; margin: 10px 0 0; min-height: 30px; align-items: center; }
+.podrow .lim { font-size: 12.5px; color: var(--muted); margin-left: 4px; }
+.msg { margin: 10px 0 0; font-size: 14.5px; min-height: 3.2em; border-left: 4px solid var(--acc); padding: 4px 10px; background: var(--panel); border-radius: 0 6px 6px 0; }
+.msg.stuck { border-left-color: var(--bad); }
+.msg.hold { border-left-color: var(--warn); }
+.msg.done { border-left-color: var(--ok); }
+.hist { margin-top: 12px; }
+.hist .ht { font-size: 13px; color: var(--muted); margin-bottom: 4px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.bars { position: relative; display: flex; align-items: flex-end; gap: 2px; height: 80px; border-bottom: 1.5px solid var(--card-line); }
+.bar { flex: 1 1 0; min-width: 0; max-width: 22px; background: var(--acc); border-radius: 3px 3px 0 0; position: relative; }
+.bar.down { background: var(--head); }
+.bar .ld { position: absolute; left: 0; right: 0; border-top: 2px solid var(--bad); }
+
+/* --- tryby VPA --- */
+dl.facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 0; font-size: 15px; }
+dl.facts dt { font-weight: 700; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 14px; }
+dl.facts dd { margin: 0; min-width: 0; }
+@media (max-width: 480px) { dl.facts { grid-template-columns: 1fr; } dl.facts dd { margin-bottom: 6px; } }
+.oneliners { list-style: none; padding: 0; margin: 12px 0; display: grid; gap: 8px; }
+.oneliners li { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; margin: 0; }
+.oneliners b { color: var(--head); }
+.loop { display: grid; gap: 6px; grid-template-columns: 1fr; counter-reset: lp; padding: 0; list-style: none; margin: 12px 0; }
+@media (min-width: 760px) { .loop { grid-template-columns: repeat(4, 1fr); } }
+.loop li { counter-increment: lp; background: var(--bg); border: 1px solid var(--border); border-top: 4px solid var(--bad); border-radius: 8px; padding: 8px 10px; font-size: 14.5px; margin: 0; }
+.loop li::before { content: counter(lp) ". "; font-weight: 800; color: var(--bad); }
+
+/* --- kiedy co --- */
+.decide { display: grid; gap: 10px; grid-template-columns: 1fr; }
+@media (min-width: 760px) { .decide { grid-template-columns: 1fr 1fr; } }
+.decide div { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--bg); min-width: 0; }
+.decide .q { font-weight: 700; margin: 0 0 4px; }
+.decide .a { margin: 0; font-size: 14.5px; }
+.decide .a b { color: var(--head); }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="kicker">Dzień 3 · ściąga · <a href="README.md">wersja tekstowa</a></p>
+    <h1>Autoskalowanie</h1>
+    <p class="lead">Kubernetes może sam dokładać pody, powiększać je albo dokładać węzły. Każdy z tych mechanizmów reaguje na inny sygnał i rozwiązuje inny problem. Poniżej zobaczysz, jak działa każdy z nich, które są wbudowane, a które trzeba doinstalować.</p>
+    <ul class="chips" aria-label="Kontekst">
+      <li>HPA · autoscaling/v2</li>
+      <li>metrics-server: add-on EKS</li>
+      <li>KEDA i VPA: do doinstalowania</li>
+      <li>in-place resize: GA w 1.35</li>
+      <li>k8s-sages: 3 węzły, stała liczba</li>
+      <li>Kubernetes 1.35</li>
+    </ul>
+  </div>
+</header>
+
+<main class="wrap">
+<nav class="toc" aria-label="Spis treści">
+  <ol>
+    <li><a href="#przeglad">Pięć mechanizmów</a></li>
+    <li><a href="#hpa">Jak działa HPA</a></li>
+    <li><a href="#symulator">Symulator HPA</a></li>
+    <li><a href="#keda">KEDA</a></li>
+    <li><a href="#vpa">VPA</a></li>
+    <li><a href="#resize">In-place resize</a></li>
+    <li><a href="#wezly">Węzły</a></li>
+    <li><a href="#porownanie">Porównanie</a></li>
+    <li><a href="#kiedy">Kiedy co</a></li>
+    <li><a href="#sciaga">Komendy</a></li>
+  </ol>
+</nav>
+
+<!-- 1 ============================================================ -->
+<section id="przeglad">
+  <h2><span class="n">1</span> Pięć mechanizmów, pięć różnych odpowiedzi</h2>
+  <p>„Aplikacji brakuje zasobów” można rozwiązać na kilka sposobów: więcej podów, większe pody albo więcej węzłów. W jednym zdaniu każdy:</p>
+  <ul class="oneliners">
+    <li><b>HPA</b> dokłada podów (scale out).</li>
+    <li><b>VPA</b> robi pody większe (scale up).</li>
+    <li><b>In-place resize</b> to mechanizm, dzięki któremu VPA może zmienić rozmiar bez restartu poda.</li>
+    <li><b>KEDA</b> skaluje według zdarzeń, np. długości kolejki, i potrafi zejść do zera. Pod spodem i tak steruje HPA.</li>
+    <li><b>Cluster Autoscaler / Karpenter</b> dokładają węzły, gdy pody nie mieszczą się na istniejących.</li>
+  </ul>
+
+  <div class="modes">
+    <div class="mode">
+      <h3>HPA</h3>
+      <p class="tag">wbudowany · więcej podów</p>
+      <div class="vis" aria-label="Dwa pody zamieniają się w cztery">
+        <span class="pod-chip"></span><span class="pod-chip"></span>
+        <span class="arr">→</span>
+        <span class="pod-chip"></span><span class="pod-chip"></span><span class="pod-chip starting"></span><span class="pod-chip starting"></span>
+      </div>
+      <p>Liczy procent zużycia CPU względem <code>requests</code> i zmienia <code>replicas</code> w Deploymencie.</p>
+    </div>
+    <div class="mode">
+      <h3>VPA</h3>
+      <p class="tag">do doinstalowania · większe pody</p>
+      <div class="vis" aria-label="Mały pod zastąpiony większym">
+        <span class="pod-chip"></span><span class="arr">→</span><span class="pod-chip big starting">nowy</span>
+        <span class="cap">domyślnie przez eksmisję i nowy pod</span>
+      </div>
+      <p>Z historii zużycia wylicza <code>requests</code> i wpisuje je podom.</p>
+    </div>
+    <div class="mode">
+      <h3>In-place resize</h3>
+      <p class="tag">wbudowany od 1.35 (GA) · ten sam pod</p>
+      <div class="vis" aria-label="Ten sam pod rośnie bez restartu">
+        <span class="pod-chip">x2k</span><span class="arr">→</span><span class="pod-chip big">x2k</span>
+        <span class="cap">ta sama nazwa, to samo IP</span>
+      </div>
+      <p>Zmiana <code>requests</code>/<code>limits</code> działającego poda, bez restartu kontenera.</p>
+    </div>
+    <div class="mode">
+      <h3>KEDA</h3>
+      <p class="tag">do doinstalowania · zdarzenia, zero</p>
+      <div class="vis" aria-label="Pusta kolejka: zero podów; 120 wiadomości: wiele podów">
+        <span class="q">kolejka 0</span><span class="pod-chip off">0</span>
+        <span class="arr">·</span>
+        <span class="q">kolejka 120</span><span class="pod-chip"></span><span class="pod-chip"></span><span class="pod-chip"></span><span class="pod-chip starting"></span>
+      </div>
+      <p>Patrzy na źródło zdarzeń (SQS, Kafka, Prometheus, cron…) i steruje HPA.</p>
+    </div>
+    <div class="mode">
+      <h3>Cluster Autoscaler / Karpenter</h3>
+      <p class="tag">dodatek na poziomie klastra · więcej węzłów</p>
+      <div class="vis" aria-label="Trzy węzły, czwarty dokładany">
+        <span class="node-chip">EC2</span><span class="node-chip">EC2</span><span class="node-chip">EC2</span><span class="arr">→</span><span class="node-chip new">+1</span>
+      </div>
+      <p>Reaguje na pody <code>Pending</code>, które nie mieszczą się na żadnym węźle.</p>
+    </div>
+    <div class="mode">
+      <h3>Na naszym klastrze</h3>
+      <p class="tag">k8s-sages</p>
+      <p style="margin-top:0">Działają <strong>HPA</strong> (metrics-server jest) i <strong>in-place resize</strong>. KEDA, VPA i Karpentera nie ma. Węzłów jest stała liczba (3), a Twój namespace ma ResourceQuota, więc HPA może chcieć więcej podów, niż faktycznie powstanie.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 2 ============================================================ -->
+<section id="hpa">
+  <h2><span class="n">2</span> Jak działa HPA</h2>
+  <p>HorizontalPodAutoscaler to obiekt w API (<code>autoscaling/v2</code>) i kontroler w kube-controller-managerze. Kontroler kręci się w pętli <strong>co 15 s</strong>. W każdym obrocie czyta zużycie podów, liczy, ile replik byłoby dobrze, i zapisuje tę liczbę w Deploymencie. <span class="js-only" hidden>Kliknij krok albo numer na diagramie, żeby podświetlić jego strzałkę.</span></p>
+
+  <figure>
+    <div class="scroll">
+    <svg class="wide flow" id="flow-hpa" viewBox="0 0 1000 400" role="img" aria-labelledby="hpa-t hpa-d">
+      <title id="hpa-t">Pętla HPA w pięciu krokach</title>
+      <desc id="hpa-d">kubelet na węźle podaje zużycie, metrics-server udostępnia je przez Metrics API w kube-apiserverze, kontroler HPA co 15 sekund je czyta, liczy liczbę replik i zapisuje ją w Deploymencie, który tworzy lub usuwa pody.</desc>
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk" d="M0 0L10 5L0 10z"/></marker>
+      </defs>
+      <!-- węzły -->
+      <rect class="panel2" x="20" y="200" width="300" height="180" rx="12"/>
+      <text class="h" x="34" y="224">WĘZŁY ROBOCZE</text>
+      <rect class="strong" x="34" y="236" width="140" height="60" rx="10"/>
+      <text class="ttl" x="104" y="262" text-anchor="middle">kubelet</text>
+      <text class="on s mono" x="104" y="282" text-anchor="middle">/metrics/resource</text>
+      <rect class="pod" x="186" y="236" width="36" height="60" rx="7"/><text class="pod-t" x="204" y="270" text-anchor="middle">Pod</text>
+      <rect class="pod" x="230" y="236" width="36" height="60" rx="7"/><text class="pod-t" x="248" y="270" text-anchor="middle">Pod</text>
+      <rect class="pod" x="274" y="236" width="36" height="60" rx="7"/><text class="pod-t" x="292" y="270" text-anchor="middle">Pod</text>
+      <text class="s" x="34" y="326">zużycie CPU i pamięci</text>
+      <text class="s" x="34" y="346">każdego kontenera, „teraz”</text>
+
+      <rect class="box" x="40" y="40" width="240" height="72" rx="8"/>
+      <text class="b" x="160" y="68" text-anchor="middle">metrics-server</text>
+      <text class="s" x="160" y="90" text-anchor="middle">add-on EKS · ostatni pomiar</text>
+
+      <rect class="strong" x="380" y="150" width="240" height="90" rx="10"/>
+      <text class="ttl" x="500" y="182" text-anchor="middle" style="font-size:17px">kube-apiserver</text>
+      <text class="on s mono" x="500" y="204" text-anchor="middle">metrics.k8s.io</text>
+      <text class="on s" x="500" y="224" text-anchor="middle">obiekty HPA, Deployment, Pod</text>
+
+      <rect class="box" x="700" y="16" width="280" height="120" rx="8"/>
+      <text class="b" x="840" y="44" text-anchor="middle">kontroler HPA</text>
+      <text class="s" x="840" y="64" text-anchor="middle">w kube-controller-manager</text>
+      <text class="formula mono" x="840" y="94" text-anchor="middle">ceil(3 × 120% / 50%) = 8</text>
+      <text class="s" x="840" y="118" text-anchor="middle">pętla co 15 s</text>
+
+      <rect class="box" x="700" y="214" width="280" height="62" rx="8"/>
+      <text class="b" x="840" y="240" text-anchor="middle">Deployment web</text>
+      <text class="s mono" x="840" y="262" text-anchor="middle">spec.replicas: 3 → 8</text>
+
+      <rect class="panel2" x="700" y="296" width="280" height="96" rx="12"/>
+      <text class="h" x="714" y="318">REPLICASET → PODY</text>
+      <rect class="pod" x="714" y="332" width="26" height="44" rx="5"/>
+      <rect class="pod" x="746" y="332" width="26" height="44" rx="5"/>
+      <rect class="pod" x="778" y="332" width="26" height="44" rx="5"/>
+      <rect class="pod-off" x="810" y="332" width="26" height="44" rx="5"/>
+      <rect class="pod-off" x="842" y="332" width="26" height="44" rx="5"/>
+      <rect class="pod-off" x="874" y="332" width="26" height="44" rx="5"/>
+      <rect class="pod-off" x="906" y="332" width="26" height="44" rx="5"/>
+      <rect class="pod-off" x="938" y="332" width="26" height="44" rx="5"/>
+
+      <!-- strzałki -->
+      <g class="step s1"><path class="ln" d="M160 196 V118" marker-end="url(#ah)"/><text class="lbl" x="172" y="160">pobiera zużycie</text></g>
+      <g class="step s2"><path class="ln" d="M284 76 H500 V144" marker-end="url(#ah)"/><text class="lbl" x="296" y="66">rejestruje metrics.k8s.io</text></g>
+      <g class="step s3"><path class="ln" d="M624 176 H770 V140" marker-start="url(#ah)" marker-end="url(#ah)"/><text class="lbl" x="632" y="198">czyta HPA, pody, metryki</text></g>
+      <g class="step s4"><rect class="ln dash" x="694" y="10" width="292" height="132" rx="12"/></g>
+      <g class="step s5">
+        <path class="ln" d="M900 140 V208" marker-end="url(#ah)"/>
+        <path class="ln" d="M840 278 V292" marker-end="url(#ah)"/>
+        <text class="lbl" x="888" y="184" text-anchor="end">zapis /scale</text>
+      </g>
+
+      <!-- numery -->
+      <g class="num s1" data-step="1"><circle cx="134" cy="156" r="14"/><text x="134" y="161" text-anchor="middle">1</text></g>
+      <g class="num s2" data-step="2"><circle cx="420" cy="100" r="14"/><text x="420" y="105" text-anchor="middle">2</text></g>
+      <g class="num s3" data-step="3"><circle cx="660" cy="152" r="14"/><text x="660" y="157" text-anchor="middle">3</text></g>
+      <g class="num s4" data-step="4"><circle cx="672" cy="76" r="14"/><text x="672" y="81" text-anchor="middle">4</text></g>
+      <g class="num s5" data-step="5"><circle cx="930" cy="176" r="14"/><text x="930" y="181" text-anchor="middle">5</text></g>
+    </svg>
+    </div>
+    <figcaption>Przykład: 3 pody, <code>requests.cpu: 200m</code>, każdy zużywa 240m, czyli 120% requestu. Cel 50%. <span class="hint">Na telefonie przewiń diagram w bok.</span></figcaption>
+  </figure>
+
+  <ol class="steps" id="steps-hpa">
+    <li data-step="1"><strong>metrics-server zbiera zużycie.</strong> Pyta kubelety o bieżące zużycie CPU i pamięci każdego kontenera. Trzyma tylko ostatni pomiar, bez historii. Na EKS instaluje się jako add-on. Z tego samego źródła korzysta <code>kubectl top</code>.</li>
+    <li data-step="2"><strong>Metrics API.</strong> metrics-server rejestruje w kube-apiserverze API <code>metrics.k8s.io</code> (agregacja API). Dla kontrolera HPA to zwykłe API Kubernetesa. Bez metrics-servera HPA na CPU pokazuje <code>&lt;unknown&gt;</code>.</li>
+    <li data-step="3"><strong>Co 15 s kontroler HPA czyta dane.</strong> Obiekt HPA, pody Deploymentu (po selektorze), ich zużycie z Metrics API i ich <code>requests</code> ze specyfikacji.</li>
+    <li data-step="4"><strong>Liczy liczbę replik.</strong> <code>desiredReplicas = ceil(currentReplicas × currentMetric / target)</code>. Procent liczy względem <code>requests</code>, nie limitów, więc może przekroczyć 100%. Gdy wynik różni się od obecnego o mniej niż ok. 10% (tolerancja), nic nie zmienia. Potem stosuje <code>behavior</code> (okna stabilizacji, tempo) i przycina do <code>minReplicas</code>/<code>maxReplicas</code>.</li>
+    <li data-step="5"><strong>Zapisuje repliki w Deploymencie.</strong> Przez podzasób <code>/scale</code> zmienia <code>spec.replicas</code>. Dalej działa zwykły mechanizm: ReplicaSet tworzy albo usuwa pody, scheduler szuka dla nich miejsca. Quota i wolne miejsce na węzłach nadal obowiązują.</li>
+  </ol>
+  <div class="stepnav" data-for="hpa" hidden>
+    <button type="button" data-act="prev">← poprzedni krok</button>
+    <button type="button" data-act="next">następny krok →</button>
+    <button type="button" data-act="all">pokaż wszystko</button>
+  </div>
+
+  <div class="key bad"><strong>Bez <code>requests</code> nie ma HPA na procentach.</strong> <code>averageUtilization: 50</code> znaczy „50% requestu”. Gdy kontener nie ma <code>requests.cpu</code>, HPA nie ma od czego liczyć: <code>TARGETS</code> pokazuje <code>&lt;unknown&gt;/50%</code>, warunek <code>ScalingActive=False</code>, zdarzenie <code>FailedGetResourceMetric</code> (<code>missing request for cpu</code>). Rozwiązanie: ustaw <code>requests</code> albo użyj celu bezwzględnego <code>type: AverageValue</code> (np. <code>averageValue: 200m</code>).</div>
+</section>
+
+<!-- 3 ============================================================ -->
+<section id="symulator">
+  <h2><span class="n">3</span> Symulator HPA</h2>
+  <p>Ustaw obciążenie i parametry HPA. Każde kliknięcie „pętla HPA” to jeden obrót kontrolera (15 s). Zobaczysz wzór z Twoimi liczbami, wpływ tolerancji, domyślnego tempa skalowania w górę i okna stabilizacji przy schodzeniu w dół.</p>
+
+  <figure>
+    <div class="sim-controls">
+      <div class="ctl">
+        <label for="in-load">łączne zużycie CPU <output id="out-load" for="in-load">720m</output></label>
+        <input type="range" id="in-load" min="0" max="4000" step="40" value="720">
+        <small>ruch rośnie → aplikacja zużywa więcej CPU; dzieli się po równo na pody</small>
+      </div>
+      <div class="ctl">
+        <span class="lab" id="lab-req">requests.cpu na pod <output id="out-req">200m</output></span>
+        <div class="seg" id="seg-req" role="group" aria-labelledby="lab-req">
+          <button type="button" data-v="0" aria-pressed="false">brak</button>
+          <button type="button" data-v="100" aria-pressed="false">100m</button>
+          <button type="button" data-v="200" aria-pressed="true">200m</button>
+          <button type="button" data-v="500" aria-pressed="false">500m</button>
+        </div>
+        <small>od tego HPA liczy procent</small>
+      </div>
+      <div class="ctl">
+        <label for="in-target">cel averageUtilization <output id="out-target" for="in-target">50%</output></label>
+        <input type="range" id="in-target" min="20" max="90" step="5" value="50">
+        <small>średnie zużycie, które HPA ma utrzymać</small>
+      </div>
+      <div class="ctl">
+        <label for="in-min">minReplicas <output id="out-min" for="in-min">1</output></label>
+        <input type="range" id="in-min" min="1" max="5" value="1">
+        <small>HPA nie zejdzie niżej (do zera tylko z KEDA)</small>
+      </div>
+      <div class="ctl">
+        <label for="in-max">maxReplicas <output id="out-max" for="in-max">10</output></label>
+        <input type="range" id="in-max" min="1" max="20" value="10">
+        <small>HPA nie wejdzie wyżej, nawet przy 500% zużycia</small>
+      </div>
+      <div class="ctl">
+        <label for="in-win">okno scaleDown <output id="out-win" for="in-win">300 s</output></label>
+        <input type="range" id="in-win" min="0" max="600" step="60" value="300">
+        <small><code>behavior.scaleDown.stabilizationWindowSeconds</code>, domyślnie 300</small>
+      </div>
+    </div>
+
+    <div class="btns">
+      <button type="button" class="b primary" id="btn-tick">pętla HPA (+15 s) →</button>
+      <button type="button" class="b" id="btn-play" aria-pressed="false">odtwarzaj</button>
+      <button type="button" class="b" id="btn-reset">od nowa</button>
+      <span class="tickno" id="sim-time" aria-live="polite">czas 0 s</span>
+    </div>
+
+    <div class="simout">
+      <div class="stats">
+        <div class="stat"><b id="st-n">3</b><span>repliki teraz</span></div>
+        <div class="stat"><b id="st-pp">240m</b><span>zużycie na pod</span></div>
+        <div class="stat" id="st-util-box"><b id="st-util">120%</b><span>średnio z requestu</span></div>
+        <div class="stat"><b id="st-targets">120%/50%</b><span>kolumna TARGETS</span></div>
+      </div>
+      <div class="formula-box" id="formula" aria-live="polite"></div>
+      <div class="podrow" id="pods" aria-label="Pody"></div>
+      <p class="msg" id="sim-msg" aria-live="polite"></p>
+      <div class="hist">
+        <div class="ht"><span>repliki w kolejnych pętlach (czerwona kreska = ile podów potrzeba, żeby trafić w cel)</span><span id="hist-range"></span></div>
+        <div class="bars" id="bars" role="img"></div>
+      </div>
+    </div>
+    <figcaption>Model jest uproszczony: obciążenie dzieli się po równo, nowe pody od razu przyjmują ruch, nie ma limitów CPU ani quoty. W klastrze nowe pody startują kilkadziesiąt sekund, a metryki spóźniają się o kolejne kilkanaście, więc reakcja jest wolniejsza.</figcaption>
+  </figure>
+
+  <div class="key"><strong>Spróbuj:</strong> ustaw 1600m i kliknij kilka razy pętlę: repliki rosną od razu, ale najwyżej o max(+100%, +4 pody) na pętlę. Potem zmniejsz obciążenie do 200m: wzór od razu pokaże mniej replik, a HPA i tak czeka, aż wysokie rekomendacje wypadną z okna 300 s. Na koniec kliknij „brak” przy requests.</div>
+
+  <div class="grid2">
+    <div>
+      <h3 style="margin-top:0">Manifest</h3>
+<pre>apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: web
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: web
+  minReplicas: 1
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 50   # % requestu
+  behavior:                      # opcjonalne
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Pods
+        value: 1                 # max 1 pod
+        periodSeconds: 60        # na minutę</pre>
+      <p>Szybko: <code>kubectl autoscale deploy web --cpu-percent=50 --min=1 --max=10</code>. Gotowe pliki: <a href="../../../przyklady/k8s/14-hpa/"><code>przyklady/k8s/14-hpa/</code></a>, ćwiczysz w <a href="../../../labs/d3-lab11-zasoby-quota-hpa/">lab11</a>.</p>
+    </div>
+    <div>
+      <h3 style="margin-top:0"><code>behavior</code>: tempo i okna</h3>
+      <div class="tablewrap" style="margin-top:0">
+        <table>
+          <thead><tr><th>Domyślnie</th><th>scaleUp</th><th>scaleDown</th></tr></thead>
+          <tbody>
+            <tr><td>okno stabilizacji</td><td>0 s: od razu</td><td>300 s: bierze <strong>najwyższą</strong> rekomendację z ostatnich 5 min</td></tr>
+            <tr><td>tempo</td><td>max(+100%, +4 pody) na 15 s</td><td>do −100% na 15 s (ogranicza je okno)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Okno stabilizacji chroni przed „szarpaniem” (flapping): chwilowy spadek ruchu nie zdejmuje od razu podów, które za minutę znów byłyby potrzebne.</p>
+      <h3>Pułapki</h3>
+      <ul>
+        <li><strong>Pole <code>replicas</code> w Deploymencie.</strong> Każdy <code>kubectl apply</code> nadpisze to, co ustawił HPA. Usuń <code>replicas</code> z manifestu, gdy działa HPA.</li>
+        <li><strong>Quota.</strong> HPA ustawi 8 replik, ale ReplicaSet nie utworzy podów ponad ResourceQuota: <code>exceeded quota</code> w <code>kubectl describe rs</code>.</li>
+        <li><strong>Pełne węzły.</strong> Nowe pody wiszą w <code>Pending</code> (<code>Insufficient cpu</code>). To już nie sprawa HPA, patrz <a href="#wezly">węzły</a>.</li>
+        <li><strong>Pamięć.</strong> HPA na pamięci rzadko ma sens: większość runtime'ów nie oddaje pamięci, więc repliki nie schodzą.</li>
+        <li><strong>Kilka metryk.</strong> HPA liczy repliki dla każdej i bierze najwyższy wynik.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 4 ============================================================ -->
+<section id="keda">
+  <h2><span class="n">4</span> KEDA: skalowanie od zdarzeń</h2>
+  <p>HPA zna tylko metryki, które ktoś mu wystawi przez API. CPU wystawia metrics-server. Długości kolejki SQS czy opóźnienia w Kafce nie wystawia nikt. <strong>KEDA</strong> (Kubernetes Event-Driven Autoscaling, projekt CNCF w statusie graduated) dostarcza te metryki i dodatkowo umie zejść do zera podów, czego zwykły HPA nie potrafi. Instaluje się ją Helmem, z uprawnieniami administratora klastra (CRD i rejestracja API). Na k8s-sages jej nie ma. <span class="js-only" hidden>Kliknij krok albo numer na diagramie.</span></p>
+
+  <figure>
+    <div class="scroll">
+    <svg class="wide flow" id="flow-keda" viewBox="0 0 1000 430" role="img" aria-labelledby="keda-t keda-d">
+      <title id="keda-t">Jak działa KEDA w sześciu krokach</title>
+      <desc id="keda-d">Piszesz ScaledObject. Operator KEDA tworzy z niego HPA, co 30 sekund pyta kolejkę SQS o długość i sam przełącza Deployment między 0 a 1 repliką. HPA pyta adapter metryk KEDA o metrykę zewnętrzną i skaluje Deployment od 1 do N.</desc>
+      <defs>
+        <marker id="ak" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk" d="M0 0L10 5L0 10z"/></marker>
+      </defs>
+      <!-- źródło -->
+      <rect class="panel2" x="20" y="100" width="220" height="316" rx="12"/>
+      <text class="h" x="34" y="124">ŹRÓDŁO ZDARZEŃ</text>
+      <rect class="box" x="34" y="150" width="192" height="64" rx="8"/>
+      <text class="b" x="130" y="176" text-anchor="middle">Amazon SQS</text>
+      <text class="s" x="130" y="198" text-anchor="middle">120 wiadomości</text>
+      <text class="s" x="34" y="252">albo: Kafka, RabbitMQ,</text>
+      <text class="s" x="34" y="270">Prometheus, Redis,</text>
+      <text class="s" x="34" y="288">cron, CPU, …</text>
+      <text class="s" x="34" y="306">(dziesiątki „scalerów”)</text>
+
+      <!-- ScaledObject -->
+      <rect class="box" x="380" y="16" width="240" height="64" rx="8" stroke-dasharray="5 4"/>
+      <text class="b" x="500" y="42" text-anchor="middle">ScaledObject worker</text>
+      <text class="s" x="500" y="64" text-anchor="middle">piszesz Ty: triggery, min/max</text>
+
+      <!-- KEDA -->
+      <rect class="panel2" x="360" y="100" width="280" height="316" rx="12"/>
+      <text class="h" x="374" y="406">KEDA (HELM, NAMESPACE keda)</text>
+      <rect class="strong" x="380" y="140" width="240" height="90" rx="10"/>
+      <text class="ttl" x="500" y="170" text-anchor="middle">keda-operator</text>
+      <text class="on s" x="500" y="192" text-anchor="middle">aktywacja 0 ↔ 1</text>
+      <text class="on s" x="500" y="212" text-anchor="middle">co pollingInterval (30 s)</text>
+      <rect class="strong" x="380" y="290" width="240" height="90" rx="10"/>
+      <text class="ttl" x="500" y="320" text-anchor="middle">metrics adapter</text>
+      <text class="on s mono" x="500" y="342" text-anchor="middle">external.metrics.k8s.io</text>
+      <text class="on s" x="500" y="362" text-anchor="middle">odpowiada na pytania HPA</text>
+
+      <!-- Deployment -->
+      <rect class="panel2" x="700" y="100" width="280" height="150" rx="12"/>
+      <text class="h" x="714" y="124">DEPLOYMENT WORKER</text>
+      <rect class="pod" x="714" y="140" width="40" height="44" rx="7"/><text class="pod-t" x="734" y="167" text-anchor="middle">Pod</text>
+      <rect class="pod" x="764" y="140" width="40" height="44" rx="7"/><text class="pod-t" x="784" y="167" text-anchor="middle">Pod</text>
+      <rect class="pod" x="814" y="140" width="40" height="44" rx="7"/><text class="pod-t" x="834" y="167" text-anchor="middle">Pod</text>
+      <rect class="pod-off" x="864" y="140" width="40" height="44" rx="7"/>
+      <rect class="pod-off" x="914" y="140" width="40" height="44" rx="7"/>
+      <text class="s" x="714" y="210">0 replik, gdy kolejka jest pusta</text>
+      <text class="s" x="714" y="230">do maxReplicaCount pod ruchem</text>
+
+      <!-- HPA -->
+      <rect class="box" x="720" y="300" width="260" height="90" rx="8"/>
+      <text class="b" x="850" y="328" text-anchor="middle">HPA keda-hpa-worker</text>
+      <text class="s" x="850" y="348" text-anchor="middle">tworzy go i zmienia KEDA</text>
+      <text class="s" x="850" y="368" text-anchor="middle">skaluje 1 ↔ N</text>
+
+      <!-- strzałki -->
+      <g class="step s1"><path class="ln" d="M500 84 V134" marker-end="url(#ak)"/><text class="lbl" x="512" y="114">watch</text></g>
+      <g class="step s2"><path class="ln" d="M624 226 L716 314" marker-end="url(#ak)"/><text class="lbl" x="694" y="266">tworzy</text></g>
+      <g class="step s3"><path class="ln" d="M376 186 H230" marker-start="url(#ak)" marker-end="url(#ak)"/><text class="lbl" x="250" y="176">pyta co 30 s</text></g>
+      <g class="step s4"><path class="ln dash" d="M624 186 H694" marker-end="url(#ak)"/><text class="lbl" x="634" y="176">0 ↔ 1</text></g>
+      <g class="step s5">
+        <path class="ln" d="M716 335 H624" marker-start="url(#ak)" marker-end="url(#ak)"/>
+        <path class="ln" d="M376 335 H244" marker-start="url(#ak)" marker-end="url(#ak)"/>
+        <text class="lbl" x="642" y="326">metryka</text>
+        <text class="lbl" x="254" y="326">pyta scaler</text>
+      </g>
+      <g class="step s6"><path class="ln" d="M850 296 V254" marker-end="url(#ak)"/><text class="lbl" x="862" y="280">1 ↔ N</text></g>
+
+      <!-- numery -->
+      <g class="num s1" data-step="1"><circle cx="470" cy="108" r="14"/><text x="470" y="113" text-anchor="middle">1</text></g>
+      <g class="num s2" data-step="2"><circle cx="650" cy="290" r="14"/><text x="650" y="295" text-anchor="middle">2</text></g>
+      <g class="num s3" data-step="3"><circle cx="300" cy="210" r="14"/><text x="300" y="215" text-anchor="middle">3</text></g>
+      <g class="num s4" data-step="4"><circle cx="662" cy="208" r="14"/><text x="662" y="213" text-anchor="middle">4</text></g>
+      <g class="num s5" data-step="5"><circle cx="670" cy="362" r="14"/><text x="670" y="367" text-anchor="middle">5</text></g>
+      <g class="num s6" data-step="6"><circle cx="824" cy="276" r="14"/><text x="824" y="281" text-anchor="middle">6</text></g>
+    </svg>
+    </div>
+    <figcaption>KEDA nie zastępuje HPA, tylko go karmi i nim steruje. <span class="hint">Na telefonie przewiń diagram w bok.</span></figcaption>
+  </figure>
+
+  <ol class="steps" id="steps-keda">
+    <li data-step="1"><strong>Piszesz ScaledObject.</strong> Co skalować (<code>scaleTargetRef</code>: Deployment, StatefulSet albo zasób z <code>/scale</code>), na podstawie czego (<code>triggers</code>), w jakim zakresie (<code>minReplicaCount</code>, domyślnie 0, i <code>maxReplicaCount</code>). Operator KEDA obserwuje te obiekty.</li>
+    <li data-step="2"><strong>Operator tworzy HPA.</strong> Dla każdego ScaledObject powstaje HPA <code>keda-hpa-&lt;nazwa&gt;</code>. Nie edytujesz go ręcznie i nie tworzysz drugiego HPA dla tego samego Deploymentu, bo będą się kłócić.</li>
+    <li data-step="3"><strong>Scaler pyta źródło.</strong> Co <code>pollingInterval</code> (domyślnie 30 s) operator pyta scaler o stan źródła, np. liczbę wiadomości w kolejce SQS. Do AWS loguje się przez <code>TriggerAuthentication</code>, np. z rolą IAM (IRSA albo EKS Pod Identity), bez kluczy w YAML-u.</li>
+    <li data-step="4"><strong>Aktywacja 0 ↔ 1 robi sama KEDA.</strong> HPA nie umie zejść do zera ani z niego wstać. Gdy metryka przekroczy próg aktywacji (np. <code>activationQueueLength</code>), operator ustawia 1 replikę. Gdy źródło jest puste dłużej niż <code>cooldownPeriod</code> (domyślnie 300 s), ustawia 0.</li>
+    <li data-step="5"><strong>HPA pyta o metrykę zewnętrzną.</strong> Przez <code>external.metrics.k8s.io</code>. Odpowiada adapter metryk KEDA, który z kolei pyta scaler. W klastrze może działać tylko jeden serwer tego API, więc KEDA nie współistnieje z innym adapterem metryk zewnętrznych.</li>
+    <li data-step="6"><strong>HPA skaluje 1 ↔ N.</strong> Tym samym wzorem co dla CPU, z celem typu <code>AverageValue</code>. Przy <code>queueLength: 5</code> i 120 wiadomościach: 120 / 5 = 24 pody, przycięte do <code>maxReplicaCount</code>.</li>
+  </ol>
+  <div class="stepnav" data-for="keda" hidden>
+    <button type="button" data-act="prev">← poprzedni krok</button>
+    <button type="button" data-act="next">następny krok →</button>
+    <button type="button" data-act="all">pokaż wszystko</button>
+  </div>
+
+  <div class="grid2" style="margin-top:20px">
+    <div>
+      <h3 style="margin-top:0">ScaledObject dla kolejki SQS</h3>
+<pre>apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: worker
+spec:
+  scaleTargetRef:
+    name: worker              # Deployment
+  minReplicaCount: 0          # domyślnie 0
+  maxReplicaCount: 20
+  pollingInterval: 30         # s, domyślnie 30
+  cooldownPeriod: 300         # s przed zejściem 1 → 0
+  triggers:
+  - type: aws-sqs-queue
+    authenticationRef:
+      name: sqs-auth
+    metadata:
+      queueURL: https://sqs.eu-central-1.amazonaws.com/123456789012/zamowienia
+      awsRegion: eu-central-1
+      # cel: 5 wiadomości na pod
+      queueLength: "5"
+      # więcej niż 0 wiadomości: budzi 0 → 1
+      activationQueueLength: "0"
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: sqs-auth
+spec:
+  podIdentity:
+    # rola IAM z IRSA albo EKS Pod Identity
+    provider: aws</pre>
+    </div>
+    <div>
+      <h3 style="margin-top:0">Co jeszcze warto wiedzieć</h3>
+      <ul>
+        <li><strong>Instalacja:</strong> <code>helm repo add kedacore https://kedacore.github.io/charts</code>, potem <code>helm install keda kedacore/keda -n keda --create-namespace</code>. Robi to administrator klastra.</li>
+        <li><strong>ScaledJob</strong> zamiast ScaledObject: KEDA tworzy Joby zależnie od liczby zdarzeń. Dobre dla długich zadań, których nie wolno przerwać przy skalowaniu w dół (Deployment usuwa dowolny pod, Job kończy pracę sam).</li>
+        <li><strong>TriggerAuthentication</strong> (albo ClusterTriggerAuthentication) trzyma dane logowania do źródła: odwołanie do Secretu albo tożsamość poda. Na AWS wybierz rolę IAM: IRSA albo EKS Pod Identity. Rola potrzebuje m.in. <code>sqs:GetQueueAttributes</code>.</li>
+        <li><strong>Kilka triggerów</strong> w jednym ScaledObject: np. <code>cron</code> (w godzinach pracy co najmniej 5 replik) i <code>cpu</code>. Jak w HPA wygrywa najwyższy wynik.</li>
+        <li><strong>Zero to zimny start.</strong> Pierwsza wiadomość po ciszy czeka na <code>pollingInterval</code> i start poda. Dla kolejek to zwykle w porządku, dla ruchu HTTP już nie (do HTTP jest osobny dodatek KEDA HTTP Add-on).</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 5 ============================================================ -->
+<section id="vpa">
+  <h2><span class="n">5</span> VPA: Vertical Pod Autoscaler</h2>
+  <p><strong>VPA to Vertical Pod Autoscaler.</strong> Nie dokłada replik, tylko zmienia <code>requests</code>, czyli „rozmiar” poda, na podstawie historii zużycia.</p>
+
+  <ul class="oneliners">
+    <li><b>HPA</b> dokłada podów (scale out).</li>
+    <li><b>VPA</b> robi pody większe (scale up).</li>
+    <li><b>In-place resize</b> to mechanizm, dzięki któremu VPA może zmienić rozmiar bez restartu poda.</li>
+    <li><b>KEDA</b> skaluje według zdarzeń, np. długości kolejki, i potrafi zejść do zera. Pod spodem i tak steruje HPA.</li>
+  </ul>
+
+  <h3>Czy VPA jest zawsze w Kubernetesie?</h3>
+  <div class="key bad">
+    <p><strong>Nie.</strong> VPA to osobny projekt: katalog <code>vertical-pod-autoscaler</code> w repozytorium <code>kubernetes/autoscaler</code>. Trzeba go doinstalować: definicje CRD i trzy komponenty (recommender, updater, admission-controller). Potrzebuje metrics-servera. EKS nie instaluje go domyślnie, na k8s-sages go nie ma.</p>
+    <p>Wbudowane w Kubernetesa są tylko <strong>HPA</strong> i mechanizm <strong>in-place resize</strong> (GA w 1.35). Sam resize nie decyduje, jaki rozmiar ustawić. Robi to VPA albo człowiek.</p>
+  </div>
+  <div class="grid2">
+    <div>
+<pre># czy VPA jest w klastrze?
+kubectl get crd verticalpodautoscalers.autoscaling.k8s.io
+# na k8s-sages: Error from server (NotFound)</pre>
+    </div>
+    <div>
+<pre># instalacja (administrator klastra), jedna z dróg:
+git clone https://github.com/kubernetes/autoscaler.git
+cd autoscaler/vertical-pod-autoscaler
+./hack/vpa-up.sh
+# albo chart Helm, np. fairwinds-stable/vpa</pre>
+    </div>
+  </div>
+
+  <figure>
+    <div class="scroll">
+    <svg class="wide" viewBox="0 0 1000 300" role="img" aria-labelledby="vpa-t vpa-d">
+      <title id="vpa-t">Trzy komponenty VPA</title>
+      <desc id="vpa-d">recommender czyta metryki z metrics-servera i zapisuje rekomendację w obiekcie VerticalPodAutoscaler. admission-controller wpisuje rekomendowane requests nowym podom. updater eksmituje albo zmienia rozmiar działających podów, które odbiegają od rekomendacji.</desc>
+      <defs>
+        <marker id="av" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="mk" d="M0 0L10 5L0 10z"/></marker>
+      </defs>
+      <rect class="box" x="20" y="40" width="200" height="70" rx="8"/>
+      <text class="b" x="120" y="70" text-anchor="middle">metrics-server</text>
+      <text class="s" x="120" y="92" text-anchor="middle">bieżące zużycie</text>
+
+      <rect class="strong" x="290" y="40" width="200" height="70" rx="10"/>
+      <text class="ttl" x="390" y="70" text-anchor="middle">recommender</text>
+      <text class="on s" x="390" y="92" text-anchor="middle">historia → rekomendacja</text>
+
+      <rect class="box" x="560" y="40" width="220" height="70" rx="8"/>
+      <text class="b" x="670" y="68" text-anchor="middle">VerticalPodAutoscaler</text>
+      <text class="s mono" x="670" y="92" text-anchor="middle">status.recommendation</text>
+
+      <rect class="strong" x="290" y="180" width="200" height="70" rx="10"/>
+      <text class="ttl" x="390" y="210" text-anchor="middle">updater</text>
+      <text class="on s" x="390" y="232" text-anchor="middle">eksmisja albo resize</text>
+
+      <rect class="strong" x="560" y="180" width="220" height="70" rx="10"/>
+      <text class="ttl" x="670" y="210" text-anchor="middle">admission-controller</text>
+      <text class="on s" x="670" y="232" text-anchor="middle">webhook: nowy pod</text>
+
+      <rect class="panel2" x="840" y="40" width="140" height="210" rx="12"/>
+      <text class="h" x="854" y="64">POD</text>
+      <rect class="pod" x="864" y="90" width="92" height="140" rx="9"/>
+      <text class="pod-t" x="910" y="156" text-anchor="middle">requests</text>
+      <text class="pod-t" x="910" y="174" text-anchor="middle">z VPA</text>
+
+      <path class="ln" d="M224 75 H284" marker-end="url(#av)"/><text class="lbl" x="230" y="66">metryki</text>
+      <path class="ln" d="M494 75 H554" marker-end="url(#av)"/><text class="lbl" x="498" y="66">zapisuje</text>
+      <path class="ln" d="M610 114 L474 176" marker-end="url(#av)"/><text class="lbl" x="556" y="160">czyta</text>
+      <path class="ln" d="M690 114 V174" marker-end="url(#av)"/><text class="lbl" x="700" y="150">czyta</text>
+      <path class="ln" d="M784 215 H834" marker-end="url(#av)"/><text class="lbl" x="786" y="206">ustawia</text>
+      <path class="ln dash" d="M390 254 V282 H910 V256" marker-end="url(#av)"/><text class="lbl" x="520" y="276">eksmituje pod albo zmienia rozmiar in-place</text>
+    </svg>
+    </div>
+    <figcaption>VPA zmienia <code>requests</code> w podach, a nie w Deploymencie. Twój YAML w repo dalej ma stare wartości. <span class="hint">Na telefonie przewiń diagram w bok.</span></figcaption>
+  </figure>
+
+  <h3>Tryby <code>updatePolicy.updateMode</code></h3>
+  <dl class="facts">
+    <dt>Off</dt><dd>Tylko rekomendacje w <code>status</code>. Niczego nie zmienia. <strong>Dobry start:</strong> czytasz rekomendacje i sam wpisujesz <code>requests</code> do YAML-a.</dd>
+    <dt>Initial</dt><dd>Ustawia <code>requests</code> tylko nowym podom (przy tworzeniu). Działających nie rusza.</dd>
+    <dt>Recreate</dt><dd>Jak Initial, a do tego updater eksmituje pody, których <code>requests</code> wyraźnie odbiegają od rekomendacji. Nowy pod dostaje nowe wartości. Oznacza restart.</dd>
+    <dt>InPlaceOrRecreate</dt><dd>Najpierw próbuje in-place resize, a gdy się nie da, eksmituje. Tryb z nowszych wersji VPA, wymaga klastra z in-place resize. Przed użyciem sprawdź w release notes swojej wersji VPA, czy jest już domyślnie włączony.</dd>
+    <dt>Auto</dt><dd>Dawny domyślny tryb, dziś zachowuje się jak Recreate i jest oznaczony jako przestarzały. W nowych manifestach wpisz tryb jawnie.</dd>
+  </dl>
+
+  <div class="grid2" style="margin-top:20px">
+    <div>
+      <h3 style="margin-top:0">Minimalny VPA (tryb Off)</h3>
+<pre>apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: web
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: web
+  updatePolicy:
+    updateMode: "Off"     # tylko rekomendacje
+  resourcePolicy:         # opcjonalnie: granice
+    containerPolicies:
+    - containerName: "*"
+      minAllowed: {cpu: 50m, memory: 64Mi}
+      maxAllowed: {cpu: "1", memory: 1Gi}</pre>
+    </div>
+    <div>
+      <h3 style="margin-top:0"><code>kubectl describe vpa web</code></h3>
+<pre>Status:
+  Recommendation:
+    Container Recommendations:
+      Container Name:  web
+      Lower Bound:
+        Cpu:     25m
+        Memory:  262144k
+      Target:
+        Cpu:     120m
+        Memory:  300Mi
+      Uncapped Target:
+        Cpu:     120m
+        Memory:  300Mi
+      Upper Bound:
+        Cpu:     480m
+        Memory:  700Mi</pre>
+    </div>
+  </div>
+  <div class="tablewrap">
+    <table class="stack">
+      <thead><tr><th>Pole</th><th>Co znaczy</th></tr></thead>
+      <tbody>
+        <tr><td data-h="Pole">Target</td><td data-h="Co znaczy">tyle VPA wpisałby jako <code>requests</code>. To wartość, którą przepisujesz do YAML-a w trybie Off</td></tr>
+        <tr><td data-h="Pole">Lower Bound</td><td data-h="Co znaczy">poniżej tego pod jest prawdopodobnie za mały. Updater zmienia pody, których <code>requests</code> są poniżej tej granicy</td></tr>
+        <tr><td data-h="Pole">Upper Bound</td><td data-h="Co znaczy">powyżej tego marnujesz zasoby. Pody z <code>requests</code> powyżej tej granicy też trafią do zmiany</td></tr>
+        <tr><td data-h="Pole">Uncapped Target</td><td data-h="Co znaczy">rekomendacja bez <code>minAllowed</code>/<code>maxAllowed</code>. Różni się od Target, gdy granice ją przycięły</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Na świeżym VPA przedział Lower–Upper jest szeroki, bo danych jest mało. Zawęża się z czasem, więc rekomendacje czytaj po co najmniej dniu typowego ruchu. Recommender ma też domyślne minima (25m CPU, 250Mi pamięci), stąd <code>262144k</code> w przykładzie.</p>
+
+  <h3>Dlaczego nie łączyć VPA i HPA na CPU</h3>
+  <p>Oba reagują na ten sam sygnał. VPA podnosi <code>requests</code>, więc procent zużycia CPU spada. Wtedy HPA zdejmuje repliki, obciążenie rośnie i wszystko się zapętla.</p>
+  <ol class="loop" aria-label="Pętla sprzężenia VPA i HPA">
+    <li>zużycie CPU rośnie</li>
+    <li>VPA podnosi <code>requests</code></li>
+    <li>procent zużycia spada, HPA zdejmuje repliki</li>
+    <li>mniej podów, obciążenie na pod rośnie… i od nowa</li>
+  </ol>
+  <div class="key"><strong>Dozwolone połączenie:</strong> HPA (albo KEDA) na metryce własnej lub zewnętrznej, np. żądania na sekundę albo długość kolejki, a VPA na CPU i pamięci. Wtedy każdy patrzy na co innego.</div>
+
+  <h3>Pułapki VPA</h3>
+  <ul>
+    <li><strong>Restart przy zmianie.</strong> W trybie Recreate każda zmiana to eksmisja poda. Updater szanuje PodDisruptionBudget i domyślnie nie eksmituje, gdy Deployment ma mniej niż 2 repliki.</li>
+    <li><strong>Limity rosną razem z requests.</strong> Domyślnie VPA zachowuje proporcję limit/request. Zmienisz to w <code>controlledValues: RequestsOnly</code>.</li>
+    <li><strong>Quota i LimitRange.</strong> Rekomendacja większa niż pozwala quota albo <code>max</code> w LimitRange skończy się podem, który nie powstanie.</li>
+    <li><strong>Aplikacje z własnym zarządzaniem pamięcią</strong> (JVM z <code>-Xmx</code>, cache) nie użyją większej pamięci, dopóki nie zmienisz ich konfiguracji.</li>
+  </ul>
+</section>
+
+<!-- 6 ============================================================ -->
+<section id="resize">
+  <h2><span class="n">6</span> In-place resize: zmiana rozmiaru bez restartu</h2>
+  <p>Do niedawna <code>resources</code> w działającym podzie były niezmienne: nowe wartości = nowy pod. Od Kubernetesa 1.35 zmiana CPU i pamięci działającego poda jest stabilną (GA) funkcją. Zmieniasz podzasób <code>resize</code>, a kubelet dostosowuje cgroups kontenera. Zwykle bez restartu.</p>
+
+  <div class="grid2">
+    <div>
+      <h3 style="margin-top:0"><code>resizePolicy</code> w kontenerze</h3>
+<pre>containers:
+- name: web
+  image: nginx:1.29
+  resources:
+    requests: {cpu: 100m, memory: 128Mi}
+    limits:   {cpu: 200m, memory: 256Mi}
+  resizePolicy:
+  - resourceName: cpu
+    restartPolicy: NotRequired       # domyślnie
+  - resourceName: memory
+    restartPolicy: RestartContainer  # restart kontenera</pre>
+      <p><code>NotRequired</code>: zmiana na żywo. <code>RestartContainer</code>: kubelet restartuje kontener z nowymi wartościami. Przydaje się, gdy aplikacja czyta limit pamięci tylko przy starcie.</p>
+    </div>
+    <div>
+      <h3 style="margin-top:0">Zmiana i sprawdzenie</h3>
+<pre>kubectl patch pod web --subresource resize --patch \
+  '{"spec":{"containers":[{"name":"web",
+    "resources":{"requests":{"cpu":"300m"},
+                 "limits":{"cpu":"400m"}}}]}}'
+
+# co zastosowano naprawdę:
+kubectl get pod web \
+  -o jsonpath='{.status.containerStatuses[0].resources}'
+kubectl get pod web \
+  -o jsonpath='{.status.containerStatuses[0].restartCount}'</pre>
+      <p><code>spec</code> to stan pożądany, <code>status.containerStatuses[].resources</code> to stan faktyczny. Gdy się różnią, zajrzyj do warunków poda.</p>
+    </div>
+  </div>
+  <div class="tablewrap">
+    <table class="stack">
+      <thead><tr><th>Warunek poda</th><th>Co znaczy</th></tr></thead>
+      <tbody>
+        <tr><td data-h="Warunek">PodResizePending · Deferred</td><td data-h="Co znaczy">na węźle teraz brakuje miejsca; kubelet spróbuje ponownie, gdy się zwolni</td></tr>
+        <tr><td data-h="Warunek">PodResizePending · Infeasible</td><td data-h="Co znaczy">tego się nie da na tym węźle (np. więcej CPU niż węzeł ma w ogóle)</td></tr>
+        <tr><td data-h="Warunek">PodResizeInProgress</td><td data-h="Co znaczy">kubelet przyjął zmianę i właśnie ją stosuje</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="key">
+    <p><strong>Ograniczenia:</strong> tylko CPU i pamięć. Klasa QoS nie może się zmienić (pod Guaranteed musi dalej mieć <code>requests</code> = <code>limits</code>). Zmniejszanie pamięci jest ryzykowne, bo proces nie oddaje jej na żądanie. Potrzebne jest uprawnienie do podzasobu <code>pods/resize</code>.</p>
+    <p><strong>Ręczny resize jest tymczasowy.</strong> Pody Deploymentu przy następnym rolloucie powstaną z szablonu, ze starymi wartościami. Zmiana <code>resources</code> w szablonie Deploymentu to zwykły rollout, a nie resize. Trwale: zmień YAML albo zostaw to VPA w trybie InPlaceOrRecreate.</p>
+  </div>
+</section>
+
+<!-- 7 ============================================================ -->
+<section id="wezly">
+  <h2><span class="n">7</span> Gdy brakuje węzłów: Cluster Autoscaler, Karpenter, EKS Auto Mode</h2>
+  <p>HPA dołożył repliki, ale część podów wisi w <code>Pending</code> ze zdarzeniem <code>FailedScheduling … Insufficient cpu</code>. Pody nie mieszczą się na żadnym węźle. To już <strong>skalowanie węzłów</strong>, a nie podów. HPA ani VPA tego nie załatwią.</p>
+  <div class="tablewrap">
+    <table class="stack">
+      <thead><tr><th>Narzędzie</th><th>Jak działa</th></tr></thead>
+      <tbody>
+        <tr><td data-h="Narzędzie">Cluster Autoscaler</td><td data-h="Jak działa">widzi pody <code>Pending</code> z braku zasobów i zwiększa grupę węzłów (na AWS: Auto Scaling Group / managed node group). Usuwa węzły, które długo są prawie puste</td></tr>
+        <tr><td data-h="Narzędzie">Karpenter</td><td data-h="Jak działa">sam tworzy instancje EC2 dopasowane do czekających podów (typ, rozmiar, spot/on-demand), bez grup węzłów. Konsoliduje: przenosi pody i wyłącza zbędne węzły</td></tr>
+        <tr><td data-h="Narzędzie">EKS Auto Mode</td><td data-h="Jak działa">AWS zarządza węzłami za Ciebie: dobiera, uruchamia i aktualizuje instancje. Mechanizm skalowania węzłów jest oparty na Karpenterze i działa po stronie AWS</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="key"><strong>Na k8s-sages:</strong> managed node group o stałym rozmiarze (3 węzły), bez autoskalera węzłów. Wcześniej i tak zatrzyma Cię ResourceQuota Twojego namespace'u. Autoskaler węzłów patrzy na <code>requests</code>, a nie na faktyczne zużycie: pod bez <code>requests</code> nigdy nie wywoła dołożenia węzła.</div>
+</section>
+
+<!-- 8 ============================================================ -->
+<section id="porownanie">
+  <h2><span class="n">8</span> Porównanie</h2>
+  <div class="tablewrap">
+    <table class="stack cmp">
+      <thead><tr><th>Mechanizm</th><th>Co skaluje</th><th>Sygnał</th><th>Wbudowany?</th><th>Do zera</th><th>Typowe użycie</th><th>Pułapki</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>HPA</td>
+          <td data-h="Co skaluje">liczbę podów (<code>replicas</code>)</td>
+          <td data-h="Sygnał">CPU/pamięć z metrics-servera (% requestu albo wartość), metryki własne i zewnętrzne przez adapter</td>
+          <td data-h="Wbudowany?"><span class="yes">tak</span>, wymaga metrics-servera</td>
+          <td data-h="Do zera"><span class="no">nie</span> (min 1)</td>
+          <td data-h="Typowe użycie">bezstanowe API i frontendy, których zużycie CPU rośnie z ruchem</td>
+          <td data-h="Pułapki">brak <code>requests</code> → <code>&lt;unknown&gt;</code>; <code>replicas</code> w manifeście; quota; pamięć nie schodzi</td>
+        </tr>
+        <tr>
+          <td>VPA</td>
+          <td data-h="Co skaluje"><code>requests</code> (i proporcjonalnie <code>limits</code>) podów</td>
+          <td data-h="Sygnał">historia zużycia CPU i pamięci</td>
+          <td data-h="Wbudowany?"><span class="no">nie</span>: CRD + 3 komponenty z kubernetes/autoscaler</td>
+          <td data-h="Do zera">nie dotyczy</td>
+          <td data-h="Typowe użycie">dobór <code>requests</code> (tryb Off), aplikacje, których nie da się skalować w poziomie</td>
+          <td data-h="Pułapki">restart przy zmianie (Recreate); konflikt z HPA na CPU/pamięci; YAML w repo się rozjeżdża</td>
+        </tr>
+        <tr>
+          <td>KEDA</td>
+          <td data-h="Co skaluje">liczbę podów (przez HPA) albo liczbę Jobów (ScaledJob)</td>
+          <td data-h="Sygnał">zdarzenia: kolejki, strumienie, Prometheus, cron, bazy, chmura…</td>
+          <td data-h="Wbudowany?"><span class="no">nie</span>: Helm, projekt CNCF graduated</td>
+          <td data-h="Do zera"><span class="yes">tak</span> (aktywacja 0 ↔ 1)</td>
+          <td data-h="Typowe użycie">workery kolejek, przetwarzanie wsadowe, skalowanie w godzinach pracy</td>
+          <td data-h="Pułapki">zimny start z zera; nie łącz z własnym HPA; jeden serwer metryk zewnętrznych w klastrze</td>
+        </tr>
+        <tr>
+          <td>In-place resize</td>
+          <td data-h="Co skaluje"><code>requests</code>/<code>limits</code> działającego poda</td>
+          <td data-h="Sygnał">żaden sam z siebie: decyduje człowiek albo VPA</td>
+          <td data-h="Wbudowany?"><span class="yes">tak</span>, GA w 1.35</td>
+          <td data-h="Do zera">nie dotyczy</td>
+          <td data-h="Typowe użycie">więcej CPU bez restartu, podstawa trybu InPlaceOrRecreate w VPA</td>
+          <td data-h="Pułapki">QoS się nie zmienia; Deferred/Infeasible przy braku miejsca; rollout przywraca szablon</td>
+        </tr>
+        <tr>
+          <td>Cluster Autoscaler / Karpenter / EKS Auto Mode</td>
+          <td data-h="Co skaluje">liczbę węzłów</td>
+          <td data-h="Sygnał">pody <code>Pending</code> z braku zasobów; puste lub słabo wykorzystane węzły</td>
+          <td data-h="Wbudowany?"><span class="no">nie</span>: dodatek albo funkcja dostawcy (Auto Mode)</td>
+          <td data-h="Do zera">węzły tak, gdy nic na nich nie musi działać</td>
+          <td data-h="Typowe użycie">każdy produkcyjny klaster z HPA albo KEDA</td>
+          <td data-h="Pułapki">liczy po <code>requests</code>; nowy węzeł to minuty, nie sekundy</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- 9 ============================================================ -->
+<section id="kiedy">
+  <h2><span class="n">9</span> Kiedy co</h2>
+  <div class="decide">
+    <div><p class="q">API albo frontend, CPU rośnie razem z ruchem</p><p class="a"><b>HPA na CPU</b> z ustawionymi <code>requests</code>. Zacznij od celu 50–70% i <code>minReplicas: 2</code>, żeby przetrwać utratę poda.</p></div>
+    <div><p class="q">Nie wiesz, jakie <code>requests</code> ustawić</p><p class="a"><b>VPA w trybie Off</b>. Po dniu–dwóch przeczytaj <code>Target</code> i wpisz go do YAML-a. Bez VPA: <code>kubectl top pods</code> i dashboardy z Prometheusa.</p></div>
+    <div><p class="q">Worker czyta kolejkę, nocami nie ma nic do zrobienia</p><p class="a"><b>KEDA</b> z triggerem kolejki (SQS, Kafka, RabbitMQ) i <code>minReplicaCount: 0</code>. Długie, nieprzerywalne zadania: <b>ScaledJob</b>.</p></div>
+    <div><p class="q">Ruch przewidywalny: rano rośnie, wieczorem spada</p><p class="a"><b>KEDA z triggerem cron</b> (minimum replik w godzinach pracy) plus trigger CPU na nieprzewidziane skoki.</p></div>
+    <div><p class="q">Jedna instancja, nie da się jej skalować w poziomie</p><p class="a"><b>VPA</b> albo ręczny <b>in-place resize</b>. HPA nic tu nie da. Uwaga: updater VPA domyślnie nie rusza podów, gdy replika jest jedna (<code>updatePolicy.minReplicas</code>).</p></div>
+    <div><p class="q">Chcesz HPA i VPA naraz</p><p class="a"><b>HPA/KEDA na metryce własnej lub zewnętrznej</b> (żądania/s, kolejka), <b>VPA na CPU i pamięci</b>. Nigdy obu na CPU.</p></div>
+    <div><p class="q">Pody wiszą w <code>Pending</code>: <code>Insufficient cpu</code></p><p class="a">Nie HPA. <b>Autoskaler węzłów</b> (Cluster Autoscaler, Karpenter, EKS Auto Mode) albo mniejsze <code>requests</code>. U nas: więcej się nie zmieści.</p></div>
+    <div><p class="q">HPA pokazuje <code>&lt;unknown&gt;</code></p><p class="a">Brak <code>requests</code> w kontenerze albo metrics-server nie działa (<code>kubectl top pods</code>). Pierwsza minuta po utworzeniu HPA też tak wygląda.</p></div>
+  </div>
+</section>
+
+<!-- 10 ============================================================ -->
+<section id="sciaga">
+  <h2><span class="n">10</span> Komendy</h2>
+  <div class="cheat">
+    <div><pre>kubectl top pods
+kubectl get apiservice v1beta1.metrics.k8s.io</pre><p>Czy działa metrics-server i Metrics API (<code>AVAILABLE True</code>).</p></div>
+    <div><pre>kubectl autoscale deploy web \
+  --cpu-percent=50 --min=1 --max=10</pre><p>HPA jedną komendą. Potem <code>kubectl get hpa web -o yaml</code> i do repo.</p></div>
+    <div><pre>kubectl get hpa -w</pre><p><code>TARGETS</code> (np. <code>cpu: 120%/50%</code>), <code>REPLICAS</code> na żywo.</p></div>
+    <div><pre>kubectl describe hpa web</pre><p>Warunki <code>AbleToScale</code>, <code>ScalingActive</code>, <code>ScalingLimited</code> i zdarzenia <code>SuccessfulRescale</code> z powodem.</p></div>
+    <div><pre>kubectl get events --field-selector \
+  reason=FailedScheduling
+kubectl describe rs &lt;rs&gt; | grep -i quota</pre><p>Czy nowe repliki utknęły na braku miejsca albo na quocie.</p></div>
+    <div><pre>kubectl api-resources | grep -iE \
+  'verticalpod|scaledobject'</pre><p>Czy w klastrze są VPA albo KEDA. Na k8s-sages: pusto.</p></div>
+    <div><pre>kubectl get vpa
+kubectl describe vpa web</pre><p>Rekomendacje: Lower Bound, Target, Upper Bound.</p></div>
+    <div><pre>kubectl get scaledobject,scaledjob
+kubectl get hpa keda-hpa-worker</pre><p>Obiekty KEDA i HPA, który z nich powstał.</p></div>
+    <div><pre>kubectl patch pod web --subresource resize \
+  --patch '{"spec":{"containers":[{"name":"web",
+  "resources":{"requests":{"cpu":"300m"}}}]}}'</pre><p>In-place resize jednego poda (kubectl musi znać <code>--subresource resize</code>).</p></div>
+    <div><pre>kubectl get pod web -o jsonpath=\
+'{.status.containerStatuses[0].resources}'</pre><p>Zasoby, które kubelet faktycznie zastosował.</p></div>
+  </div>
+</section>
+
+<footer>Kubernetes w praktyce · Dzień 3 · stan na październik 2026 (Kubernetes 1.35). Wersja tekstowa: <a href="README.md">README.md</a> · przykłady: <a href="../../../przyklady/k8s/14-hpa/"><code>przyklady/k8s/14-hpa/</code></a> · lab: <a href="../../../labs/d3-lab11-zasoby-quota-hpa/">lab11</a>.</footer>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  document.documentElement.classList.add('js');
+  var $ = function (id) { return document.getElementById(id); };
+  document.querySelectorAll('.js-only').forEach(function (el) { el.hidden = false; });
+
+  /* ================= diagramy z krokami ================= */
+  function bindFlow(name) {
+    var flow = $('flow-' + name), list = $('steps-' + name);
+    var nav = document.querySelector('.stepnav[data-for="' + name + '"]');
+    if (!flow || !list) return;
+    var items = list.querySelectorAll('li[data-step]');
+    var max = items.length, current = 0;
+    if (nav) nav.hidden = false;
+
+    function show(n) {
+      current = n;
+      if (n) { flow.setAttribute('data-active', String(n)); flow.classList.add('has-active'); }
+      else { flow.removeAttribute('data-active'); flow.classList.remove('has-active'); }
+      items.forEach(function (li) {
+        var on = Number(li.getAttribute('data-step')) === n;
+        li.classList.toggle('on', on);
+        li.setAttribute('aria-current', on ? 'step' : 'false');
+      });
+    }
+    items.forEach(function (li) {
+      li.tabIndex = 0;
+      li.addEventListener('click', function () {
+        var n = Number(li.getAttribute('data-step'));
+        show(current === n ? 0 : n);
+      });
+      li.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); li.click(); }
+      });
+    });
+    flow.querySelectorAll('.num[data-step]').forEach(function (g) {
+      g.addEventListener('click', function () {
+        var n = Number(g.getAttribute('data-step'));
+        show(current === n ? 0 : n);
+        var li = list.querySelector('li[data-step="' + n + '"]');
+        if (li && current) li.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      });
+    });
+    if (nav) nav.addEventListener('click', function (e) {
+      var act = e.target && e.target.getAttribute('data-act');
+      if (act === 'next') show(current >= max ? 1 : current + 1);
+      else if (act === 'prev') show(current <= 1 ? max : current - 1);
+      else if (act === 'all') show(0);
+    });
+  }
+  bindFlow('hpa');
+  bindFlow('keda');
+
+  /* ================= symulator HPA ================= */
+  var inLoad = $('in-load'), inTarget = $('in-target'), inMin = $('in-min'), inMax = $('in-max'), inWin = $('in-win');
+  var segReq = $('seg-req');
+  var btnTick = $('btn-tick'), btnPlay = $('btn-play'), btnReset = $('btn-reset');
+  if (!inLoad || !btnTick) return;
+
+  var TOL = 0.1, PERIOD = 15, HIST_MAX = 40;
+  var req = 200, n, t, recs, hist, lastAdded, timer = null;
+
+  function fmt(x, d) { return x.toFixed(d).replace('.', ','); }
+  function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
+  function cfg() {
+    var mn = Number(inMin.value), mx = Number(inMax.value);
+    if (mx < mn) { mx = mn; inMax.value = String(mx); }
+    return { load: Number(inLoad.value), target: Number(inTarget.value), min: mn, max: mx, win: Number(inWin.value), req: req };
+  }
+  function syncOutputs(c) {
+    $('out-load').textContent = c.load + 'm';
+    $('out-target').textContent = c.target + '%';
+    $('out-min').textContent = c.min;
+    $('out-max').textContent = c.max;
+    $('out-win').textContent = c.win + ' s';
+    $('out-req').textContent = c.req ? c.req + 'm' : 'brak';
+  }
+
+  // jedna decyzja kontrolera dla czasu `now` (bez zapisu stanu)
+  function evaluate(c, now) {
+    var r = { n: n };
+    if (!c.req) { r.unknown = true; r.result = clamp(n, c.min, c.max); return r; }
+    r.perPod = c.load / n;
+    r.util = r.perPod / c.req * 100;
+    r.ratio = r.util / c.target;
+    r.exact = n * r.ratio;
+    r.inTol = Math.abs(r.ratio - 1) <= TOL;
+    r.raw = r.inTol ? n : Math.ceil(r.exact - 1e-9);
+    // okno stabilizacji scaleDown: najwyższa rekomendacja z okna (łącznie z bieżącą)
+    var win = recs.filter(function (x) { return x.t > now - c.win; });
+    var downRec = r.raw;
+    win.forEach(function (x) { if (x.r > downRec) downRec = x.r; });
+    r.downRec = downRec;
+    var res = n;
+    if (r.raw > n) res = r.raw;                 // scaleUp: okno 0 s
+    else if (n > downRec) res = downRec;        // scaleDown: nie niżej niż max z okna
+    r.afterStab = res;
+    // domyślne tempo scaleUp: max(+100%, +4 pody) na 15 s
+    var upLimit = Math.max(2 * n, n + 4);
+    r.rateLimited = res > upLimit;
+    if (r.rateLimited) res = upLimit;
+    r.afterRate = res;
+    r.result = clamp(res, c.min, c.max);
+    r.clampedMax = res > c.max; r.clampedMin = res < c.min;
+    // ile jeszcze czekać na zejście (gdy okno blokuje)
+    if (r.raw < n && downRec >= n) {
+      var latest = -Infinity;
+      win.forEach(function (x) { if (x.r > r.raw && x.t > latest) latest = x.t; });
+      r.waitS = latest > -Infinity ? Math.max(PERIOD, latest + c.win - now + PERIOD) : 0;
+    }
+    return r;
+  }
+
+  function describe(c, r, applied) {
+    var s, cls = '';
+    if (r.unknown) {
+      return { cls: 'stuck', text: 'TARGETS: <unknown>/' + c.target + '%. Kontenery nie mają requests.cpu, więc HPA nie ma od czego liczyć procentu. Warunek ScalingActive=False, zdarzenie FailedGetResourceMetric. Liczba replik się nie zmienia.' };
+    }
+    var verb = applied ? 'HPA ustawił' : 'W następnej pętli HPA ustawi';
+    if (r.inTol && r.result === r.n) {
+      s = 'Stosunek ' + fmt(r.util, 0) + '% / ' + c.target + '% = ' + fmt(r.ratio, 2) + ' mieści się w tolerancji ±10%: bez zmian, ' + r.n + ' replik.';
+      cls = 'done';
+    } else if (r.raw > r.n) {
+      s = 'Skalowanie w górę od razu (okno scaleUp domyślnie 0 s). ';
+      if (r.rateLimited) s += 'Wzór chce ' + r.raw + ', ale domyślna polityka pozwala w jednej pętli najwyżej na max(2 × ' + r.n + ', ' + r.n + ' + 4) = ' + r.afterRate + '. ';
+      if (r.clampedMax) s += 'Limit maxReplicas: ' + c.max + '. ';
+      s += verb + ' ' + r.result + '.';
+      if (r.result === r.n) { s = 'Wzór chce ' + r.raw + ' replik, ale już jesteś na maxReplicas (' + c.max + '). Średnie zużycie zostanie powyżej celu.'; cls = 'stuck'; }
+    } else if (r.raw < r.n) {
+      if (r.downRec >= r.n) {
+        s = 'Wzór daje ' + r.raw + ', ale w oknie stabilizacji (' + c.win + ' s) najwyższa rekomendacja to ' + r.downRec + '. Zostaje ' + r.n + '.';
+        if (r.waitS) s += ' Zejdzie najwcześniej za ok. ' + r.waitS + ' s, jeśli obciążenie się utrzyma.';
+        cls = 'hold';
+      } else {
+        s = 'Skalowanie w dół: najwyższa rekomendacja z okna ' + c.win + ' s to ' + r.downRec + '. ';
+        if (r.clampedMin) s += 'Limit minReplicas: ' + c.min + '. ';
+        s += verb + ' ' + r.result + '.';
+        if (r.result === r.n) { s = 'Wzór daje ' + r.raw + ', ale minReplicas to ' + c.min + '. Zostaje ' + r.n + '.'; cls = 'done'; }
+      }
+    } else {
+      s = 'Wzór daje dokładnie obecną liczbę replik: ' + r.n + '.'; cls = 'done';
+    }
+    return { cls: cls, text: s };
+  }
+
+  function renderFormula(c, r) {
+    var box = $('formula');
+    if (r.unknown) {
+      box.innerHTML = 'desiredReplicas = ceil( ' + r.n + ' × <span class="res">?</span> / ' + c.target + '% )<br><span class="dim">brak requests.cpu → procent nie istnieje</span>';
+      return;
+    }
+    var lines = [];
+    lines.push('desiredReplicas = ceil( ' + r.n + ' × ' + fmt(r.util, 0) + '% / ' + c.target + '% ) = ceil(' + fmt(r.exact, 2) + ') = ' + Math.ceil(r.exact - 1e-9));
+    if (r.inTol) lines.push('<span class="dim">tolerancja: |' + fmt(r.ratio, 2) + ' − 1| ≤ 0,1 → zostaje ' + r.n + '</span>');
+    if (r.raw < r.n) lines.push('<span class="dim">okno scaleDown ' + c.win + ' s: max rekomendacji = ' + r.downRec + ' → ' + r.afterStab + '</span>');
+    if (r.rateLimited) lines.push('<span class="dim">tempo scaleUp: max(2 × ' + r.n + ', ' + r.n + ' + 4) = ' + r.afterRate + '</span>');
+    if (r.clampedMax || r.clampedMin) lines.push('<span class="dim">min/max: [' + c.min + ', ' + c.max + '] → ' + r.result + '</span>');
+    lines.push('wynik: <span class="res">' + r.result + '</span> ' + (r.result === r.n ? '(bez zmian)' : (r.result > r.n ? '(+' + (r.result - r.n) + ')' : '(−' + (r.n - r.result) + ')')));
+    box.innerHTML = lines.join('<br>');
+  }
+
+  function renderPods(c) {
+    var box = $('pods');
+    box.textContent = '';
+    for (var i = 0; i < n; i++) {
+      var s = document.createElement('span');
+      s.className = 'pod-chip' + (i >= n - lastAdded ? ' starting' : '');
+      s.title = i >= n - lastAdded ? 'nowy pod' : 'pod';
+      box.appendChild(s);
+    }
+    var l = document.createElement('span');
+    l.className = 'lim';
+    l.textContent = n + ' z max ' + c.max + (lastAdded > 0 ? ' · przerywane = dodane w tej pętli' : '');
+    box.appendChild(l);
+    box.setAttribute('aria-label', 'Pody: ' + n);
+  }
+
+  function renderHist(c) {
+    var box = $('bars');
+    box.textContent = '';
+    var top = Math.max(c.max, 1);
+    hist.forEach(function (h, i) {
+      var b = document.createElement('div');
+      b.className = 'bar' + (i > 0 && h.n < hist[i - 1].n ? ' down' : '');
+      b.style.height = (h.n / top * 100) + '%';
+      if (h.req) {
+        // kreska: ile podów potrzeba przy zadanym celu; pozycja względem wysokości słupka
+        var need = h.load / (h.req * h.target / 100);
+        if (need <= top && h.n) {
+          var ld = document.createElement('span');
+          ld.className = 'ld';
+          ld.style.bottom = (need / h.n * 100) + '%';
+          b.appendChild(ld);
+        }
+      }
+      b.title = h.t + ' s: ' + h.n + ' replik, zużycie ' + h.load + 'm';
+      box.appendChild(b);
+    });
+    var first = hist.length ? hist[0].t : 0;
+    $('hist-range').textContent = hist.length > 1 ? first + '–' + t + ' s' : '';
+    box.setAttribute('aria-label', 'Repliki w kolejnych pętlach: ' + hist.map(function (h) { return h.n; }).join(', '));
+  }
+
+  function render(applied) {
+    var c = cfg();
+    syncOutputs(c);
+    if (n < c.min) n = c.min;
+    if (n > c.max) n = c.max;
+    var r = evaluate(c, t + PERIOD);
+    $('st-n').textContent = n;
+    $('st-pp').textContent = r.unknown ? Math.round(c.load / n) + 'm' : Math.round(r.perPod) + 'm';
+    $('st-util').textContent = r.unknown ? '?' : fmt(r.util, 0) + '%';
+    $('st-util-box').classList.toggle('warn', r.unknown || r.util > 100);
+    $('st-targets').textContent = (r.unknown ? '<unknown>' : fmt(r.util, 0) + '%') + '/' + c.target + '%';
+    renderFormula(c, r);
+    var d = describe(c, r, false);
+    if (applied && applied.text) d = applied;
+    var msg = $('sim-msg');
+    msg.textContent = d.text;
+    msg.className = 'msg' + (d.cls ? ' ' + d.cls : '');
+    renderPods(c);
+    renderHist(c);
+    $('sim-time').textContent = 'czas ' + (t >= 60 ? Math.floor(t / 60) + ' min ' + (t % 60) + ' s' : t + ' s');
+  }
+
+  function tick() {
+    var c = cfg();
+    var now = t + PERIOD;
+    var r = evaluate(c, now);
+    var d = describe(c, r, true);
+    if (!r.unknown) recs.push({ t: now, r: r.raw });
+    recs = recs.filter(function (x) { return x.t > now - 600; });
+    t = now;
+    lastAdded = Math.max(0, r.result - n);
+    n = r.result;
+    hist.push({ t: t, n: n, load: c.load, req: c.req, target: c.target });
+    if (hist.length > HIST_MAX) hist.shift();
+    render({ cls: d.cls, text: 'Pętla ' + (t / PERIOD) + ': ' + d.text });
+  }
+
+  function reset() {
+    stop();
+    var c = cfg();
+    n = clamp(3, c.min, c.max);
+    t = 0; recs = []; lastAdded = 0;
+    hist = [{ t: 0, n: n, load: c.load, req: c.req, target: c.target }];
+    render();
+  }
+
+  function stop() {
+    if (timer) { clearInterval(timer); timer = null; }
+    btnPlay.textContent = 'odtwarzaj';
+    btnPlay.setAttribute('aria-pressed', 'false');
+  }
+  function play() {
+    if (timer) { stop(); return; }
+    btnPlay.textContent = 'pauza';
+    btnPlay.setAttribute('aria-pressed', 'true');
+    tick();
+    timer = setInterval(tick, 900);
+  }
+
+  [inLoad, inTarget, inMin, inMax, inWin].forEach(function (el) { el.addEventListener('input', function () { lastAdded = 0; render(); }); });
+  segReq.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-v]');
+    if (!b) return;
+    req = Number(b.getAttribute('data-v'));
+    segReq.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+    render();
+  });
+  btnTick.addEventListener('click', function () { stop(); tick(); });
+  btnPlay.addEventListener('click', play);
+  btnReset.addEventListener('click', reset);
+  reset();
+})();
+</script>
+</body>
+</html>

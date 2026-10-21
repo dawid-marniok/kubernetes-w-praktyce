@@ -1,0 +1,10 @@
+# Łatka do Deploymentu web: toleracja dla taintu dedicated=gpu:NoSchedule.
+#   kubectl patch deployment web --patch-file toleracja.yaml
+spec:
+  template:
+    spec:
+      tolerations:
+      - key: dedicated
+        operator: Equal         # Equal: klucz i wartość muszą się zgadzać; Exists: wystarczy klucz (bez value)
+        value: gpu
+        effect: NoSchedule      # NoSchedule, PreferNoSchedule, NoExecute; puste = toleruje każdy efekt tego klucza

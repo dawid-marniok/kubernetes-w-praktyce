@@ -1,0 +1,31 @@
+# HPA autoscaling/v2 z ograniczonym tempem w obie strony (wariant hpa.yaml; zastosuj zamiast niego — ta sama nazwa).
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: hpa-test
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: hpa-test
+  minReplicas: 2                   # zawsze co najmniej 2 repliki (odporność na utratę poda)
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 60
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0                      # w górę od razu, bez czekania
+      policies:
+      - {type: Percent, value: 50, periodSeconds: 15}    # +50% replik na 15 s
+      - {type: Pods, value: 2, periodSeconds: 15}        # albo +2 pody na 15 s
+      selectPolicy: Max                                  # Max: wybierz politykę, która da więcej; Min: mniej; Disabled: nie skaluj w tę stronę
+    scaleDown:
+      stabilizationWindowSeconds: 300                    # w dół dopiero po 5 min niskiego obciążenia
+      policies:
+      - {type: Pods, value: 1, periodSeconds: 60}        # najwyżej 1 pod na minutę
+      selectPolicy: Min

@@ -1,0 +1,26 @@
+# Aplikacja pod HPA (z Objects/13-HPA/01-basic-cpu-memory, po poprawkach). Bez pola replicas: liczbą replik rządzi HPA.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hpa-test
+spec:
+  selector:
+    matchLabels:
+      app: hpa-test
+  template:
+    metadata:
+      labels:
+        app: hpa-test
+    spec:
+      containers:
+      - name: web
+        image: nginx:1.29
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            cpu: 20m          # mały request → HPA szybko widzi wysoki procent
+            memory: 64Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi

@@ -1,5 +1,9 @@
 # Lista zakupów: Flask + PostgreSQL 18 (+ pgAdmin)
 
+**Cel:** aplikacja z bazą w Compose: budowanie obrazu, `depends_on` z healthcheckiem, dane w wolumenie, profil `debug`.
+
+**Gdzie:** lokalnie, Docker Desktop. Komendy wydajesz w tym katalogu (`cd przyklady/docker/compose/3-shoppinglist`).
+
 | Usługa | Obraz | Port na hoście | Uwagi |
 |---|---|---|---|
 | `web` | budowany z `app/` (`python:3.13-slim`) | 5001 → 5000 | REST API, healthcheck na `/health` |
@@ -41,6 +45,12 @@ docker compose --profile debug up -d
 http://localhost:5050, login `admin@example.com` / `changeme-pgadmin`. Serwer dodajesz ręcznie: host `db`, port `5432`, użytkownik `shop`, hasło `changeme-postgres`. Host to nazwa usługi, bo pgAdmin działa w tej samej sieci compose.
 
 Hasła w `compose.yaml` to atrapy na potrzeby zajęć.
+
+## Sprzątanie
+
+```bash
+docker compose --profile debug down -v   # kontenery, sieć i wolumen z danymi
+```
 
 ## Endpointy
 

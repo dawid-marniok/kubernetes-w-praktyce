@@ -1,0 +1,28 @@
+# CronJob co 2 minuty, strefa Europe/Warsaw, Forbid (bez nakładania), limity historii, TTL dla Jobów.
+# $(date) w cudzysłowach, nie w apostrofach — inaczej shell wypisze dosłownie "$(date)".
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: przyklad-cleanup
+spec:
+  schedule: "*/2 * * * *"          # cron: minuta godzina dzień-miesiąca miesiąc dzień-tygodnia; tu co 2 min
+  timeZone: Europe/Warsaw          # strefa IANA dla schedule; bez pola = strefa kube-controller-managera (zwykle UTC)
+  concurrencyPolicy: Forbid        # Allow (domyślnie): przebiegi mogą się nakładać; Forbid: pomiń nowy, gdy stary trwa;
+                                   # Replace: zabij trwający i uruchom nowy
+  startingDeadlineSeconds: 120     # spóźniony przebieg (np. kontroler nie działał) wolno uruchomić najwyżej 120 s po terminie
+  successfulJobsHistoryLimit: 3    # ile udanych Jobów zostawić (domyślnie 3)
+  failedJobsHistoryLimit: 1        # ile nieudanych Jobów zostawić (domyślnie 1)
+  suspend: false                   # true = nowe przebiegi wstrzymane (trwające kończą się normalnie)
+  jobTemplate:                     # szablon Joba: te same pola co w spec Joba
+    spec:
+      ttlSecondsAfterFinished: 600
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: cleanup
+            image: busybox:1.37
+            command: ["sh", "-c", "echo \"czyszczenie $(date)\"; sleep 10; echo gotowe"]
+            resources:
+              requests: {cpu: 10m, memory: 16Mi}
+              limits: {cpu: 100m, memory: 32Mi}

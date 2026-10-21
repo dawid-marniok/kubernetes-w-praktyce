@@ -1,0 +1,26 @@
+# HPA autoscaling/v2: cel 50% requestu CPU, 1–5 replik, w dół łagodnie (okno 300 s, 1 pod na minutę).
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: hpa-test
+spec:
+  scaleTargetRef:                  # co skalujemy: Deployment, StatefulSet albo inny obiekt z podzasobem scale
+    apiVersion: apps/v1
+    kind: Deployment
+    name: hpa-test
+  minReplicas: 1                   # dolna granica (domyślnie 1)
+  maxReplicas: 5                   # górna granica: HPA nigdy nie przekroczy tej liczby
+  metrics:
+  - type: Resource                 # Resource: CPU/pamięć z metrics-server; Pods, Object, External: metryki własne (np. Prometheus)
+    resource:
+      name: cpu
+      target:
+        type: Utilization          # Utilization: procent requestu; AverageValue: wartość na pod (np. 200m)
+        averageUtilization: 50     # średnio 50% requests.cpu na pod; więcej → dokłada repliki, mniej → zabiera
+  behavior:                        # tempo zmian; bez sekcji: w górę szybko, w dół po 300 s
+    scaleDown:
+      stabilizationWindowSeconds: 300   # schodzi w dół dopiero, gdy przez 5 min wszystkie wyliczenia mówiły „mniej”
+      policies:
+      - type: Pods                 # Pods: o tyle podów; Percent: o tyle % obecnych replik
+        value: 1
+        periodSeconds: 60          # najwyżej 1 pod na 60 s

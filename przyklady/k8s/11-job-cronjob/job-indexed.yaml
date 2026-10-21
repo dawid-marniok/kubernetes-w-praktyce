@@ -1,0 +1,29 @@
+# Job ze slajdu „Job kończy się sukcesem albo limitem prób”: 5 części, po 2 naraz, każdy pod zna swój numer.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: przyklad-resize
+spec:
+  completions: 5                   # Job skończony, gdy 5 podów zakończy się sukcesem
+  parallelism: 2                   # najwyżej 2 pody naraz
+  completionMode: Indexed          # NonIndexed (domyślnie): pody są wymienne, liczy się tylko liczba sukcesów;
+                                   # Indexed: każdy pod dostaje numer 0…completions-1 i każdy numer musi skończyć się sukcesem
+  backoffLimit: 3                  # limit porażek dla całego Joba
+  # backoffLimitPerIndex: 1        # (tylko Indexed) limit prób osobno dla każdego numeru: zepsuta część nie zatrzymuje pozostałych
+  activeDeadlineSeconds: 300       # limit czasu całego Joba
+  ttlSecondsAfterFinished: 600     # po 10 min od końca Job i pody znikają same
+  template:
+    spec:
+      restartPolicy: Never         # porażka = nowy pod (stary zostaje do wglądu: logs, describe)
+      containers:
+      - name: worker
+        image: busybox:1.37
+        # JOB_COMPLETION_INDEX ustawia Kubernetes (tylko Indexed): numer części, którą ma przerobić ten pod
+        command: ["sh", "-c", "echo \"część $JOB_COMPLETION_INDEX z 5, start $(date +%T)\"; sleep 15; echo \"część $JOB_COMPLETION_INDEX gotowa\""]
+        resources:
+          requests:
+            cpu: 10m
+            memory: 16Mi
+          limits:
+            cpu: 100m
+            memory: 32Mi

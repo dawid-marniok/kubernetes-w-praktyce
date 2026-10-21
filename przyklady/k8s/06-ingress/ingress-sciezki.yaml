@@ -11,7 +11,7 @@ spec:
     http:
       paths:
       - path: /app1
-        pathType: Prefix
+        pathType: Prefix          # Prefix, Exact; ImplementationSpecific zależy od kontrolera
         backend:
           service:
             name: app1

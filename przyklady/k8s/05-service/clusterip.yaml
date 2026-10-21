@@ -4,8 +4,8 @@ kind: Service
 metadata:
   name: przyklad-deploy
 spec:
-  type: ClusterIP
-  selector:
+  type: ClusterIP       # ClusterIP (domyślny), NodePort, LoadBalancer, ExternalName
+  selector:             # do których podów kierować ruch (etykiety)
     app: przyklad-deploy
   ports:
   - name: http

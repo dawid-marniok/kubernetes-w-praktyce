@@ -1,0 +1,25 @@
+# Deployment do testu quoty (krok 4): każdy pod rezerwuje 500m CPU.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-quota
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nginx-quota
+  template:
+    metadata:
+      labels:
+        app: nginx-quota
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.29
+        resources:
+          requests:
+            cpu: 500m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 128Mi

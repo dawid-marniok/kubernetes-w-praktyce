@@ -10,9 +10,9 @@ spec:
   selector:
     matchLabels:
       app: przyklad-rs-env
-    matchExpressions:
+    matchExpressions:            # warunki łączone przez AND z matchLabels
     - key: environment
-      operator: In
+      operator: In               # In, NotIn, Exists, DoesNotExist
       values:
         - dev
         - test

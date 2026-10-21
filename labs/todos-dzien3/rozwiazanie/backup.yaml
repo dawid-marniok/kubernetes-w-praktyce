@@ -1,0 +1,71 @@
+# ToDos · dzień 3 (*): kopia zapasowa bazy. CronJob raz na dobę robi mongodump na osobny PVC todos-backup.
+# Test bez czekania: kubectl create job --from=cronjob/mongo-backup backup-test && kubectl logs -f job/backup-test
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: todos-backup
+  labels:
+    app.kubernetes.io/part-of: todos
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: mongo-backup
+  labels:
+    app.kubernetes.io/part-of: todos
+spec:
+  schedule: "0 2 * * *"            # 2:00 czasu UTC (strefę zmienisz polem timeZone, np. Europe/Warsaw)
+  concurrencyPolicy: Forbid        # nigdy dwa backupy naraz
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: todos
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 600
+      template:
+        metadata:
+          labels:
+            app: todos-backup
+            app.kubernetes.io/part-of: todos
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: backup
+              image: mongo:7.0         # ma mongodump; ta sama wersja co baza
+              env:
+                - name: MONGODB_URI
+                  valueFrom:
+                    secretKeyRef:
+                      name: todos-mongo
+                      key: uri
+              command:
+                - sh
+                - -c
+                - |
+                  set -e
+                  plik=/backup/todos-$(date +%Y%m%d-%H%M).archive.gz
+                  mongodump --uri="$MONGODB_URI" --archive="$plik" --gzip
+                  ls -t /backup/todos-*.archive.gz | tail -n +8 | xargs -r rm --   # zostaw 7 ostatnich
+                  ls -lh /backup
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  cpu: 500m
+                  memory: 256Mi
+              volumeMounts:
+                - name: backup
+                  mountPath: /backup
+          volumes:
+            - name: backup
+              persistentVolumeClaim:
+                claimName: todos-backup

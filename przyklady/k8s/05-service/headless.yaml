@@ -4,7 +4,7 @@ kind: Service
 metadata:
   name: przyklad-deploy-headless
 spec:
-  clusterIP: None
+  clusterIP: None       # brak wirtualnego IP: DNS zwraca rekordy A wszystkich gotowych podów
   selector:
     app: przyklad-deploy
   ports:

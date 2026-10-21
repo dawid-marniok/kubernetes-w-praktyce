@@ -1,0 +1,13 @@
+# Zjada pamięć bez końca → po przekroczeniu limitu 64Mi jądro zabija proces: OOMKilled, exit 137.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: przyklad-oom
+spec:
+  containers:
+  - name: mem
+    image: busybox:1.37
+    command: ["sh", "-c", "tail /dev/zero"]
+    resources:
+      requests: {cpu: 10m, memory: 64Mi}
+      limits: {cpu: 100m, memory: 64Mi}

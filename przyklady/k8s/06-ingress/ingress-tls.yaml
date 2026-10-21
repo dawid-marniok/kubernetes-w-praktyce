@@ -16,7 +16,7 @@ spec:
   tls:
   - hosts:
     - <login>.<DOMENA>          # ten sam host co w rules
-    secretName: przyklad-tls
+    secretName: przyklad-tls    # Secret typu kubernetes.io/tls; z cert-managerem tworzy go cert-manager
   rules:
   - host: <login>.<DOMENA>
     http:

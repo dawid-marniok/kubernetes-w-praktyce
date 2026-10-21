@@ -1,4 +1,8 @@
-# Docker Compose: przykłady
+# Przykłady: Docker Compose
+
+**Cel:** uruchomić kilka kontenerów jednym plikiem: sieć, wolumeny, kolejność startu z healthcheckami i skalowanie usługi.
+
+**Gdzie:** lokalnie, Docker Desktop. Komendy wydajesz w katalogu danego przykładu (`cd przyklady/docker/compose/<katalog>`). Każdy katalog z własnym `README.md` ma tam kroki i oczekiwane wyniki.
 
 | Katalog | Co pokazuje | Start | Adres |
 |---|---|---|---|
@@ -8,6 +12,18 @@
 | `../../../app/todos/` | aplikacja ToDos z labu (web + api + mongo + mongo-express, `docker compose watch`) | `docker compose up -d --build` | http://localhost:3000 |
 
 Numer 2 jest wolny: stary przykład ELK (Elasticsearch + Kibana 7.14) nie wszedł do repo. Obecne wersje 8.x/9.x mają domyślnie włączone zabezpieczenia, a oba obrazy zajmują razem ok. 2,5 GB i potrzebują 2–4 GB RAM, co na laptopie z Docker Desktop jest uciążliwe. Na tym przykładzie nie uczymy niczego, czego nie pokazują pozostałe.
+
+## 1-nginx krok po kroku
+
+```bash
+cd 1-nginx
+docker compose up -d
+docker compose ps                    # nginx: Up … (healthy) po ok. 10 s
+curl localhost:8888                  # strona z html/index.html
+```
+Zmień coś w `html/index.html` i odśwież: zmianę widać od razu (bind mount, bez przebudowy). Wariant z sieciami, wolumenem i limitami: `docker compose -f compose.advanced.yaml up -d` → http://localhost:8889.
+
+Sprzątanie: `docker compose down` (i `docker compose -f compose.advanced.yaml down -v`).
 
 ## Najczęstsze polecenia
 

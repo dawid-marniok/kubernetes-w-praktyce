@@ -1,10 +1,10 @@
 # ConfigMap z dwoma rodzajami kluczy: zwykła wartość i cały plik.
 apiVersion: v1
 kind: ConfigMap
-metadata:
+metadata:                     # klucz: wartość (tekst); binaria w binaryData (base64)
   name: przyklad-config
 data:
   LOG_LEVEL: info
-  app.properties: |
+  app.properties: |        # | = wartość wielolinijkowa: cały plik pod jednym kluczem
     feature.x=true
     timeout.seconds=30

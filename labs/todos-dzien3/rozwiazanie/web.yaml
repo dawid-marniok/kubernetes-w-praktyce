@@ -1,0 +1,54 @@
+# ToDos · dzień 3 (bez zmian od wczoraj): frontend (nginx + zbudowany React). Nginx słucha na 8080
+# i przekazuje /api/ do http://$API_HOST:$API_PORT.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  labels:
+    app: todos-web
+    app.kubernetes.io/part-of: todos
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: todos-web
+  template:
+    metadata:
+      labels:
+        app: todos-web
+        app.kubernetes.io/part-of: todos
+    spec:
+      containers:
+        - name: web
+          image: <REJESTR>/todos-web:1.0.0
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: todos-config
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  labels:
+    app.kubernetes.io/part-of: todos
+spec:
+  selector:
+    app: todos-web
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
