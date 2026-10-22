@@ -1,0 +1,21 @@
+# Po deny-all aplikacja znika z internetu: wpuść ruch z namespace kontrolera Ingress/Gateway.
+# Nazwę namespace kontrolera sprawdź: kubectl get pods -A | grep -iE 'ingress|gateway|traefik'
+# (klaster szkoleniowy: traefik; z ingress-nginx zwykle ingress-nginx).
+# Z cert-managerem (HTTP-01) wpuść też ruch do poda solvera: przykład w docs/k8s/ingress-gateway/cert-manager.md.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-from-ingress-controller
+spec:
+  podSelector:
+    matchLabels:
+      app: frontend
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: traefik
+    ports:
+    - port: 8080          # port kontenera aplikacji, nie port Service

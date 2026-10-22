@@ -66,6 +66,8 @@ Brak obrazu → wróć do lab04, krok 6 (Mac M: `buildx --platform linux/amd64`)
 - klasa `traefik` (jak w lab08), host `todos-<login>.<DOMENA>`, ścieżka `/` do Service `web`. Ścieżka `/api` nie jest potrzebna: nginx w web sam przekazuje ją do api.
 - HTTPS z certyfikatem od Let's Encrypt jak w lab08 (krok 4): adnotacja `cert-manager.io/cluster-issuer` i sekcja `tls` z Secretem `todos-tls`. Bez tego przeglądarka pokaże ostrzeżenie (domena `.dev` działa w przeglądarce tylko po HTTPS). Ten sam host i Secret wykorzystasz w dniu 5.
 
+> **Skąd klaster ma dostęp do ECR?** Nie tworzysz Secretu `docker-registry` ani `imagePullSecrets`. Obraz pobiera węzeł, nie pod: rola IAM węzłów ma `AmazonEC2ContainerRegistryReadOnly`, a kubelet sam bierze token do ECR i go odnawia. Działa to dla ECR na tym samym koncie AWS. Prywatny Docker Hub czy GHCR wymagałyby Secretu. Więcej: [`docs/k8s/rejestr/ecr.html`](../../docs/k8s/rejestr/ecr.html) (otwórz w przeglądarce).
+
 Ściąga: `kubectl explain deployment.spec.strategy`, `kubectl explain pod.spec.containers.env.valueFrom`, `kubectl create secret generic --help`, wzorce w [`przyklady/k8s/`](../../przyklady/k8s/).
 
 ## Jak sprawdzić

@@ -1,0 +1,32 @@
+# jedna strzałka frontend → backend = dwie polityki, bo deny-all zamknął obie strony.
+# 1) backend przyjmuje ruch od frontendu na porcie kontenera 8080 (nie 80 z Service!)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-from-frontend
+spec:
+  podSelector:
+    matchLabels: {app: backend}
+  policyTypes: ["Ingress"]     # Ingress = ruch przychodzący do wybranych podów; Egress = wychodzący
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels: {app: frontend}
+    ports:
+    - port: 8080
+---
+# 2) frontend może wyjść do backendu
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: frontend-to-backend
+spec:
+  podSelector:
+    matchLabels: {app: frontend}
+  policyTypes: ["Egress"]
+  egress:
+  - to:
+    - podSelector:
+        matchLabels: {app: backend}
+    ports:
+    - port: 8080

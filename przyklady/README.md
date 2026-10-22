@@ -29,3 +29,8 @@ Manifesty Kubernetesa nie mają `namespace:` (trafiają do Twojego domyślnego) 
 | [`k8s/14-hpa/`](k8s/14-hpa/) | 3 | Zasoby, QoS, HPA | lab11 | HPA `autoscaling/v2`, zachowanie przy skalowaniu, generator ruchu |
 | [`k8s/15-affinity-taints/`](k8s/15-affinity-taints/) | 3 | Planowanie i utrzymanie | — | nodeAffinity, pod (anti-)affinity, topologySpread, taint i toleracja; ćwiczenie taint + PDB + drain na kind |
 | [`k8s/16-pdb/`](k8s/16-pdb/) | 3 | Planowanie i utrzymanie | — | PodDisruptionBudget i drain węzła (kind) |
+| [`k8s/17-rbac/`](k8s/17-rbac/) | 4 | RBAC i ServiceAccount | lab13 | Role dla dewelopera, pod z kubectl i ServiceAccount, antywzorzec cluster-admin |
+| [`k8s/18-pod-security/`](k8s/18-pod-security/) | 4 | Pod Security i admission | lab14 | Deployment zgodny z poziomem restricted |
+| [`k8s/19-networkpolicy/`](k8s/19-networkpolicy/) | 4 | Sieć | lab15 | deny, DNS, ruch z kontrolera Ingress, izolacja namespace, egress HTTPS |
+| [`k8s/20-crd/`](k8s/20-crd/) | 4 | Rozszerzanie API | lab16 | CRD `Backup` i obiekt tego typu |
+| [`k8s/21-downward-api/`](k8s/21-downward-api/) | 4 | Rozszerzanie API | lab16 | pod, który zna swoją nazwę, węzeł i limity |

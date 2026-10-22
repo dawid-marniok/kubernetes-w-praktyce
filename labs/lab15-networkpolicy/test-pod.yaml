@@ -1,0 +1,14 @@
+# Pod testowy BEZ etykiety app: „obcy” w Twoim namespace. busybox ma wget i nslookup.
+# kubectl apply -f test-pod.yaml, potem: kubectl exec test-pod -- wget -qO- -T 2 http://backend
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-pod
+spec:
+  containers:
+  - name: busybox
+    image: busybox:1.37
+    command: ["sleep", "3600"]
+    resources:
+      requests: {cpu: 10m, memory: 16Mi}
+      limits: {cpu: 100m, memory: 32Mi}

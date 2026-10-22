@@ -2,7 +2,7 @@
 
 **Wizualizacja:** [storage.html](storage.html) — otwórz plik w przeglądarce (dwuklik albo `open storage.html`). Jest tam animacja krok po kroku: od PVC do dysku EBS zamontowanego w kontenerze, z tym, co w danym momencie pokazuje `kubectl get`.
 
-Gotowe manifesty: `przyklady/k8s/08-storage/` (PVC, pod z PVC, Postgres na PVC), `przyklady/k8s/09-statefulset/`. Ćwiczysz w [d3-lab09-storage-statefulset](../../../labs/d3-lab09-storage-statefulset/).
+Gotowe manifesty: `przyklady/k8s/08-storage/` (PVC, pod z PVC, Postgres na PVC), `przyklady/k8s/09-statefulset/`. Ćwiczysz w [lab09-storage-statefulset](../../../labs/lab09-storage-statefulset/).
 
 Nasz klaster: EKS `k8s-sages` w `eu-central-1`, 3 węzły w 3 strefach (AZ), domyślna klasa `gp3` (sterownik EBS CSI `ebs.csi.aws.com`, dodatek EKS). Ty tworzysz PVC w swoim namespace. PV i StorageClass tylko czytasz.
 

@@ -1,0 +1,15 @@
+# Krok 3: pod z własnym ServiceAccountem. Uzupełnij pole, które wskazuje SA.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-sa
+spec:
+  ___: my-service-account
+  containers:
+  - name: nginx
+    image: nginx:1.29
+    ports:
+    - containerPort: 80
+    resources:
+      requests: {cpu: 10m, memory: 32Mi}
+      limits: {cpu: 200m, memory: 64Mi}

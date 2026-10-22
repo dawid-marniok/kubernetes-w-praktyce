@@ -1,0 +1,83 @@
+# ToDos · dzień 4: ruch przychodzący do podów ToDos tylko tam, gdzie wynika ze strzałek na diagramie.
+# Porty to porty PODÓW (containerPort), nie Service: web 8080 (Service 80), api 3001, mongo 27017.
+#
+# 1. Domyślnie nic nie wchodzi do podów ToDos. Selektor po part-of=todos, a nie podSelector: {}:
+#    pody z innych labów i pod solvera cert-managera (odnawianie certyfikatu todos-tls) zostają bez zmian.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: todos-default-deny
+  labels:
+    app.kubernetes.io/part-of: todos
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: todos
+  policyTypes: [Ingress]
+---
+# 2. web: tylko z namespace'u kontrolera Ingress (Traefik), na port 8080
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: web-from-traefik
+  labels:
+    app.kubernetes.io/part-of: todos
+spec:
+  podSelector:
+    matchLabels:
+      app: todos-web
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: traefik   # tę etykietę każdy namespace ma od Kubernetesa
+      ports:
+        - port: 8080
+          protocol: TCP
+---
+# 3. api: tylko od podów web (nginx przekazuje /api/), port 3001
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-from-web
+  labels:
+    app.kubernetes.io/part-of: todos
+spec:
+  podSelector:
+    matchLabels:
+      app: todos-api
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: todos-web
+      ports:
+        - port: 3001
+          protocol: TCP
+---
+# 4. mongo: tylko od podów api i (*) od Joba backupu, port 27017.
+#    Dwa elementy listy from = LUB. Bez CronJobu reguła dla todos-backup niczego nie otwiera.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mongo-from-api
+  labels:
+    app.kubernetes.io/part-of: todos
+spec:
+  podSelector:
+    matchLabels:
+      app: todos-mongo
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: todos-api
+        - podSelector:
+            matchLabels:
+              app: todos-backup
+      ports:
+        - port: 27017
+          protocol: TCP

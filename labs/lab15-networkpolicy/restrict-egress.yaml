@@ -1,0 +1,35 @@
+# Krok 3: uzupełnij trzy reguły egress dla podów app=restricted (miejsca ___).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: restrict-egress
+spec:
+  podSelector:
+    matchLabels:
+      app: restricted
+  policyTypes:
+  - Egress
+  egress:
+  # 1) DNS: tylko do podów kube-dns w namespace kube-system, UDP i TCP 53
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          ___: kube-system        # etykieta, którą Kubernetes sam nadaje każdemu namespace
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - {protocol: UDP, port: 53}
+    - {protocol: TCP, port: 53}
+  # 2) HTTPS do internetu: ipBlock, a NIE namespaceSelector (ten wybiera tylko pody w klastrze)
+  - to:
+    - ipBlock:
+        cidr: ___
+        except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]   # sieci prywatne: klaster i VPC
+    ports:
+    - {protocol: TCP, port: 443}
+  # 3) HTTP do podów w Twoim namespace
+  - to:
+    - podSelector: ___
+    ports:
+    - {protocol: TCP, port: 80}

@@ -1,0 +1,578 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jak klaster wie, kim jesteś</title>
+<meta name="description" content="Dzień 4 — ściąga: uwierzytelnianie w zwykłym Kubernetesie (certyfikat x509, OIDC, token ServiceAccount) i na EKS (IAM, access entries, access policies), krok po kroku obok siebie. RBAC jest wszędzie taki sam.">
+<style>
+:root {
+  --navy: #012438;
+  --acc: #41C0F0;
+  --light: #EBF8FD;
+  --light2: #E1EDF8;
+
+  --bg: #ffffff;
+  --ink: #0f2535;
+  --muted: #557080;
+  --panel: var(--light);
+  --card: #ffffff;
+  --card-line: #b9d3e2;
+  --strong: var(--navy);
+  --on-strong: #ffffff;
+  --strong-title: var(--acc);
+  --head: #0a7aa8;
+  --line: #34505f;
+  --code-bg: var(--light2);
+  --row-alt: #f4fafd;
+  --border: #d5e4ed;
+
+  --ok: #1d7a44;
+  --ok-bg: #dcf2e4;
+  --bad: #b42318;
+  --bad-bg: #fde3df;
+  --warn: #8a5300;
+  --warn-bg: #fff0d4;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #08151e;
+    --ink: #e3eef4;
+    --muted: #9cb4c3;
+    --panel: #0f2532;
+    --card: #142f3f;
+    --card-line: #2c5065;
+    --strong: #0d4b70;
+    --on-strong: #ffffff;
+    --strong-title: #7fd6f7;
+    --head: #41C0F0;
+    --line: #a8c3d2;
+    --code-bg: #12293a;
+    --row-alt: #0d1f2b;
+    --border: #23404f;
+
+    --ok: #6fd99a;
+    --ok-bg: #12382a;
+    --bad: #ff9a8c;
+    --bad-bg: #4a1c18;
+    --warn: #ffcf70;
+    --warn-bg: #3d2e0e;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px 64px; }
+header.hero { background: var(--navy); color: #fff; padding: 40px 0 32px; border-bottom: 6px solid var(--acc); }
+header.hero .wrap { padding-bottom: 0; }
+.kicker { color: var(--acc); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; font-size: 13px; margin: 0 0 6px; }
+.kicker a { color: var(--acc); }
+h1 { font-size: clamp(28px, 6vw, 44px); line-height: 1.15; margin: 0 0 12px; }
+.hero p.lead { max-width: 720px; margin: 0; color: #d6e9f3; font-size: 17px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0 0; padding: 0; list-style: none; }
+.chips li { background: rgba(65,192,240,.14); border: 1px solid rgba(65,192,240,.45); color: #e6f6fd; border-radius: 999px; padding: 3px 12px; font-size: 14px; }
+nav.toc { margin: 28px 0 8px; }
+nav.toc ol { display: flex; flex-wrap: wrap; gap: 6px 8px; padding: 0; margin: 0; list-style: none; counter-reset: toc; }
+nav.toc li { counter-increment: toc; }
+nav.toc a { display: inline-block; text-decoration: none; color: var(--ink); background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 4px 10px; font-size: 14px; }
+nav.toc a::before { content: counter(toc) ". "; color: var(--head); font-weight: 700; }
+nav.toc a:hover, nav.toc a:focus-visible { border-color: var(--acc); }
+section { margin-top: 48px; scroll-margin-top: 16px; }
+h2 { font-size: clamp(22px, 4.5vw, 28px); line-height: 1.25; margin: 0 0 10px; display: flex; gap: 12px; align-items: baseline; }
+h2 .n { color: var(--acc); font-weight: 800; font-size: 1.25em; line-height: 1; }
+h3 { font-size: 18px; margin: 24px 0 8px; }
+p { margin: 0 0 12px; }
+a { color: var(--head); }
+code, kbd, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: .9em; }
+:not(pre) > code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+pre { background: var(--code-bg); padding: 12px 14px; border-radius: 8px; overflow-x: auto; margin: 0 0 12px; }
+pre .c { color: var(--muted); }
+.key { border-left: 5px solid var(--acc); background: var(--panel); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; }
+.key strong { color: var(--ink); }
+.key.warnk { border-left-color: var(--bad); }
+figure { margin: 20px 0; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px; min-width: 0; }
+figure .scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+figure svg { display: block; width: 100%; height: auto; }
+figcaption { font-size: 14px; color: var(--muted); margin-top: 8px; }
+figcaption .hint { display: none; }
+@media (max-width: 640px) {
+  figure { padding: 8px; margin-left: -4px; margin-right: -4px; }
+  figure .scroll svg.wide { min-width: 760px; }
+  figcaption .hint { display: inline; }
+}
+.grid2 { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+.grid2 > * { min-width: 0; }
+@media (min-width: 820px) { .grid2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.tablewrap { overflow-x: auto; margin: 16px 0; border: 1px solid var(--border); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+thead th { background: var(--navy); color: #fff; font-size: 14px; }
+tbody tr:nth-child(even) { background: var(--row-alt); }
+tbody tr:last-child td { border-bottom: 0; }
+td:first-child { font-weight: 700; }
+@media (max-width: 640px) {
+  table.stack thead { display: none; }
+  table.stack, table.stack tbody, table.stack tr, table.stack td { display: block; width: 100%; }
+  table.stack tr { border-bottom: 1px solid var(--border); padding: 6px 0; }
+  table.stack td { border: 0; padding: 4px 12px; }
+  table.stack td[data-h]::before { content: attr(data-h); display: block; font-size: 12px; font-weight: 700; color: var(--head); text-transform: uppercase; letter-spacing: .05em; }
+}
+.cheat { display: grid; gap: 10px; grid-template-columns: 1fr; }
+@media (min-width: 760px) { .cheat { grid-template-columns: 1fr 1fr; } }
+.cheat div { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--bg); min-width: 0; }
+.cheat pre { margin: 0 0 6px; font-size: 14px; }
+.cheat p { margin: 0; font-size: 14px; color: var(--muted); }
+footer { margin-top: 56px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--border); padding-top: 16px; }
+
+/* --- sterowanie --- */
+.ctl { min-width: 0; }
+.ctl .cl { display: flex; justify-content: space-between; gap: 8px; font-weight: 700; font-size: 15px; }
+.ctl small { display: block; color: var(--muted); font-size: 13px; line-height: 1.4; }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 4px; }
+.seg button { font: inherit; font-size: 13.5px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel); color: var(--ink); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--strong); color: var(--on-strong); border-color: var(--strong); }
+.seg button:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; align-items: center; }
+button.b { font: inherit; font-size: 15px; padding: 7px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--ink); cursor: pointer; }
+button.b.primary { background: var(--strong); color: var(--on-strong); border-color: var(--strong); font-weight: 700; }
+button.b:hover, button.b:focus-visible { border-color: var(--acc); }
+button.b:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; }
+button.b:disabled { opacity: .45; cursor: not-allowed; }
+.tickno { font-size: 14px; color: var(--muted); margin-left: auto; }
+.flow { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 4px; padding: 0; list-style: none; }
+.flow li { font-size: 13.5px; padding: 3px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--muted); }
+.flow li.on { background: var(--strong); color: var(--on-strong); border-color: var(--strong); font-weight: 700; }
+.flow li.past { color: var(--ink); border-color: var(--ok); }
+.side { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; min-width: 0; }
+.side h3 { margin: 0 0 4px; font-size: 17px; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.side h3 .sub { font-size: 13px; color: var(--muted); font-weight: 400; }
+.stepbox { border-left: 4px solid var(--acc); background: var(--panel); border-radius: 0 8px 8px 0; padding: 8px 12px; margin-top: 10px; min-height: 9em; font-size: 14.5px; }
+.stepbox.fin { border-left-color: var(--ok); }
+.stepbox .st { font-weight: 800; font-size: 13px; color: var(--head); text-transform: uppercase; letter-spacing: .05em; margin: 0 0 4px; }
+.stepbox p { margin: 0 0 6px; }
+.stepbox pre { font-size: 12px; margin: 6px 0 0; background: var(--bg); white-space: pre-wrap; overflow-wrap: anywhere; }
+.idbox { margin-top: 10px; border: 1.5px dashed var(--card-line); border-radius: 10px; padding: 8px 10px; font: 12.5px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; color: var(--muted); }
+.idbox.set { border-style: solid; border-color: var(--ok); background: var(--ok-bg); color: var(--ink); }
+.idbox b { color: var(--ink); }
+.same { text-align: center; font-weight: 800; color: var(--ok); margin: 12px 0 0; font-size: 15px; }
+
+/* --- karty --- */
+.cards { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 720px) { .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 960px) { .cards.c3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.card { border: 1px solid var(--border); border-radius: 12px; background: var(--bg); padding: 14px; min-width: 0; }
+.card h3 { margin: 0 0 6px; }
+.card p { font-size: 15px; }
+.card ul { margin: 0; padding-left: 20px; font-size: 15px; }
+.card li { margin-bottom: 4px; }
+.card.mid { border-top: 5px solid var(--acc); }
+.card.no { border-top: 5px solid var(--bad); }
+.card.yes { border-top: 5px solid var(--ok); }
+.card pre { font-size: 12.5px; }
+
+/* --- SVG --- */
+svg text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; fill: var(--ink); font-size: 14px; }
+svg .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+svg .b { font-weight: 700; }
+svg .s { font-size: 12.5px; fill: var(--muted); }
+svg .h { font-size: 13px; font-weight: 800; letter-spacing: .06em; fill: var(--head); }
+svg .ttl { font-size: 16px; font-weight: 800; fill: var(--strong-title); }
+svg .on { fill: var(--on-strong); }
+svg .on.s { fill: var(--on-strong); opacity: .85; }
+svg .panel { fill: var(--bg); stroke: var(--card-line); stroke-width: 1; }
+svg .box { fill: var(--card); stroke: var(--card-line); stroke-width: 1.2; }
+svg .strong { fill: var(--strong); }
+svg .okb { fill: var(--ok-bg); stroke: var(--ok); stroke-width: 1.4; }
+svg .okt { fill: var(--ok); font-weight: 800; }
+svg .ln { fill: none; stroke: var(--line); stroke-width: 1.8; }
+svg .ln.acc { stroke: var(--acc); stroke-width: 2.6; }
+svg .mk { fill: var(--line); }
+svg .mk-acc { fill: var(--acc); }
+svg .lbl { font-size: 12.5px; fill: var(--muted); font-style: italic; }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="kicker">Dzień 4 · ściąga · <a href="README.md">wersja tekstowa</a> · <a href="rbac.html">RBAC i ServiceAccount</a></p>
+    <h1>Jak klaster wie, kim jesteś</h1>
+    <p class="lead">RBAC wygląda tak samo w każdym klastrze: Role, RoleBinding, <code style="background:transparent;color:inherit">kubectl auth can-i</code>. Różni się to, co dzieje się przed nim: jak klaster sprawdza dowód tożsamości i jak zamienia go na nazwę użytkownika i grupy.</p>
+    <ul class="chips" aria-label="Kontekst">
+      <li>certyfikat x509</li>
+      <li>OIDC</li>
+      <li>token ServiceAccount</li>
+      <li>EKS: IAM + access entries</li>
+      <li>access policies</li>
+      <li>Kubernetes 1.35</li>
+    </ul>
+  </div>
+</header>
+
+<main class="wrap">
+<nav class="toc" aria-label="Spis treści">
+  <ol>
+    <li><a href="#zasada">Jedna zasada</a></li>
+    <li><a href="#obok">Krok po kroku obok siebie</a></li>
+    <li><a href="#vanilla">Zwykły Kubernetes</a></li>
+    <li><a href="#eks">EKS</a></li>
+    <li><a href="#nasz">Nasz klaster</a></li>
+    <li><a href="#inne">AKS i GKE</a></li>
+    <li><a href="#porownanie">Porównanie</a></li>
+  </ol>
+</nav>
+
+<!-- 1 ============================================================ -->
+<section id="zasada">
+  <h2><span class="n">1</span> Jedna zasada: dowód → tożsamość → RBAC</h2>
+  <p>Uwierzytelnienie ma jeden wynik: <strong>nazwę użytkownika i listę grup</strong>. Tylko to trafia dalej. RBAC nie wie, czy przyszedłeś z certyfikatem, z Keycloaka czy z IAM. Widzi napis <code>anna</code> i grupy, i szuka bindingów dla nich.</p>
+  <figure>
+    <div class="scroll">
+    <svg class="wide" viewBox="0 0 1000 300" role="img" aria-labelledby="z-t z-d">
+      <title id="z-t">Różne dowody, jedna tożsamość, ten sam RBAC</title>
+      <desc id="z-d">Cztery rodzaje dowodu: certyfikat klienta, token OIDC, token ServiceAccount i token IAM na EKS. Każdy trafia do innego mechanizmu uwierzytelnienia, ale wszystkie dają to samo: nazwę użytkownika i grupy. Dalej jest jeden, wspólny RBAC.</desc>
+      <defs>
+        <marker id="z1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk" d="M0 0L10 5L0 10z"/></marker>
+        <marker id="z1c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="mk-acc" d="M0 0L10 5L0 10z"/></marker>
+      </defs>
+      <rect class="panel" x="12" y="12" width="548" height="276" rx="14"/>
+      <text class="h" x="28" y="38">RÓŻNI SIĘ · uwierzytelnienie</text>
+      <rect class="box" x="30" y="52" width="230" height="52" rx="8"/>
+      <text class="b" x="44" y="74">certyfikat klienta x509</text>
+      <text class="s" x="44" y="94">CN = nazwa, O = grupy</text>
+      <rect class="box" x="30" y="112" width="230" height="52" rx="8"/>
+      <text class="b" x="44" y="134">token OIDC (JWT)</text>
+      <text class="s" x="44" y="154">Keycloak, Entra ID, Google…</text>
+      <rect class="box" x="30" y="172" width="230" height="52" rx="8"/>
+      <text class="b" x="44" y="194">token ServiceAccount</text>
+      <text class="s" x="44" y="214">podpisany przez klaster</text>
+      <rect class="box" x="30" y="232" width="230" height="46" rx="8"/>
+      <text class="b" x="44" y="252">token IAM (EKS)</text>
+      <text class="s" x="44" y="270">aws eks get-token</text>
+      <rect class="box" x="300" y="52" width="240" height="52" rx="8"/>
+      <text class="s" x="314" y="74">CA klastra (--client-ca-file)</text>
+      <text class="s" x="314" y="94">podpis i data ważności</text>
+      <rect class="box" x="300" y="112" width="240" height="52" rx="8"/>
+      <text class="s" x="314" y="134">klucze wystawcy OIDC</text>
+      <text class="s" x="314" y="154">claimy → nazwa i grupy</text>
+      <rect class="box" x="300" y="172" width="240" height="52" rx="8"/>
+      <text class="s" x="314" y="194">klucz SA klastra</text>
+      <text class="s" x="314" y="214">+ czy pod/SA jeszcze istnieje</text>
+      <rect class="box" x="300" y="232" width="240" height="46" rx="8"/>
+      <text class="s" x="314" y="252">AWS STS → ARN → access entry</text>
+      <text class="s" x="314" y="270">ARN → nazwa i grupy</text>
+      <path class="ln" d="M262 78 H296" marker-end="url(#z1)"/>
+      <path class="ln" d="M262 138 H296" marker-end="url(#z1)"/>
+      <path class="ln" d="M262 198 H296" marker-end="url(#z1)"/>
+      <path class="ln" d="M262 255 H296" marker-end="url(#z1)"/>
+
+      <rect class="okb" x="604" y="96" width="170" height="108" rx="10"/>
+      <text class="okt" x="689" y="126" text-anchor="middle">tożsamość</text>
+      <text class="s mono" x="689" y="152" text-anchor="middle">user: anna</text>
+      <text class="s mono" x="689" y="172" text-anchor="middle">groups: [devs,</text>
+      <text class="s mono" x="689" y="190" text-anchor="middle"> system:authenticated]</text>
+      <path class="ln acc" d="M544 78 C 580 78, 570 140, 598 144" marker-end="url(#z1c)"/>
+      <path class="ln acc" d="M544 138 H598" marker-end="url(#z1c)"/>
+      <path class="ln acc" d="M544 198 C 576 198, 576 160, 598 156" marker-end="url(#z1c)"/>
+      <path class="ln acc" d="M544 255 C 584 255, 576 170, 598 166" marker-end="url(#z1c)"/>
+
+      <rect class="strong" x="812" y="60" width="176" height="180" rx="12"/>
+      <text class="ttl" x="900" y="94" text-anchor="middle">RBAC</text>
+      <text class="on s" x="900" y="120" text-anchor="middle">taki sam wszędzie</text>
+      <text class="on s" x="900" y="150" text-anchor="middle">Role · ClusterRole</text>
+      <text class="on s" x="900" y="170" text-anchor="middle">RoleBinding</text>
+      <text class="on s" x="900" y="190" text-anchor="middle">ClusterRoleBinding</text>
+      <text class="on s" x="900" y="220" text-anchor="middle">(EKS: + access policies)</text>
+      <path class="ln" d="M776 150 H806" marker-end="url(#z1)"/>
+    </svg>
+    </div>
+    <figcaption>W Kubernetesie <strong>nie ma obiektu User</strong>. Nie zrobisz <code>kubectl create user</code> ani <code>kubectl get users</code>. Użytkownik istnieje tylko jako napis w dowodzie i w <code>subjects</code> bindingów. <span class="hint">Na telefonie diagram przewiniesz w bok.</span></figcaption>
+  </figure>
+  <p>Sprawdzisz to w każdym klastrze jedną komendą: <code>kubectl auth whoami</code> pokazuje nazwę i grupy, które zobaczył apiserver.</p>
+</section>
+
+<!-- 2 ============================================================ -->
+<section id="obok">
+  <h2><span class="n">2</span> Krok po kroku obok siebie</h2>
+  <p>Po lewej zwykły Kubernetes (np. postawiony przez kubeadm), po prawej EKS, czyli nasz klaster. Wybierz sposób logowania po obu stronach i przechodź krokami.</p>
+  <figure>
+    <ol class="flow" id="o-flow" aria-label="Krok">
+      <li>1 · kubeconfig</li><li>2 · co wysyła kubectl</li><li>3 · weryfikacja</li><li>4 · tożsamość</li><li>5 · autoryzacja</li>
+    </ol>
+    <div class="btns">
+      <button type="button" class="b primary" id="o-step">krok dalej →</button>
+      <button type="button" class="b" id="o-back">← wstecz</button>
+      <button type="button" class="b" id="o-reset">od nowa</button>
+      <span class="tickno" id="o-tick" aria-live="polite">krok 1 z 5</span>
+    </div>
+    <div class="grid2">
+      <div class="side">
+        <h3>Zwykły Kubernetes <span class="sub">kubeadm, k3s…</span></h3>
+        <div class="ctl">
+          <div class="seg" id="o-v" role="group" aria-label="Sposób logowania w zwykłym Kubernetesie">
+            <button type="button" data-v="cert" aria-pressed="true">certyfikat (jan)</button>
+            <button type="button" data-v="oidc" aria-pressed="false">OIDC (jan@firma.pl)</button>
+            <button type="button" data-v="sa" aria-pressed="false">token SA (ci-deployer)</button>
+          </div>
+        </div>
+        <div class="stepbox" id="o-vbox" aria-live="polite"></div>
+        <div class="idbox" id="o-vid"></div>
+      </div>
+      <div class="side">
+        <h3>Amazon EKS <span class="sub">k8s-sages</span></h3>
+        <div class="ctl">
+          <div class="seg" id="o-e" role="group" aria-label="Kto loguje się do EKS">
+            <button type="button" data-v="kursant" aria-pressed="true">kursantka (anna)</button>
+            <button type="button" data-v="trener" aria-pressed="false">trener (access policy)</button>
+            <button type="button" data-v="brak" aria-pressed="false">IAM bez access entry</button>
+          </div>
+        </div>
+        <div class="stepbox" id="o-ebox" aria-live="polite"></div>
+        <div class="idbox" id="o-eid"></div>
+      </div>
+    </div>
+    <p class="same" id="o-same" hidden>Od kroku 4 obie strony wyglądają tak samo: nazwa, grupy, RBAC.</p>
+    <figcaption><code>&lt;konto&gt;</code> to numer konta AWS. Wynik <code>kubectl auth whoami</code> dla trenera skopiowany z klastra szkoleniowego (bez numeru konta i kluczy).</figcaption>
+  </figure>
+</section>
+
+<!-- 3 ============================================================ -->
+<section id="vanilla">
+  <h2><span class="n">3</span> Zwykły Kubernetes: trzy drogi</h2>
+  <p>W klastrze, który stawiasz sam, decydujesz flagami kube-apiservera, które metody są włączone. Najczęściej spotkasz trzy.</p>
+  <div class="cards c3">
+    <article class="card mid">
+      <h3>Certyfikat klienta x509</h3>
+      <ul>
+        <li><code>CN</code> = nazwa użytkownika, każde <code>O</code> = grupa.</li>
+        <li>apiserver ufa certyfikatom podpisanym przez CA z flagi <code>--client-ca-file</code>. Innego podpisu nie przyjmie.</li>
+        <li>Klucz CA ma administrator; na klastrach zarządzanych go nie masz, więc podpisujesz przez API <code>CertificateSigningRequest</code> (<a href="README.md#certyfikat">krok po kroku</a>).</li>
+        <li><strong>Nie da się go unieważnić.</strong> Kubernetes nie sprawdza list CRL. Wyciekł = działa do daty ważności, chyba że wymienisz CA całego klastra. Dlatego krótka ważność.</li>
+        <li><code>O=system:masters</code> omija RBAC całkowicie. Takiego certyfikatu nie wyłączysz żadnym bindingiem.</li>
+      </ul>
+    </article>
+    <article class="card mid">
+      <h3>OIDC (logowanie firmowe)</h3>
+      <ul>
+        <li>apiserver ufa wystawcy tokenów: Keycloak, Dex, Entra ID, Google, GitLab. Konfiguracja flagami <code>--oidc-*</code> albo plikiem <code>--authentication-config</code>.</li>
+        <li>W kubeconfigu jest wtyczka <code>exec</code>, zwykle <a href="https://github.com/int128/kubelogin">kubelogin</a> (<code>kubectl oidc-login</code>): otwiera przeglądarkę, logujesz się, dostaje token.</li>
+        <li>Claim (np. <code>email</code>) → nazwa, claim <code>groups</code> → grupy. Zwykle z prefiksem, np. <code>oidc:</code>.</li>
+        <li>Odebranie dostępu: wyłączasz konto u wystawcy, a wydany token wygasa sam (zwykle po kilku–kilkudziesięciu minutach, zależnie od wystawcy). To standard dla ludzi.</li>
+      </ul>
+    </article>
+    <article class="card mid">
+      <h3>Token ServiceAccount</h3>
+      <ul>
+        <li>JWT podpisany kluczem klastra (<code>--service-account-key-file</code>). Tak loguje się każdy pod.</li>
+        <li>Można go wyjąć na zewnątrz: <code>kubectl create token &lt;sa&gt;</code>. Dobre dla automatów, złe dla ludzi (wspólne konto, brak MFA, brak śladu, kto to był).</li>
+        <li>Nazwa: <code>system:serviceaccount:&lt;ns&gt;:&lt;sa&gt;</code>. Usunięcie SA unieważnia jego tokeny.</li>
+      </ul>
+    </article>
+  </div>
+  <p style="margin-top:14px">Rzadziej: plik statycznych tokenów, webhook sprawdzający token w zewnętrznej usłudze, proxy uwierzytelniające (nagłówki <code>X-Remote-User</code>). Na klastrze z kubeadm plik <code>admin.conf</code> to certyfikat w grupie <code>kubeadm:cluster-admins</code> (zbindowanej do <code>cluster-admin</code>), a awaryjny <code>super-admin.conf</code> ma <code>O=system:masters</code>.</p>
+  <div class="key warnk"><strong>Certyfikat dla człowieka to wyjątek, nie reguła.</strong> Nadaje się na konto awaryjne albo do nauki. Do codziennej pracy zespołu: OIDC z firmowym logowaniem, grupy z katalogu i RoleBinding na grupę, nie na osobę.</div>
+</section>
+
+<!-- 4 ============================================================ -->
+<section id="eks">
+  <h2><span class="n">4</span> EKS: IAM, access entries i access policies</h2>
+  <p>Na EKS nie dostajesz certyfikatu ani hasła do klastra. Logujesz się do AWS, a EKS zamienia tożsamość IAM na nazwę użytkownika Kubernetesa.</p>
+  <ol>
+    <li><code>aws eks update-kubeconfig</code> zapisuje w kubeconfigu wtyczkę <code>exec</code>: <code>aws eks get-token --cluster-name k8s-sages</code>. W pliku nie ma żadnego sekretu.</li>
+    <li>Przy każdym żądaniu kubectl uruchamia tę komendę. AWS CLI podpisuje Twoimi poświadczeniami (sesja <code>aws login</code>) zapytanie do STS „kim jestem” i pakuje je w token <code>k8s-aws-v1.…</code>, ważny kilkanaście minut.</li>
+    <li>EKS wysyła to zapytanie do STS i dostaje ARN, np. <code>arn:aws:iam::&lt;konto&gt;:user/szkolenie/anna</code>.</li>
+    <li>EKS szuka <strong>access entry</strong> dla tego ARN. Wpis mówi: nazwa użytkownika w Kubernetesie (<code>anna</code>) i opcjonalnie grupy. Brak wpisu = <code>401</code>, mimo poprawnego konta AWS.</li>
+    <li>Dalej zwykły RBAC na <code>anna</code> i jej grupy. Plus jedno, czego nie ma w zwykłym Kubernetesie: <strong>access policies</strong>.</li>
+  </ol>
+
+  <h3>Access policies: uprawnienia, których nie widać w klastrze</h3>
+  <p>Do access entry można przypiąć gotową politykę EKS, z zasięgiem na cały klaster albo na wybrane namespace'y: <code>AmazonEKSClusterAdminPolicy</code>, <code>AmazonEKSAdminPolicy</code>, <code>AmazonEKSEditPolicy</code>, <code>AmazonEKSViewPolicy</code> (lista: <code>aws eks list-access-policies</code>). Odpowiadają mniej więcej <code>cluster-admin</code>, <code>admin</code>, <code>edit</code> i <code>view</code>. Sprawdza je osobny autoryzator EKS (webhook) obok RBAC, a uprawnienia z obu źródeł się sumują.</p>
+  <div class="cards">
+    <article class="card no">
+      <h3>Konsekwencje, o które się potkniesz</h3>
+      <ul>
+        <li><code>kubectl get clusterrolebindings</code> nie pokaże, skąd ktoś ma admina. Na naszym klastrze trener nie ma żadnego bindingu, a może wszystko.</li>
+        <li><code>kubectl auth can-i --list</code> nie widzi access policies i ostrzega: <code>Warning: the list may be incomplete: webhook authorizer does not support user rule resolution</code>.</li>
+        <li><code>--as</code> / <code>--as-group</code> wymusza sam RBAC: impersonowany użytkownik nie dostaje access policies.</li>
+        <li>Pełny obraz: <code>aws eks list-access-entries</code> i <code>aws eks list-associated-access-policies</code>, czyli po stronie AWS, nie <code>kubectl</code>.</li>
+      </ul>
+    </article>
+    <article class="card mid">
+      <h3>aws-auth: stary sposób</h3>
+      <ul>
+        <li>Wcześniej mapowanie IAM → użytkownik było w ConfigMapie <code>aws-auth</code> w <code>kube-system</code>. AWS oznacza go jako przestarzały (deprecated).</li>
+        <li>Tryb ustawia <code>authenticationMode</code> klastra: <code>CONFIG_MAP</code>, <code>API_AND_CONFIG_MAP</code> albo <code>API</code> (tylko access entries).</li>
+        <li><code>k8s-sages</code> działa w trybie <code>API</code>: ConfigMapy <code>aws-auth</code> w ogóle nie ma.</li>
+        <li>Access entry zarządzasz przez API AWS (CLI, Terraform), więc literówka nie odetnie całego klastra jak zepsuty YAML w <code>aws-auth</code>.</li>
+      </ul>
+    </article>
+  </div>
+  <p style="margin-top:14px">Certyfikaty klienta na EKS: zobacz <a href="README.md#eks-cert">README</a>. W skrócie: EKS nie podpisuje certyfikatów do logowania (sprawdzone na <code>k8s-sages</code>), ludzie przychodzą przez IAM.</p>
+</section>
+
+<!-- 5 ============================================================ -->
+<section id="nasz">
+  <h2><span class="n">5</span> Nasz klaster: od konta IAM do RoleBindingu</h2>
+  <div class="tablewrap">
+    <table class="stack">
+      <thead><tr><th>Etap</th><th>Kursant (np. anna)</th><th>Trener</th></tr></thead>
+      <tbody>
+        <tr><td data-h="Etap">Konto IAM</td><td data-h="Kursant (np. anna)"><code>arn:aws:iam::&lt;konto&gt;:user/szkolenie/anna</code>, logowanie <code>aws login</code></td><td data-h="Trener"><code>arn:aws:iam::&lt;konto&gt;:user/dawid</code></td></tr>
+        <tr><td data-h="Etap">Access entry</td><td data-h="Kursant (np. anna)">typ <code>STANDARD</code>, username <code>anna</code>, grupy: brak</td><td data-h="Trener">utworzone razem z klastrem (twórca klastra), username = ARN</td></tr>
+        <tr><td data-h="Etap">Access policy</td><td data-h="Kursant (np. anna)">brak</td><td data-h="Trener"><code>AmazonEKSClusterAdminPolicy</code>, zasięg: cały klaster</td></tr>
+        <tr><td data-h="Etap">Tożsamość w Kubernetesie</td><td data-h="Kursant (np. anna)"><code>anna</code>, grupy <code>[system:authenticated]</code></td><td data-h="Trener"><code>arn:aws:iam::&lt;konto&gt;:user/dawid</code>, grupy <code>[system:authenticated]</code></td></tr>
+        <tr><td data-h="Etap">RBAC w namespace <code>anna</code></td><td data-h="Kursant (np. anna)">RoleBinding <code>kursant-edit</code> → ClusterRole <code>edit</code>; RoleBinding <code>kursant-lab</code> → Role <code>kursant-lab</code> (Role, RoleBinding, LimitRange)</td><td data-h="Trener">brak</td></tr>
+        <tr><td data-h="Etap">RBAC w całym klastrze</td><td data-h="Kursant (np. anna)">ClusterRoleBinding do <code>view</code> (bez Secretów), <code>kursant-klaster</code> (odczyt prawie wszystkich zasobów klastra, też węzłów i CRD, bez Secretów), <code>kursant-ns-anna</code> (własny namespace)</td><td data-h="Trener">brak; wszystko z access policy</td></tr>
+      </tbody>
+    </table>
+  </div>
+<pre><span class="c"># sprawdź u siebie</span>
+kubectl auth whoami                         <span class="c"># Username: Twój login</span>
+kubectl get rolebindings                    <span class="c"># kursant-edit, kursant-lab</span>
+kubectl get clusterrolebindings -o wide | grep "$(kubectl auth whoami -o jsonpath='{.status.userInfo.username}')"</pre>
+</section>
+
+<!-- 6 ============================================================ -->
+<section id="inne">
+  <h2><span class="n">6</span> AKS i GKE w skrócie</h2>
+  <div class="cards">
+    <article class="card mid">
+      <h3>AKS (Azure)</h3>
+      <ul>
+        <li>Logowanie przez Microsoft Entra ID; w kubeconfigu wtyczka <code>exec</code> <code>kubelogin</code> (od Azure).</li>
+        <li>Autoryzacja: zwykły RBAC (w <code>subjects</code> użytkownicy i grupy z Entra ID) albo „Azure RBAC for Kubernetes”: przypisania ról w Azure, sprawdzane webhookiem. To odpowiednik access policies z EKS.</li>
+        <li>Konto lokalne z certyfikatem admina (<code>az aks get-credentials --admin</code>) da się wyłączyć: <code>--disable-local-accounts</code>.</li>
+      </ul>
+    </article>
+    <article class="card mid">
+      <h3>GKE (Google Cloud)</h3>
+      <ul>
+        <li>Logowanie kontem Google; w kubeconfigu wtyczka <code>exec</code> <code>gke-gcloud-auth-plugin</code>.</li>
+        <li>Nazwa użytkownika to e-mail konta (człowieka albo service account Google).</li>
+        <li>Autoryzacja: IAM projektu i RBAC klastra działają razem. Wystarczy, że jedno z nich pozwala.</li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<!-- 7 ============================================================ -->
+<section id="porownanie">
+  <h2><span class="n">7</span> Porównanie</h2>
+  <div class="tablewrap">
+    <table class="stack">
+      <thead><tr><th></th><th>Zwykły Kubernetes</th><th>EKS</th></tr></thead>
+      <tbody>
+        <tr><td data-h="">Dowód w kubeconfigu</td><td data-h="Zwykły Kubernetes">certyfikat + klucz, token, albo <code>exec</code> (kubelogin)</td><td data-h="EKS"><code>exec: aws eks get-token</code></td></tr>
+        <tr><td data-h="">Kto weryfikuje</td><td data-h="Zwykły Kubernetes">kube-apiserver: CA klastra, klucze OIDC, klucz SA</td><td data-h="EKS">EKS + AWS STS</td></tr>
+        <tr><td data-h="">Skąd nazwa i grupy</td><td data-h="Zwykły Kubernetes">z dowodu: <code>CN</code>/<code>O</code>, claimy OIDC</td><td data-h="EKS">z access entry (username, kubernetesGroups)</td></tr>
+        <tr><td data-h="">Odebranie dostępu</td><td data-h="Zwykły Kubernetes">OIDC: wyłącz konto; certyfikat: tylko czekać na wygaśnięcie albo wymienić CA</td><td data-h="EKS">usuń access entry albo wyłącz użytkownika IAM</td></tr>
+        <tr><td data-h="">Autoryzacja</td><td data-h="Zwykły Kubernetes">RBAC</td><td data-h="EKS">RBAC + access policies (webhook EKS)</td></tr>
+        <tr><td data-h="">Admin „spoza RBAC”</td><td data-h="Zwykły Kubernetes"><code>system:masters</code> w certyfikacie</td><td data-h="EKS"><code>AmazonEKSClusterAdminPolicy</code></td></tr>
+        <tr><td data-h="">Pody (ServiceAccount)</td><td data-h="Zwykły Kubernetes" colspan="2" style="font-weight:400">tak samo: token SA, <code>system:serviceaccount:&lt;ns&gt;:&lt;sa&gt;</code>, RBAC. Do AWS na EKS dodatkowo Pod Identity / IRSA.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="cheat">
+    <div><pre>kubectl auth whoami
+kubectl config view --minify</pre><p>Kim jestem i czym się loguję (sekcja <code>users</code>: certyfikat, token czy <code>exec</code>).</p></div>
+    <div><pre>aws sts get-caller-identity
+aws eks list-access-entries --cluster-name k8s-sages
+aws eks list-associated-access-policies \
+  --cluster-name k8s-sages --principal-arn &lt;arn&gt;</pre><p>Strona AWS na EKS. Druga i trzecia komenda wymagają uprawnień IAM do EKS (kursant ich nie ma).</p></div>
+  </div>
+</section>
+
+<footer>Kubernetes w praktyce · Dzień 4 · stan na październik 2026 (Kubernetes 1.35, EKS). Wersja tekstowa: <a href="README.md">README.md</a>. RBAC i ServiceAccount: <a href="rbac.html">rbac.html</a>.</footer>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  function $(id) { return document.getElementById(id); }
+  var STEPS = ['kubeconfig', 'co wysyła kubectl', 'weryfikacja', 'tożsamość', 'autoryzacja'];
+  var V = {
+    cert: [
+      { p: 'W kubeconfigu jest certyfikat i <strong>klucz prywatny</strong>. Kto ma ten plik, ten jest janem.', c: 'users:\n- name: jan\n  user:\n    client-certificate-data: LS0tLS1CRUdJTi…\n    client-key: jan.key   # plik z kluczem prywatnym jana' },
+      { p: 'Nic w nagłówku. Certyfikat idzie w handshake TLS (mTLS): kubectl dowodzi, że ma klucz pasujący do certyfikatu.' },
+      { p: 'apiserver sprawdza: czy certyfikat podpisało CA z <code>--client-ca-file</code> i czy nie minęła data ważności. Listy unieważnionych certyfikatów nie sprawdza.' },
+      { p: 'Nazwa i grupy wprost z certyfikatu, bez żadnego mapowania.', c: 'Subject: CN=jan, O=devs\n→ user: jan\n→ groups: devs, system:authenticated', id: 'user: <b>jan</b><br>groups: <b>devs, system:authenticated</b>' },
+      { p: 'RBAC szuka bindingów dla <code>User jan</code> i <code>Group devs</code>.', c: 'subjects:\n- kind: Group\n  name: devs\n  apiGroup: rbac.authorization.k8s.io' }
+    ],
+    oidc: [
+      { p: 'W kubeconfigu nie ma sekretu, tylko wtyczka <code>exec</code>, która umie zdobyć token.', c: 'users:\n- name: oidc\n  user:\n    exec:\n      command: kubectl\n      args: [oidc-login, get-token,\n        --oidc-issuer-url=https://sso.firma.pl/realms/k8s,\n        --oidc-client-id=kubernetes]' },
+      { p: 'kubelogin otwiera przeglądarkę, logujesz się (z MFA), wystawca daje ID token (JWT). kubectl wysyła go w nagłówku.', c: 'Authorization: Bearer eyJhbGciOiJSUzI1NiIs…' },
+      { p: 'apiserver sprawdza podpis kluczami wystawcy, <code>iss</code>, <code>aud</code> (= client-id) i <code>exp</code>. Do wystawcy nie dzwoni przy każdym żądaniu, pobiera tylko klucze publiczne.' },
+      { p: 'Claimy z tokenu → nazwa i grupy, zgodnie z konfiguracją apiservera.', c: '"email": "jan@firma.pl"  → user: oidc:jan@firma.pl\n"groups": ["devs"]       → groups: oidc:devs', id: 'user: <b>oidc:jan@firma.pl</b><br>groups: <b>oidc:devs, system:authenticated</b>' },
+      { p: 'RBAC szuka bindingów dla tej nazwy i grup. Najlepiej binding na grupę: odejście z firmy załatwia się w katalogu, nie w klastrze.' }
+    ],
+    sa: [
+      { p: 'W kubeconfigu jest gotowy token z <code>kubectl create token ci-deployer</code>.', c: 'users:\n- name: ci\n  user:\n    token: <JWT z kubectl create token>' },
+      { p: 'Token idzie w nagłówku.', c: 'Authorization: Bearer eyJhbGciOiJSUzI1NiIs…' },
+      { p: 'apiserver sprawdza podpis własnym kluczem SA, datę ważności i to, czy ServiceAccount (a dla tokenu poda: pod) nadal istnieje.' },
+      { p: 'Nazwa wynika z tokenu: namespace i nazwa SA.', id: 'user: <b>system:serviceaccount:anna:ci-deployer</b><br>groups: <b>system:serviceaccounts, system:serviceaccounts:anna, system:authenticated</b>' },
+      { p: 'RBAC szuka bindingów dla <code>ServiceAccount anna/ci-deployer</code> i jego grup.' }
+    ]
+  };
+  var CMN = [
+    { p: 'Po <code>aws eks update-kubeconfig</code> kubeconfig ma tylko wtyczkę <code>exec</code>. Sekretu w pliku nie ma, poświadczenia AWS są w sesji <code>aws login</code>.', c: 'users:\n- name: arn:aws:eks:eu-central-1:<konto>:cluster/k8s-sages\n  user:\n    exec:\n      command: aws\n      args: [--region, eu-central-1, eks, get-token,\n             --cluster-name, k8s-sages, --output, json]' },
+    { p: 'AWS CLI podpisuje zapytanie STS <code>GetCallerIdentity</code> i pakuje je w token. Sam token nie zawiera hasła ani klucza, tylko podpisane zapytanie, ważne kilkanaście minut.', c: 'Authorization: Bearer k8s-aws-v1.aHR0cHM6Ly9zdHMu…' }
+  ];
+  var E = {
+    kursant: CMN.concat([
+      { p: 'EKS wykonuje podpisane zapytanie w STS i dostaje ARN. Potem szuka access entry dla tego ARN: jest.', c: 'arn:aws:iam::<konto>:user/szkolenie/anna\n→ access entry: type STANDARD, username anna, kubernetesGroups []' },
+      { p: 'Nazwa z access entry. Grup w wpisie nie ma, zostaje tylko wspólna dla zalogowanych.', id: 'user: <b>anna</b><br>groups: <b>system:authenticated</b>' },
+      { p: 'Zwykły RBAC: RoleBinding <code>kursant-edit</code> (→ <code>edit</code>) i <code>kursant-lab</code> w <code>anna</code>, ClusterRoleBinding do <code>view</code> w całym klastrze. Access policies: brak.', c: '$ kubectl get rolebindings -n anna\nNAME           ROLE\nkursant-edit   ClusterRole/edit\nkursant-lab    Role/kursant-lab' }
+    ]),
+    trener: CMN.concat([
+      { p: 'STS zwraca ARN trenera. Access entry powstał razem z klastrem (uprawnienia twórcy klastra w Terraformie).', c: 'arn:aws:iam::<konto>:user/dawid\n→ access entry: type STANDARD, username = ARN\n→ access policy: AmazonEKSClusterAdminPolicy (cluster)' },
+      { p: 'W access entry nie podano nazwy, więc nazwą jest ARN.', c: '$ kubectl auth whoami\nUsername   arn:aws:iam::<konto>:user/dawid\nUID        aws-iam-authenticator:<konto>:AIDA…\nGroups     [system:authenticated]', id: 'user: <b>arn:aws:iam::&lt;konto&gt;:user/dawid</b><br>groups: <b>system:authenticated</b>' },
+      { p: 'RBAC nie ma dla trenera żadnego bindingu. Zgodę daje autoryzator EKS na podstawie access policy. Dlatego <code>can-i --list</code> pokazuje prawie nic, a mimo to <code>can-i delete nodes</code> mówi <code>yes</code>.', c: '$ kubectl auth can-i --list\nWarning: the list may be incomplete: webhook authorizer\n  does not support user rule resolution\nselfsubjectreviews.authentication.k8s.io   [create]\n…' }
+    ]),
+    brak: CMN.concat([
+      { p: 'STS potwierdza konto, ale access entry dla tego ARN nie ma. EKS nie umie nadać nazwy, więc odrzuca żądanie już na etapie uwierzytelnienia.', c: 'error: You must be logged in to the server (Unauthorized)', bad: true },
+      { p: 'Do tożsamości nie doszło. Poprawne konto AWS to za mało: bez access entry klaster cię nie zna.', id: '— brak (401) —', bad: true },
+      { p: 'Autoryzacja się nie odbyła. To częsty problem po założeniu klastra przez kogoś innego: trzeba dodać access entry (albo wpis w <code>aws-auth</code> na starszych klastrach).', bad: true }
+    ])
+  };
+  var oCfg = { v: 'cert', e: 'kursant' }, oStep = 0;
+  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function box(st, i, el, idEl) {
+    var s = st[i], html = '<p class="st">krok ' + (i + 1) + ' · ' + STEPS[i] + '</p><p>' + s.p + '</p>' + (s.c ? '<pre>' + esc(s.c) + '</pre>' : '');
+    el.innerHTML = html;
+    el.className = 'stepbox' + (i === 4 && !s.bad ? ' fin' : '') + (s.bad ? '' : '');
+    if (s.bad) el.style.borderLeftColor = 'var(--bad)'; else el.style.borderLeftColor = '';
+    var idTxt = null;
+    for (var k = 0; k <= i; k++) if (st[k].id) idTxt = st[k].id;
+    if (i >= 3 && idTxt) { idEl.innerHTML = idTxt; idEl.className = 'idbox' + (st[3].bad ? '' : ' set'); }
+    else { idEl.innerHTML = 'tożsamość: jeszcze nieznana'; idEl.className = 'idbox'; }
+  }
+  function oRender() {
+    box(V[oCfg.v], oStep, $('o-vbox'), $('o-vid'));
+    box(E[oCfg.e], oStep, $('o-ebox'), $('o-eid'));
+    document.querySelectorAll('#o-flow li').forEach(function (li, i) { li.className = i === oStep ? 'on' : (i < oStep ? 'past' : ''); });
+    $('o-tick').textContent = 'krok ' + (oStep + 1) + ' z 5';
+    $('o-step').disabled = oStep >= 4; $('o-back').disabled = oStep <= 0;
+    $('o-same').hidden = !(oStep >= 3 && oCfg.e !== 'brak');
+  }
+  function seg(id, k) {
+    var b = $(id);
+    b.addEventListener('click', function (e) {
+      var t = e.target.closest('button'); if (!t) return;
+      b.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', x === t ? 'true' : 'false'); });
+      oCfg[k] = t.getAttribute('data-v'); oRender();
+    });
+  }
+  seg('o-v', 'v'); seg('o-e', 'e');
+  $('o-step').addEventListener('click', function () { if (oStep < 4) oStep++; oRender(); });
+  $('o-back').addEventListener('click', function () { if (oStep > 0) oStep--; oRender(); });
+  $('o-reset').addEventListener('click', function () { oStep = 0; oRender(); });
+  oRender();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+# ⚠ ANTYWZORZEC — czego NIE robić. Nie wgrywaj tego na wspólny klaster.
+# ClusterRole z */*/* i powiązanie SA z całym klastrem: włamanie do poda = przejęcie klastra
+# (odczyt wszystkich Secretów, pod privileged z hostPath na węzeł, dopisywanie sobie bindingów).
+# Zamiast tego: własny SA, Role z konkretnymi verbs, RoleBinding w jednym namespace.
+# Przegląd na swoim klastrze: kubectl get clusterrolebindings -o wide | grep cluster-admin
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: zly-przyklad-wszystko
+rules:
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: zly-przyklad-app-admin
+subjects:
+- kind: ServiceAccount
+  name: app-sa
+  namespace: <NAMESPACE>
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin          # „bo nie działało”
+  apiGroup: rbac.authorization.k8s.io

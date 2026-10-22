@@ -1,0 +1,10 @@
+# pusty podSelector = wszystkie pody w namespace; bez reguł = nic nie wchodzi i nic nie wychodzi.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+spec:
+  podSelector: {}
+  policyTypes:          # których kierunków dotyczy polityka; wymieniony kierunek bez reguł = wszystko zablokowane
+  - Ingress
+  - Egress

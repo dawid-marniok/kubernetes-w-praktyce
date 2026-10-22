@@ -1,0 +1,14 @@
+# TYLKO PROWADZĄCY (uprawnienia klastrowe), razem z crd-backup.yaml: prawo do obiektów Backup dla kursantów w ich namespace'ach.
+# Etykieta aggregate-to-edit dokleja te reguły do wbudowanej ClusterRole „edit”, którą kursanci mają w swoim namespace.
+# Kursant dostanie tu forbidden i tak ma być. Po lab16: kubectl delete -f crd-backup.yaml -f rbac-backups-edit.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: szkolenie-backups-edit
+  labels:
+    rbac.authorization.k8s.io/aggregate-to-edit: "true"
+    rbac.authorization.k8s.io/aggregate-to-admin: "true"
+rules:
+- apiGroups: ["szkolenie.example.com"]
+  resources: ["backups"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]

@@ -1,0 +1,40 @@
+# Definicja typu Backup, którą trener wgrał na klaster po demie d4-t4-01 (to samo co na slajdzie). Tylko do przeczytania: CRD to zasób klastrowy, tworzy go administrator.
+# Nazwa CRD = <plural>.<group>. Schemat jest obowiązkowy w apiextensions.k8s.io/v1.
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: backups.szkolenie.example.com
+spec:
+  group: szkolenie.example.com
+  scope: Namespaced
+  names:
+    kind: Backup
+    singular: backup
+    plural: backups
+    shortNames: [bk]
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            required: [schedule]
+            properties:
+              schedule:
+                type: string
+                description: Harmonogram w formacie cron, np. "0 2 * * *"
+              retention:
+                type: integer
+                minimum: 1
+                description: Ile kopii trzymać
+    additionalPrinterColumns:
+    - name: Schedule
+      type: string
+      jsonPath: .spec.schedule
+    - name: Retention
+      type: integer
+      jsonPath: .spec.retention

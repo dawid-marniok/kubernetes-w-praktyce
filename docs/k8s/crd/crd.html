@@ -1,0 +1,1289 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jak działa CRD</title>
+<meta name="description" content="Dzień 4 — ściąga: jak CustomResourceDefinition dodaje nowy typ do API Kubernetesa, co dzieje się z obiektem Backup bez kontrolera i z kontrolerem, operatory (cert-manager, CloudNativePG), schemat, wersje, status, CEL i RBAC dla nowego typu. Z symulatorem.">
+<style>
+:root {
+  --navy: #012438;
+  --acc: #41C0F0;
+  --light: #EBF8FD;
+  --light2: #E1EDF8;
+
+  --bg: #ffffff;
+  --ink: #0f2535;
+  --muted: #557080;
+  --panel: var(--light);
+  --card: #ffffff;
+  --card-line: #b9d3e2;
+  --strong: var(--navy);
+  --on-strong: #ffffff;
+  --strong-title: var(--acc);
+  --head: #0a7aa8;
+  --line: #34505f;
+  --code-bg: var(--light2);
+  --row-alt: #f4fafd;
+  --border: #d5e4ed;
+
+  --ok: #1d7a44;
+  --ok-bg: #dcf2e4;
+  --bad: #b42318;
+  --bad-bg: #fde3df;
+  --warn: #8a5300;
+  --warn-bg: #fff0d4;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #08151e;
+    --ink: #e3eef4;
+    --muted: #9cb4c3;
+    --panel: #0f2532;
+    --card: #142f3f;
+    --card-line: #2c5065;
+    --strong: #0d4b70;
+    --on-strong: #ffffff;
+    --strong-title: #7fd6f7;
+    --head: #41C0F0;
+    --line: #a8c3d2;
+    --code-bg: #12293a;
+    --row-alt: #0d1f2b;
+    --border: #23404f;
+
+    --ok: #6fd99a;
+    --ok-bg: #12382a;
+    --bad: #ff9a8c;
+    --bad-bg: #4a1c18;
+    --warn: #ffcf70;
+    --warn-bg: #3d2e0e;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px 64px; }
+header.hero { background: var(--navy); color: #fff; padding: 40px 0 32px; border-bottom: 6px solid var(--acc); }
+header.hero .wrap { padding-bottom: 0; }
+.kicker { color: var(--acc); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; font-size: 13px; margin: 0 0 6px; }
+.kicker a { color: var(--acc); }
+h1 { font-size: clamp(28px, 6vw, 44px); line-height: 1.15; margin: 0 0 12px; }
+.hero p.lead { max-width: 720px; margin: 0; color: #d6e9f3; font-size: 17px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0 0; padding: 0; list-style: none; }
+.chips li { background: rgba(65,192,240,.14); border: 1px solid rgba(65,192,240,.45); color: #e6f6fd; border-radius: 999px; padding: 3px 12px; font-size: 14px; }
+nav.toc { margin: 28px 0 8px; }
+nav.toc ol { display: flex; flex-wrap: wrap; gap: 6px 8px; padding: 0; margin: 0; list-style: none; counter-reset: toc; }
+nav.toc li { counter-increment: toc; }
+nav.toc a { display: inline-block; text-decoration: none; color: var(--ink); background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 4px 10px; font-size: 14px; }
+nav.toc a::before { content: counter(toc) ". "; color: var(--head); font-weight: 700; }
+nav.toc a:hover, nav.toc a:focus-visible { border-color: var(--acc); }
+section { margin-top: 48px; scroll-margin-top: 16px; }
+h2 { font-size: clamp(22px, 4.5vw, 28px); line-height: 1.25; margin: 0 0 10px; display: flex; gap: 12px; align-items: baseline; }
+h2 .n { color: var(--acc); font-weight: 800; font-size: 1.25em; line-height: 1; }
+h3 { font-size: 18px; margin: 24px 0 8px; }
+p { margin: 0 0 12px; }
+a { color: var(--head); }
+code, kbd, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: .9em; }
+:not(pre) > code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+pre { background: var(--code-bg); padding: 12px 14px; border-radius: 8px; overflow-x: auto; margin: 0 0 12px; }
+pre .c { color: var(--muted); }
+pre .hl { background: rgba(65,192,240,.22); border-radius: 3px; }
+.key { border-left: 5px solid var(--acc); background: var(--panel); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; }
+.key strong { color: var(--ink); }
+.key.warnk { border-left-color: var(--bad); }
+figure { margin: 20px 0; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px; min-width: 0; }
+figure .scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+figure svg { display: block; width: 100%; height: auto; }
+figcaption { font-size: 14px; color: var(--muted); margin-top: 8px; }
+figcaption .hint { display: none; }
+@media (max-width: 640px) {
+  figure { padding: 8px; margin-left: -4px; margin-right: -4px; }
+  figure .scroll svg.wide { min-width: 820px; }
+  figcaption .hint { display: inline; }
+}
+.grid2 { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+.grid2 > * { min-width: 0; }
+@media (min-width: 820px) { .grid2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.tablewrap { overflow-x: auto; margin: 16px 0; border: 1px solid var(--border); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+thead th { background: var(--navy); color: #fff; font-size: 14px; }
+tbody tr:nth-child(even) { background: var(--row-alt); }
+tbody tr:last-child td { border-bottom: 0; }
+td:first-child { font-weight: 700; }
+@media (max-width: 640px) {
+  table.stack thead { display: none; }
+  table.stack, table.stack tbody, table.stack tr, table.stack td { display: block; width: 100%; }
+  table.stack tr { border-bottom: 1px solid var(--border); padding: 6px 0; }
+  table.stack td { border: 0; padding: 4px 12px; }
+  table.stack td[data-h]::before { content: attr(data-h); display: block; font-size: 12px; font-weight: 700; color: var(--head); text-transform: uppercase; letter-spacing: .05em; }
+}
+.cheat { display: grid; gap: 10px; grid-template-columns: 1fr; }
+@media (min-width: 760px) { .cheat { grid-template-columns: 1fr 1fr; } }
+.cheat div { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--bg); min-width: 0; }
+.cheat pre { margin: 0 0 6px; font-size: 14px; }
+.cheat p { margin: 0; font-size: 14px; color: var(--muted); }
+.cards { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 720px) { .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.card { border: 1px solid var(--border); border-radius: 12px; background: var(--bg); padding: 14px; min-width: 0; }
+.card h3 { margin: 0 0 6px; }
+.card ul { margin: 0; padding-left: 20px; }
+.card li { margin-bottom: 4px; }
+.card.yes { border-top: 5px solid var(--ok); }
+.card.no { border-top: 5px solid var(--bad); }
+footer { margin-top: 56px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--border); padding-top: 16px; }
+
+/* --- SVG --- */
+svg text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; fill: var(--ink); font-size: 14px; }
+svg .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+svg .b { font-weight: 700; }
+svg .s { font-size: 12.5px; fill: var(--muted); }
+svg .h { font-size: 13px; font-weight: 800; letter-spacing: .06em; fill: var(--head); }
+svg .ttl { font-size: 16px; font-weight: 800; fill: var(--strong-title); }
+svg .on { fill: var(--on-strong); }
+svg .on.s { fill: var(--on-strong); opacity: .85; }
+svg .panel2 { fill: var(--panel); stroke: var(--card-line); stroke-width: 1; }
+svg .panel { fill: var(--bg); stroke: var(--card-line); stroke-width: 1; }
+svg .box { fill: var(--card); stroke: var(--card-line); stroke-width: 1.2; }
+svg .box.cr { stroke: var(--acc); stroke-width: 2; }
+svg .box.ctrl { stroke: var(--warn); stroke-width: 2; stroke-dasharray: 7 5; }
+svg .box.res { fill: var(--ok-bg); stroke: var(--ok); stroke-width: 1.2; }
+svg .strong { fill: var(--strong); }
+svg .db { fill: var(--acc); }
+svg .db-t { fill: var(--navy); font-weight: 800; }
+svg .ln { fill: none; stroke: var(--line); stroke-width: 1.8; }
+svg .ln.dash { stroke-dasharray: 6 5; }
+svg .ln.acc { stroke: var(--acc); stroke-width: 2.6; }
+svg .ln.warn { stroke: var(--warn); stroke-width: 2; }
+svg .mk { fill: var(--line); }
+svg .mk-acc { fill: var(--acc); }
+svg .mk-warn { fill: var(--warn); }
+svg .num circle { fill: var(--strong); stroke: var(--acc); stroke-width: 2; }
+svg .num text { fill: #fff; font-weight: 800; font-size: 14px; }
+svg .num.w circle { stroke: var(--warn); }
+svg .lbl { font-size: 12.5px; fill: var(--muted); font-style: italic; }
+svg .warn-t { fill: var(--warn); }
+svg .ok-t { fill: var(--ok); }
+
+/* --- symulator --- */
+.btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; align-items: center; }
+button.b { font: inherit; font-size: 15px; padding: 7px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--ink); cursor: pointer; }
+button.b.primary { background: var(--strong); color: var(--on-strong); border-color: var(--strong); font-weight: 700; }
+button.b:hover, button.b:focus-visible { border-color: var(--acc); }
+button.b:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; }
+button.b:disabled { opacity: .45; cursor: not-allowed; }
+.tickno { font-size: 14px; color: var(--muted); margin-left: auto; }
+.acts { display: grid; gap: 10px 18px; grid-template-columns: minmax(0, 1fr); background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; }
+@media (min-width: 820px) { .acts { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, .8fr); } }
+.acts .al { font-weight: 700; font-size: 14px; }
+.acts .al small { font-weight: 400; color: var(--muted); }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 2px; }
+.seg button { font: inherit; font-size: 13.5px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel); color: var(--ink); cursor: pointer; }
+.seg button code { background: none; padding: 0; font-size: 12.5px; }
+.seg button:hover { border-color: var(--acc); }
+.seg button[aria-pressed="true"] { background: var(--strong); color: var(--on-strong); border-color: var(--strong); }
+.seg button.danger { border-color: var(--bad); color: var(--bad); }
+.seg button:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; }
+.flow { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 10px; padding: 0; list-style: none; }
+.flow li { font-size: 13.5px; padding: 3px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--muted); }
+.flow li.on { background: var(--strong); color: var(--on-strong); border-color: var(--strong); font-weight: 700; }
+.flow li.past { color: var(--ink); border-color: var(--ok); }
+.board { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 900px) { .board { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, .9fr); } }
+.pane { border: 1.5px solid var(--card-line); border-radius: 10px; background: var(--card); padding: 10px 11px; min-width: 0; }
+.pane .ph { font-size: 12.5px; font-weight: 800; letter-spacing: .06em; color: var(--head); text-transform: uppercase; margin: 0 0 6px; }
+.pane .ph small { text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--muted); }
+.pane.off { border-style: dashed; border-color: var(--warn); background: var(--bg); }
+.pane.live { border-color: var(--ok); }
+.ep { font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padding: 3px 6px; border-radius: 5px; border: 1px solid transparent; margin-bottom: 3px; overflow-wrap: anywhere; }
+.ep span { display: block; color: var(--muted); font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; font-size: 12px; }
+.ep.cust { background: var(--panel); border-color: var(--acc); font-weight: 700; }
+.ep.cust span { font-weight: 400; }
+.fresh { box-shadow: 0 0 0 3px var(--acc); }
+.gone { opacity: .55; text-decoration: line-through; border-color: var(--bad) !important; background: var(--bad-bg) !important; color: var(--bad); }
+.pipe { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 0; padding: 0; list-style: none; }
+.pipe li { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg); color: var(--muted); }
+.pipe li.ok { background: var(--strong); color: var(--on-strong); border-color: var(--strong); font-weight: 700; }
+.pipe li.bad { background: var(--bad); color: #fff; border-color: var(--bad); font-weight: 700; }
+.pipe-who { font-size: 12.5px; color: var(--muted); margin: 8px 0 0; }
+.grp { margin-bottom: 8px; }
+.grp:last-child { margin-bottom: 0; }
+.gh { font-size: 12px; font-weight: 700; color: var(--muted); margin-bottom: 3px; }
+.obj { font-size: 12.5px; line-height: 1.4; padding: 4px 7px; border-radius: 6px; border: 1px solid var(--border); border-left: 4px solid var(--acc); background: var(--bg); margin-bottom: 4px; overflow-wrap: anywhere; }
+.obj b { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.obj .m { display: block; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11.5px; }
+.obj .m.st { color: var(--ok); }
+.obj.crd { border-left-color: var(--strong); }
+.obj.cj { border-left-color: var(--ok); background: var(--ok-bg); }
+.empty-note { font-size: 12.5px; color: var(--muted); font-style: italic; }
+.ctl-note { font-size: 13px; line-height: 1.45; margin-top: 8px; }
+.ctl-note code { font-size: 11.5px; }
+pre.term { background: var(--navy); color: #d6e9f3; font-size: 12.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; margin: 10px 0 0; min-height: 5em; }
+pre.term .cmd { color: var(--acc); font-weight: 700; }
+pre.term .er { color: #ffb4a8; }
+pre.term .wa { color: #ffd98a; }
+pre.term .okl { color: #8fe3b0; }
+pre.term .cm { color: #8aa6b6; }
+.msg { margin: 10px 0 0; font-size: 14.5px; min-height: 3.2em; border-left: 4px solid var(--acc); padding: 6px 10px; background: var(--bg); border-radius: 0 6px 6px 0; }
+.msg.stuck { border-left-color: var(--bad); }
+.msg.done { border-left-color: var(--ok); }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 10px 0 0; padding: 0; list-style: none; font-size: 14px; color: var(--muted); }
+.legend li { display: flex; align-items: center; gap: 6px; }
+.legend .sw { display: inline-block; width: 22px; height: 14px; border-radius: 3px; border: 1px solid var(--border); border-left-width: 4px; }
+.tag { display: inline-block; font-size: 12.5px; font-weight: 700; padding: 0 8px; border-radius: 999px; white-space: nowrap; }
+.tag.hard { background: var(--bad-bg); color: var(--bad); }
+.tag.soft { background: var(--ok-bg); color: var(--ok); }
+.tag.mid { background: var(--warn-bg); color: var(--warn); }
+ol.plain { margin: 0 0 12px; padding-left: 22px; }
+ol.plain li { margin-bottom: 6px; }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="kicker">Dzień 4 · ściąga · <a href="README.md">wersja tekstowa</a></p>
+    <h1>Jak działa CRD</h1>
+    <p class="lead">CustomResourceDefinition dopisuje do API Kubernetesa nowy typ obiektu. kube-apiserver od razu go obsługuje: REST, walidacja, RBAC, zapis w etcd, <code>kubectl get</code>. Żeby obiekt coś <em>robił</em>, potrzebny jest kontroler. CRD + kontroler = operator.</p>
+    <ul class="chips" aria-label="Kontekst">
+      <li>backups.szkolenie.example.com</li>
+      <li>kind: Backup · skrót bk</li>
+      <li>CRD bez kontrolera = rekord w etcd</li>
+      <li>watch → porównaj → działaj</li>
+      <li>cert-manager · CloudNativePG</li>
+      <li>Kubernetes 1.35</li>
+    </ul>
+  </div>
+</header>
+
+<main class="wrap">
+<nav class="toc" aria-label="Spis treści">
+  <ol>
+    <li><a href="#obraz">Cały obraz</a></li>
+    <li><a href="#symulator">Symulator: CRD, obiekt, kontroler</a></li>
+    <li><a href="#petla">Pętla kontrolera</a></li>
+    <li><a href="#operatory">Ten sam wzorzec w narzędziach</a></li>
+    <li><a href="#anatomia">Anatomia CRD</a></li>
+    <li><a href="#rbac">RBAC i kto tworzy CRD</a></li>
+    <li><a href="#sciaga">Pułapki i komendy</a></li>
+  </ol>
+</nav>
+
+<!-- 1 ============================================================ -->
+<section id="obraz">
+  <h2><span class="n">1</span> Cały obraz w pięciu strzałkach</h2>
+  <p>Wbudowane typy (Pod, Deployment, Service) kube-apiserver zna od startu. CRD to zwykły obiekt w API, który mówi: od teraz istnieje typ <code>Backup</code> w grupie <code>szkolenie.example.com</code>, z takimi polami. Strzałki 1–3 obsługuje sam kube-apiserver. Strzałki 4–5 to osobny program: kontroler.</p>
+
+  <figure>
+    <div class="scroll">
+    <svg class="wide" viewBox="0 0 1000 330" role="img" aria-labelledby="ov-t ov-d">
+      <title id="ov-t">CRD, obiekt Backup, kube-apiserver, etcd i kontroler</title>
+      <desc id="ov-d">Trener wgrywa CRD, kube-apiserver wystawia nowy endpoint. Kursant wgrywa obiekt Backup, który przechodzi bramki i walidację schematem, trafia do etcd. Kontroler obserwuje obiekty Backup i tworzy CronJob.</desc>
+      <defs>
+        <marker id="m1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-acc" d="M0 0L10 5L0 10z"/></marker>
+        <marker id="m2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-warn" d="M0 0L10 5L0 10z"/></marker>
+      </defs>
+
+      <rect class="box" x="16" y="34" width="190" height="66" rx="10"/>
+      <text class="b" x="111" y="60" text-anchor="middle">CRD</text>
+      <text class="s mono" x="111" y="82" text-anchor="middle">crd-backup.yaml · trener</text>
+
+      <rect class="box cr" x="16" y="190" width="190" height="66" rx="10"/>
+      <text class="b" x="111" y="216" text-anchor="middle">Backup nightly</text>
+      <text class="s mono" x="111" y="238" text-anchor="middle">backup-nightly.yaml · Ty</text>
+
+      <rect class="panel2" x="262" y="16" width="330" height="272" rx="12"/>
+      <text class="h" x="278" y="40">KUBE-APISERVER</text>
+      <rect class="strong" x="278" y="52" width="298" height="74" rx="10"/>
+      <text class="ttl" x="427" y="80" text-anchor="middle">nowy endpoint REST</text>
+      <text class="on s mono" x="427" y="104" text-anchor="middle">/apis/szkolenie.example.com/v1</text>
+      <rect class="box" x="278" y="164" width="298" height="108" rx="10"/>
+      <text class="b" x="427" y="190" text-anchor="middle">te same bramki co dla Poda</text>
+      <text class="s" x="427" y="212" text-anchor="middle">uwierzytelnienie → RBAC → admission</text>
+      <text class="b" x="427" y="240" text-anchor="middle">+ walidacja schematem z CRD</text>
+      <text class="s mono" x="427" y="261" text-anchor="middle">required · minimum: 1 · nieznane pola</text>
+
+      <rect class="db" x="634" y="196" width="128" height="66" rx="14"/>
+      <text class="db-t" x="698" y="226" text-anchor="middle">etcd</text>
+      <text class="mono" x="698" y="246" text-anchor="middle" style="font-size:11.5px;fill:var(--navy)">rekord Backup</text>
+
+      <rect class="box ctrl" x="808" y="34" width="176" height="86" rx="10"/>
+      <text class="b warn-t" x="896" y="62" text-anchor="middle">kontroler</text>
+      <text class="s" x="896" y="82" text-anchor="middle">osobny Deployment</text>
+      <text class="s" x="896" y="102" text-anchor="middle">watch + reconcile</text>
+
+      <rect class="box res" x="808" y="196" width="176" height="66" rx="10"/>
+      <text class="b" x="896" y="222" text-anchor="middle">CronJob → Job → Pod</text>
+      <text class="s" x="896" y="244" text-anchor="middle">prawdziwy efekt</text>
+
+      <path class="ln acc" d="M206 67 H272" marker-end="url(#m1)"/>
+      <path class="ln acc" d="M206 223 H272" marker-end="url(#m1)"/>
+      <path class="ln acc" d="M576 229 H628" marker-end="url(#m1)"/>
+      <path class="ln warn dash" d="M802 77 H582" marker-start="url(#m2)" marker-end="url(#m2)"/>
+      <path class="ln warn" d="M896 120 V190" marker-end="url(#m2)"/>
+
+      <g class="num"><circle cx="239" cy="47" r="14"/><text x="239" y="52" text-anchor="middle">1</text></g>
+      <g class="num"><circle cx="239" cy="203" r="14"/><text x="239" y="208" text-anchor="middle">2</text></g>
+      <g class="num"><circle cx="604" cy="209" r="14"/><text x="604" y="214" text-anchor="middle">3</text></g>
+      <g class="num w"><circle cx="692" cy="57" r="14"/><text x="692" y="62" text-anchor="middle">4</text></g>
+      <g class="num w"><circle cx="920" cy="155" r="14"/><text x="920" y="160" text-anchor="middle">5</text></g>
+      <text class="lbl" x="620" y="102">watch backups</text>
+      <text class="lbl" x="936" y="160">tworzy</text>
+      <text class="b" x="500" y="318" text-anchor="middle" style="font-size:15px">Bez 4 i 5 obiekt Backup to tylko rekord w etcd: kubectl get działa, nic więcej się nie dzieje.</text>
+    </svg>
+    </div>
+    <figcaption><span class="hint">Przewiń diagram w bok. </span>Kontroler tworzy CronJob też przez kube-apiserver (jak każdy klient); strzałka 5 to skrót. Kontrolera <code>Backup</code> na naszym klastrze nie ma: krok 3 symulatora pokazuje, co by robił.</figcaption>
+  </figure>
+
+  <ol class="plain">
+    <li><strong>CRD (strzałka 1).</strong> Trener wgrywa <code>crd-backup.yaml</code>. kube-apiserver rejestruje nowy endpoint i ogłasza go w discovery.</li>
+    <li><strong>Obiekt (strzałki 2–3).</strong> Ty wgrywasz <code>Backup nightly</code>. Bramki jak dla Poda, potem walidacja schematem z CRD, zapis w etcd. Koniec.</li>
+    <li><strong>Kontroler (strzałki 4–5).</strong> Program, który obserwuje obiekty <code>Backup</code>, porównuje stan zadany z rzeczywistym, tworzy CronJob i zapisuje <code>status</code>.</li>
+    <li><strong>Operator.</strong> Ten sam wzorzec z wiedzą o konkretnej aplikacji: cert-manager (<code>Certificate</code> → Secret TLS), CloudNativePG (<code>Cluster</code> → pody, PVC, Service'y).</li>
+  </ol>
+</section>
+
+<!-- 2 ============================================================ -->
+<section id="symulator">
+  <h2><span class="n">2</span> Symulator: CRD, obiekt, kontroler</h2>
+  <p>Ty to kursantka <code>anna</code> z namespace'em <code>anna</code>. W namespace <code>bartek</code> pracuje inny kursant. Klikaj <strong>krok dalej</strong>, żeby przejść scenariusz z labu, albo wywołuj akcje w dowolnej kolejności, np. wgraj obiekt przed CRD albo usuń CRD z włączonym kontrolerem.</p>
+
+  <figure>
+    <div class="btns">
+      <button type="button" class="b primary" id="s-step">krok dalej →</button>
+      <button type="button" class="b" id="s-reset">od nowa</button>
+      <span class="tickno" id="s-tick" aria-live="polite">krok 0</span>
+    </div>
+
+    <div class="acts">
+      <div>
+        <div class="al">Ty (<code>anna</code>) <small>· edit w swoim namespace</small></div>
+        <div class="seg" role="group" aria-label="Akcje kursanta">
+          <button type="button" data-a="discover">api-resources + explain</button>
+          <button type="button" data-a="applyCR">apply <code>nightly</code></button>
+          <button type="button" data-a="ret0"><code>retention: 0</code></button>
+          <button type="button" data-a="unknown">pole spoza schematu</button>
+          <button type="button" data-a="check">co się wykonało?</button>
+          <button type="button" data-a="patch">zmień <code>schedule</code></button>
+          <button type="button" data-a="delCR">delete <code>nightly</code></button>
+          <button type="button" data-a="crdAsTy">apply CRD</button>
+        </div>
+      </div>
+      <div>
+        <div class="al">trener <small>· cluster-admin</small></div>
+        <div class="seg" role="group" aria-label="Akcje trenera">
+          <button type="button" data-a="applyCRD">apply CRD</button>
+          <button type="button" data-a="getAll">get bk -A</button>
+          <button type="button" data-a="delCRD" class="danger">delete crd</button>
+        </div>
+      </div>
+      <div>
+        <div class="al">kontroler <small>· backup-operator</small></div>
+        <div class="seg" role="group" aria-label="Kontroler">
+          <button type="button" data-a="ctrl" id="s-ctrl" aria-pressed="false">wyłączony</button>
+        </div>
+      </div>
+    </div>
+
+    <ol class="flow" id="s-flow" aria-label="Etap scenariusza">
+      <li data-p="1">1 · nowy typ w API</li>
+      <li data-p="2">2 · obiekt nowego typu</li>
+      <li data-p="3">3 · kontroler</li>
+      <li data-p="4">4 · sprzątanie: delete crd</li>
+    </ol>
+
+    <div class="board">
+      <div class="pane" id="s-api"></div>
+      <div class="pane" id="s-etcd"></div>
+      <div class="pane" id="s-ctl"></div>
+    </div>
+
+    <pre class="term" id="s-term" aria-live="polite"></pre>
+    <div class="msg" id="s-msg" aria-live="polite"></div>
+
+    <ul class="legend" aria-label="Legenda">
+      <li><span class="sw" style="border-left-color:var(--strong)"></span> CRD (zasób klastrowy)</li>
+      <li><span class="sw" style="border-left-color:var(--acc)"></span> obiekt Backup</li>
+      <li><span class="sw" style="border-left-color:var(--ok);background:var(--ok-bg)"></span> CronJob od kontrolera</li>
+      <li><span class="sw fresh" style="border-left-color:var(--acc)"></span> zmiana w tym kroku</li>
+    </ul>
+    <figcaption>Komunikaty kubectl i kube-apiservera są takie jak na klastrze (część długich skrócona „…”). Kontroler <code>backup-operator</code> jest wymyślony: zakłada CRD rozszerzony o pole <code>status</code> i <code>subresources.status</code> (sekcja 5). Nasz <code>crd-backup.yaml</code> ich nie ma, bo nie ma kontrolera, który by status pisał.</figcaption>
+  </figure>
+
+  <div class="grid2">
+    <div class="key" style="margin:0"><strong>Spróbuj:</strong> zanim trener wgra CRD, kliknij <em>apply nightly</em>. kubectl nie znajdzie typu w discovery i nie wyśle żądania: <code>no matches for kind "Backup"</code>, <code>ensure CRDs are installed first</code>.</div>
+    <div class="key warnk" style="margin:0"><strong>Spróbuj:</strong> włącz kontroler, zmień <code>schedule</code>, wyłącz kontroler i zmień jeszcze raz. Backup i CronJob się rozjeżdżają i nikt tego nie naprawia. Włącz kontroler: zgodność wraca w jednym przebiegu pętli.</div>
+  </div>
+</section>
+
+<!-- 3 ============================================================ -->
+<section id="petla">
+  <h2><span class="n">3</span> Pętla kontrolera</h2>
+  <p>Kontroler to zwykły program w podzie (zwykle Deployment z jedną aktywną repliką i leader election), który rozmawia z kube-apiserverem przez swój ServiceAccount. Działa tak samo jak wbudowane kontrolery z kube-controller-manager: nie wykonuje polecenia raz, tylko bez końca doprowadza świat do tego, co jest w <code>spec</code>.</p>
+
+  <div class="grid2">
+    <figure style="margin:0">
+      <svg viewBox="0 0 640 400" role="img" aria-labelledby="loop-t">
+        <title id="loop-t">Pętla kontrolera Backup: obserwuj, porównaj, działaj</title>
+        <defs>
+          <marker id="m3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="mk-acc" d="M0 0L10 5L0 10z"/></marker>
+        </defs>
+        <circle cx="320" cy="200" r="130" fill="none" stroke="var(--card-line)" stroke-width="1.5" stroke-dasharray="3 6"/>
+        <path class="ln acc" d="M403.6 100.4 A130 130 0 0 1 449.5 211.3" marker-end="url(#m3)"/>
+        <path class="ln acc" d="M394.6 306.5 A130 130 0 0 1 245.4 306.5" marker-end="url(#m3)"/>
+        <path class="ln acc" d="M190.5 211.3 A130 130 0 0 1 236.4 100.4" marker-end="url(#m3)"/>
+
+        <rect class="strong" x="225" y="40" width="190" height="62" rx="31"/>
+        <text class="ttl" x="320" y="66" text-anchor="middle">obserwuj</text>
+        <text class="on s mono" x="320" y="86" text-anchor="middle">watch backups, cronjobs</text>
+
+        <rect class="strong" x="372" y="236" width="200" height="62" rx="31"/>
+        <text class="ttl" x="472" y="262" text-anchor="middle">porównaj</text>
+        <text class="on s" x="472" y="282" text-anchor="middle">spec Backupu vs CronJob</text>
+
+        <rect class="strong" x="68" y="236" width="200" height="62" rx="31"/>
+        <text class="ttl" x="168" y="262" text-anchor="middle">działaj</text>
+        <text class="on s" x="168" y="282" text-anchor="middle">create/update + status</text>
+
+        <text class="mono b" x="320" y="152" text-anchor="middle" style="font-size:14px">chce: schedule 0 2 * * *</text>
+        <text class="mono" x="320" y="176" text-anchor="middle" style="font-size:14px">jest: brak CronJoba</text>
+        <text class="b" x="320" y="208" text-anchor="middle" style="fill:var(--head)">→ utwórz nightly-backup</text>
+
+        <text class="s" x="320" y="370" text-anchor="middle">zdarzenie albo okresowy resync → kolejny obieg</text>
+      </svg>
+    </figure>
+    <div>
+      <h3 style="margin-top:0">Co kontroler robi w jednym obiegu</h3>
+      <ol class="plain">
+        <li><strong>Obserwuj.</strong> Watch na <code>backups</code> we wszystkich namespace'ach i na CronJobach, które utworzył. Każda zmiana wrzuca klucz <code>&lt;ns&gt;/&lt;nazwa&gt;</code> do kolejki.</li>
+        <li><strong>Porównaj.</strong> Czyta aktualny Backup i CronJob. Patrzy na stan, nie na samo zdarzenie (level-triggered), więc zgubione zdarzenie nie psuje wyniku.</li>
+        <li><strong>Działaj.</strong> Tworzy albo poprawia CronJob z <code>ownerReferences</code> wskazującym na Backup. Zapisuje <code>status</code> przez <code>/status</code>, m.in. <code>observedGeneration</code>.</li>
+        <li><strong>Błąd?</strong> Klucz wraca do kolejki z rosnącym opóźnieniem. Działanie jest idempotentne: drugi obieg na zgodnym stanie nic nie zmienia.</li>
+      </ol>
+      <p><code>metadata.generation</code> rośnie przy każdej zmianie <code>spec</code>. Gdy <code>status.observedGeneration</code> jest równe <code>generation</code>, kontroler przetworzył najnowszą wersję.</p>
+      <p>Usunięcie Backupu usuwa CronJob bez udziału kontrolera: robi to garbage collector w kube-controller-manager na podstawie <code>ownerReferences</code>.</p>
+    </div>
+  </div>
+
+  <div class="grid2" style="margin-top:16px">
+    <div>
+      <h3 style="margin-top:0">Ty piszesz <code>spec</code></h3>
+<pre>apiVersion: szkolenie.example.com/v1
+kind: Backup
+metadata:
+  name: nightly
+  generation: 1           <span class="c"># nadaje kube-apiserver</span>
+spec:
+  schedule: "0 2 * * *"
+  retention: 7</pre>
+    </div>
+    <div>
+      <h3 style="margin-top:0">Kontroler pisze <code>status</code> i CronJob</h3>
+<pre>status:                   <span class="c"># przez /status, wymyślone pola</span>
+  cronJob: nightly-backup
+  observedGeneration: 1
+---
+kind: CronJob
+metadata:
+  name: nightly-backup
+  ownerReferences:
+  - kind: Backup
+    name: nightly
+spec:
+  schedule: "0 2 * * *"</pre>
+    </div>
+  </div>
+</section>
+
+<!-- 4 ============================================================ -->
+<section id="operatory">
+  <h2><span class="n">4</span> Ten sam wzorzec w narzędziach, które znasz</h2>
+  <p>Instalujesz narzędzie = instalujesz zestaw CRD, kontroler w Deploymencie i RBAC dla kontrolera (zwykle jednym <code>helm install</code>). Ty piszesz krótki obiekt, kontroler tworzy z niego wbudowane zasoby i dopisuje <code>status</code>. Kontroler, który zna konkretną aplikację (jak odnowić certyfikat, jak przełączyć primary PostgreSQL), nazywamy <strong>operatorem</strong>.</p>
+
+  <figure>
+    <div class="scroll">
+    <svg class="wide" viewBox="0 0 1000 380" role="img" aria-labelledby="op-t op-d">
+      <title id="op-t">cert-manager i CloudNativePG jako CRD plus kontroler</title>
+      <desc id="op-d">Certificate web-tls trafia do cert-managera, który przez CertificateRequest, Order i Challenge tworzy Secret web-tls z certyfikatem. Cluster pg trafia do operatora CloudNativePG, który tworzy pody, PVC, Service'y i Secret.</desc>
+      <defs>
+        <marker id="m4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="mk-warn" d="M0 0L10 5L0 10z"/></marker>
+      </defs>
+      <text class="h" x="16" y="26">CERT-MANAGER · DZIEŃ 2, NASZ KLASTER</text>
+      <rect class="box cr" x="16" y="40" width="200" height="120" rx="10"/>
+      <text class="b mono" x="30" y="64" style="font-size:13px">kind: Certificate</text>
+      <text class="mono s" x="30" y="86">name: web-tls</text>
+      <text class="mono s" x="30" y="106">secretName: web-tls</text>
+      <text class="mono s" x="30" y="126">dnsNames: [&lt;login&gt;…]</text>
+      <text class="mono s" x="30" y="146" style="font-size:11px">issuerRef: letsencrypt-prod</text>
+
+      <rect class="box ctrl" x="268" y="62" width="170" height="76" rx="10"/>
+      <text class="b warn-t" x="353" y="94" text-anchor="middle">cert-manager</text>
+      <text class="s" x="353" y="116" text-anchor="middle">kontroler</text>
+
+      <rect class="box cr" x="490" y="40" width="210" height="120" rx="10"/>
+      <text class="s" x="505" y="62">własne CR po drodze:</text>
+      <text class="mono b" x="505" y="86" style="font-size:13px">CertificateRequest</text>
+      <text class="mono b" x="505" y="108" style="font-size:13px">Order (ACME)</text>
+      <text class="mono b" x="505" y="130" style="font-size:13px">Challenge (HTTP-01)</text>
+      <text class="s" x="505" y="150">+ tymczasowy pod i Ingress</text>
+
+      <rect class="box res" x="752" y="40" width="232" height="120" rx="10"/>
+      <text class="b mono" x="766" y="66" style="font-size:13px">Secret web-tls</text>
+      <text class="s mono" x="766" y="88">type: kubernetes.io/tls</text>
+      <text class="s mono" x="766" y="108">tls.crt, tls.key</text>
+      <text class="s" x="766" y="132">status: Ready=True</text>
+      <text class="s" x="766" y="150">odnowienie przed wygaśnięciem</text>
+
+      <path class="ln warn" d="M216 100 H262" marker-end="url(#m4)"/>
+      <path class="ln warn" d="M438 100 H484" marker-end="url(#m4)"/>
+      <path class="ln warn" d="M700 100 H746" marker-end="url(#m4)"/>
+
+      <text class="h" x="16" y="214">CLOUDNATIVEPG · DZIEŃ 5</text>
+      <rect class="box cr" x="16" y="228" width="200" height="130" rx="10"/>
+      <text class="b mono" x="30" y="252" style="font-size:13px">kind: Cluster</text>
+      <text class="mono s" x="30" y="274">name: pg</text>
+      <text class="mono s" x="30" y="294">instances: 3</text>
+      <text class="mono s" x="30" y="314">storage.size: 1Gi</text>
+      <text class="mono s" x="30" y="334">bootstrap.initdb: app</text>
+
+      <rect class="box ctrl" x="268" y="255" width="170" height="76" rx="10"/>
+      <text class="b warn-t" x="353" y="287" text-anchor="middle">operator CNPG</text>
+      <text class="s" x="353" y="309" text-anchor="middle">wie, jak działa Postgres</text>
+
+      <rect class="box res" x="490" y="228" width="494" height="130" rx="10"/>
+      <text class="mono b" x="506" y="254" style="font-size:13px">Pody pg-1, pg-2, pg-3</text>
+      <text class="s" x="506" y="274">primary + 2 repliki, bez StatefulSetu</text>
+      <text class="mono b" x="506" y="300" style="font-size:13px">PVC pg-1, pg-2, pg-3</text>
+      <text class="s" x="506" y="320">po jednym na instancję</text>
+      <text class="mono b" x="760" y="254" style="font-size:13px">Service pg-rw, pg-ro, pg-r</text>
+      <text class="s" x="760" y="274">zapis do primary / odczyt</text>
+      <text class="mono b" x="760" y="300" style="font-size:13px">Secret pg-app</text>
+      <text class="s" x="760" y="320">użytkownik, hasło, uri</text>
+      <text class="s" x="506" y="346">status: instancje, aktualny primary; failover sam przepina pg-rw</text>
+
+      <path class="ln warn" d="M216 293 H262" marker-end="url(#m4)"/>
+      <path class="ln warn" d="M438 293 H484" marker-end="url(#m4)"/>
+    </svg>
+    </div>
+    <figcaption><span class="hint">Przewiń diagram w bok. </span>Szczegóły HTTP-01: <a href="../ingress-gateway/cert-manager.md">cert-manager i TLS</a>. CloudNativePG ćwiczysz w lab18 (dzień 5).</figcaption>
+  </figure>
+
+  <div class="tablewrap">
+    <table class="stack">
+      <thead><tr><th>Narzędzie</th><th>Przykładowe CRD</th><th>Co robi kontroler</th></tr></thead>
+      <tbody>
+        <tr><td data-h="Narzędzie">cert-manager</td><td data-h="CRD"><code>Certificate</code>, <code>Issuer</code>, <code>ClusterIssuer</code></td><td data-h="Kontroler">wystawia i odnawia certyfikaty, zapisuje je w Secretach</td></tr>
+        <tr><td data-h="Narzędzie">KEDA</td><td data-h="CRD"><code>ScaledObject</code>, <code>ScaledJob</code></td><td data-h="Kontroler">tworzy HPA i skaluje od zera (dzień 3)</td></tr>
+        <tr><td data-h="Narzędzie">Gateway API</td><td data-h="CRD"><code>Gateway</code>, <code>HTTPRoute</code></td><td data-h="Kontroler">konfiguruje ruch; implementację daje np. Traefik (dzień 2)</td></tr>
+        <tr><td data-h="Narzędzie">Prometheus Operator</td><td data-h="CRD"><code>ServiceMonitor</code>, <code>PrometheusRule</code></td><td data-h="Kontroler">generuje konfigurację Prometheusa (dzień 5)</td></tr>
+        <tr><td data-h="Narzędzie">CloudNativePG</td><td data-h="CRD"><code>Cluster</code>, <code>Backup</code>, <code>ScheduledBackup</code></td><td data-h="Kontroler">PostgreSQL z replikami, failover, backupy (dzień 5)</td></tr>
+        <tr><td data-h="Narzędzie">Kyverno</td><td data-h="CRD"><code>ClusterPolicy</code>, <code>PolicyReport</code></td><td data-h="Kontroler">polityki admission (dzień 4, temat 2)</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>CloudNativePG też ma typ <code>Backup</code>, ale w innej grupie: <code>postgresql.cnpg.io</code>. Dlatego nazwa CRD zawiera grupę (<code>backups.postgresql.cnpg.io</code> obok <code>backups.szkolenie.example.com</code>). Gdy dwie grupy mają ten sam typ, pisz pełną nazwę: <code>kubectl get backups.postgresql.cnpg.io</code>.</p>
+</section>
+
+<!-- 5 ============================================================ -->
+<section id="anatomia">
+  <h2><span class="n">5</span> Anatomia CRD</h2>
+  <p>Po lewej <code>crd-backup.yaml</code> z repo (bez komentarzy). Po prawej, co daje każda część.</p>
+
+  <div class="grid2">
+<pre>apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: <span class="hl">backups.szkolenie.example.com</span>   <span class="c"># &lt;plural&gt;.&lt;group&gt;</span>
+spec:
+  group: <span class="hl">szkolenie.example.com</span>
+  scope: <span class="hl">Namespaced</span>
+  names:
+    kind: Backup
+    singular: backup
+    plural: backups
+    shortNames: [bk]
+  versions:
+  - name: v1
+    <span class="hl">served: true</span>
+    <span class="hl">storage: true</span>
+    schema:
+      <span class="hl">openAPIV3Schema</span>:
+        type: object
+        properties:
+          spec:
+            type: object
+            required: [schedule]
+            properties:
+              schedule:
+                type: string
+                description: Harmonogram w formacie cron, np. "0 2 * * *"
+              retention:
+                type: integer
+                minimum: 1
+                description: Ile kopii trzymać
+    <span class="hl">additionalPrinterColumns</span>:
+    - name: Schedule
+      type: string
+      jsonPath: .spec.schedule
+    - name: Retention
+      type: integer
+      jsonPath: .spec.retention</pre>
+    <div class="tablewrap" style="margin:0">
+      <table class="stack">
+        <thead><tr><th>Pole</th><th>Co daje</th></tr></thead>
+        <tbody>
+          <tr><td data-h="Pole"><code>metadata.name</code></td><td data-h="Co daje">zawsze <code>&lt;plural&gt;.&lt;group&gt;</code>; inna nazwa = błąd przy apply</td></tr>
+          <tr><td data-h="Pole"><code>group</code> + <code>versions[].name</code></td><td data-h="Co daje"><code>apiVersion: szkolenie.example.com/v1</code> w obiektach i ścieżka <code>/apis/szkolenie.example.com/v1/…</code></td></tr>
+          <tr><td data-h="Pole"><code>names</code></td><td data-h="Co daje">kind, nazwy w kubectl i skrót <code>bk</code>; opcjonalnie <code>categories</code></td></tr>
+          <tr><td data-h="Pole"><code>scope</code></td><td data-h="Co daje"><code>Namespaced</code> albo <code>Cluster</code> (niżej)</td></tr>
+          <tr><td data-h="Pole"><code>served</code> / <code>storage</code></td><td data-h="Co daje">czy wersja jest w API / w której wersji obiekty leżą w etcd</td></tr>
+          <tr><td data-h="Pole"><code>openAPIV3Schema</code></td><td data-h="Co daje">obowiązkowy: walidacja typów, <code>required</code>, <code>minimum</code>, <code>enum</code>, <code>pattern</code>; usuwanie nieznanych pól; opisy dla <code>kubectl explain</code></td></tr>
+          <tr><td data-h="Pole"><code>additionalPrinterColumns</code></td><td data-h="Co daje">kolumny <code>SCHEDULE</code> i <code>RETENTION</code> w <code>kubectl get bk</code> (bez nich tylko <code>NAME</code> i <code>AGE</code>)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <h3>Namespaced czy Cluster</h3>
+  <div class="tablewrap">
+    <table class="stack">
+      <thead><tr><th></th><th><code>scope: Namespaced</code></th><th><code>scope: Cluster</code></th></tr></thead>
+      <tbody>
+        <tr><td data-h="">obiekty żyją</td><td data-h="Namespaced">w namespace, jak Pod</td><td data-h="Cluster">poza namespace'ami, jak Node</td></tr>
+        <tr><td data-h="">ścieżka</td><td data-h="Namespaced"><code>/apis/&lt;grupa&gt;/v1/namespaces/&lt;ns&gt;/backups</code></td><td data-h="Cluster"><code>/apis/&lt;grupa&gt;/v1/&lt;plural&gt;</code></td></tr>
+        <tr><td data-h="">uprawnienia</td><td data-h="Namespaced">Role + RoleBinding w namespace wystarczą</td><td data-h="Cluster">ClusterRole + ClusterRoleBinding</td></tr>
+        <tr><td data-h="">usunięcie namespace</td><td data-h="Namespaced">usuwa obiekty w nim</td><td data-h="Cluster">nie dotyczy</td></tr>
+        <tr><td data-h="">przykłady</td><td data-h="Namespaced"><code>Backup</code>, <code>Certificate</code>, <code>Cluster</code> (CNPG), <code>ServiceMonitor</code></td><td data-h="Cluster"><code>ClusterIssuer</code>, <code>ClusterPolicy</code>, <code>GatewayClass</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Sam obiekt <code>CustomResourceDefinition</code> jest zawsze klastrowy, niezależnie od <code>scope</code> typu, który definiuje. <code>scope</code> nie zmienisz w istniejącym CRD.</p>
+
+  <h3>Wersje: served i storage</h3>
+  <p>CRD może mieć kilka wersji naraz, np. <code>v1alpha1</code> i <code>v1</code>. Każda z <code>served: true</code> jest dostępna w API. Dokładnie jedna ma <code>storage: true</code>: w niej obiekty są zapisywane w etcd. Bez webhooka konwersji (<code>conversion.strategy: None</code>) kube-apiserver zmienia tylko pole <code>apiVersion</code>, więc schematy wersji muszą być zgodne. Przy zmianie struktury pól potrzebny jest webhook konwersji (<code>strategy: Webhook</code>), który dostarcza autor operatora. <code>status.storedVersions</code> w CRD pokazuje, w jakich wersjach coś kiedyś zapisano. Starą wersję oznaczysz <code>deprecated: true</code>, a kubectl wypisze wtedy ostrzeżenie.</p>
+
+  <h3>Status, CEL i więcej kolumn: CRD gotowy na kontroler</h3>
+  <p>Tego nie ma w repo. Tak wyglądałaby wersja <code>v1</code> z kroku 3 symulatora:</p>
+  <div class="grid2">
+<pre>  - name: v1
+    served: true
+    storage: true
+    <span class="hl">subresources:</span>
+      <span class="hl">status: {}</span>              <span class="c"># osobny endpoint /status</span>
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            required: [schedule]
+            <span class="hl">x-kubernetes-validations:</span>
+            <span class="hl">- rule: "!has(self.retention) || self.retention &lt;= 30"</span>
+              <span class="hl">message: "retention: najwyżej 30 kopii"</span>
+            properties:
+              schedule: {type: string}
+              retention: {type: integer, minimum: 1}
+          <span class="hl">status:</span>
+            type: object
+            properties:
+              cronJob: {type: string}
+              observedGeneration: {type: integer}
+    additionalPrinterColumns:
+    - {name: Schedule, type: string, jsonPath: .spec.schedule}
+    - {name: CronJob, type: string, jsonPath: .status.cronJob}
+    - {name: Age, type: date, jsonPath: .metadata.creationTimestamp}</pre>
+    <div>
+      <ul>
+        <li><strong><code>subresources.status</code></strong> oddziela <code>spec</code> od <code>status</code>. Zapis do głównego endpointu ignoruje zmiany w <code>status</code>, zapis do <code>/status</code> ignoruje zmiany w <code>spec</code>. Kontroler dostaje prawo do <code>backups/status</code>, użytkownik do <code>backups</code>. <code>generation</code> rośnie tylko przy zmianie <code>spec</code>.</li>
+        <li><strong>Bez <code>status</code> w schemacie</strong> pole zostałoby usunięte przy zapisie (pruning). Dlatego nasz CRD bez kontrolera go nie ma.</li>
+        <li><strong><code>subresources.scale</code></strong> (opcjonalnie) wskazuje pola z liczbą replik. Wtedy działa <code>kubectl scale</code> i HPA.</li>
+        <li><strong><code>x-kubernetes-validations</code></strong> to reguły w języku CEL, liczone w kube-apiserverze (GA od 1.29). Sprawdzają zależności między polami, czego nie da się zapisać <code>minimum</code> czy <code>required</code>. Reguła z <code>oldSelf</code>, np. <code>self == oldSelf</code>, blokuje zmianę pola po utworzeniu.</li>
+        <li><strong><code>additionalPrinterColumns</code></strong> po dodaniu własnych kolumn <code>AGE</code> trzeba dopisać samemu (<code>type: date</code>).</li>
+      </ul>
+      <p>Odrzucenie przez CEL wygląda tak: <code>The Backup "nightly" is invalid: spec: Invalid value: "object": retention: najwyżej 30 kopii</code>.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 6 ============================================================ -->
+<section id="rbac">
+  <h2><span class="n">6</span> RBAC i kto tworzy CRD</h2>
+  <div class="cards">
+    <div class="card no">
+      <h3>CRD: administrator klastra</h3>
+      <ul>
+        <li><code>customresourcedefinitions</code> w grupie <code>apiextensions.k8s.io</code> to zasób klastrowy. Nowy typ widzą wszyscy w klastrze, a <code>delete crd</code> kasuje obiekty wszystkich.</li>
+        <li>Na naszym klastrze CRD <code>backups.szkolenie.example.com</code> wgrywa i usuwa trener. Ty możesz je czytać: <code>kubectl get crd</code>.</li>
+        <li>W firmie CRD instaluje zwykle zespół platformy razem z operatorem (chart Helm).</li>
+      </ul>
+    </div>
+    <div class="card yes">
+      <h3>Obiekty Backup: Ty, w swoim namespace</h3>
+      <ul>
+        <li>Dla RBAC nowy typ to zasób <code>backups</code> (liczba mnoga) w grupie <code>szkolenie.example.com</code>.</li>
+        <li>Wbudowane role <code>view</code>, <code>edit</code>, <code>admin</code> nie znają nowego typu. Trzeba im go dokleić.</li>
+        <li>Trener dokleił reguły do <code>edit</code> (i <code>admin</code>), więc w swoim namespace tworzysz Backupy, a w cudzym nie. <code>view</code> nie dostało nic, dlatego <code>get bk -A</code> daje Ci <code>forbidden</code>.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>Agregacja: ClusterRole doklejana do <code>edit</code></h3>
+  <div class="grid2">
+<pre><span class="c"># przyklady/k8s/20-crd/rbac-backups-edit.yaml (wgrywa trener)</span>
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: szkolenie-backups-edit
+  labels:
+    <span class="hl">rbac.authorization.k8s.io/aggregate-to-edit: "true"</span>
+    <span class="hl">rbac.authorization.k8s.io/aggregate-to-admin: "true"</span>
+rules:
+- apiGroups: ["szkolenie.example.com"]
+  resources: ["backups"]
+  verbs: ["get", "list", "watch", "create",
+          "update", "patch", "delete"]</pre>
+    <div>
+      <p>Role <code>view</code>, <code>edit</code> i <code>admin</code> mają <code>aggregationRule</code>: kontroler w kube-controller-manager dokleja do nich reguły z każdej ClusterRole z etykietą <code>rbac.authorization.k8s.io/aggregate-to-&lt;rola&gt;: "true"</code>. Nikt nie musi zmieniać RoleBindingów kursantów. Operatory robią to samo w swoich chartach.</p>
+      <p>Kontroler potrzebuje własnej roli przez ServiceAccount, np. <code>get, list, watch</code> na <code>backups</code>, <code>update, patch</code> na <code>backups/status</code> i pełnych praw do <code>cronjobs</code>. Działa we wszystkich namespace'ach, więc to ClusterRole + ClusterRoleBinding.</p>
+<pre>kubectl auth can-i create backups              <span class="c"># yes</span>
+kubectl auth can-i create backups -n bartek    <span class="c"># no</span>
+kubectl auth can-i create customresourcedefinitions   <span class="c"># no</span></pre>
+    </div>
+  </div>
+
+  <div class="tablewrap">
+    <table class="stack">
+      <thead><tr><th>Komunikat</th><th>Co znaczy</th></tr></thead>
+      <tbody>
+        <tr><td data-h="Komunikat"><code>customresourcedefinitions.apiextensions.k8s.io is forbidden: User "anna" cannot create resource "customresourcedefinitions" … at the cluster scope</code></td><td data-h="Co znaczy">CRD tworzy administrator; Ty tworzysz tylko obiekty</td></tr>
+        <tr><td data-h="Komunikat"><code>backups.szkolenie.example.com is forbidden: User "anna" cannot list resource "backups" in API group "szkolenie.example.com" at the cluster scope</code></td><td data-h="Co znaczy"><code>get bk -A</code> bez praw klastrowych; patrz tylko w swoim namespace</td></tr>
+        <tr><td data-h="Komunikat"><code>no matches for kind "Backup" in version "szkolenie.example.com/v1"</code></td><td data-h="Co znaczy">CRD jeszcze nie ma albo literówka w <code>apiVersion</code></td></tr>
+        <tr><td data-h="Komunikat"><code>the server doesn't have a resource type "bk"</code></td><td data-h="Co znaczy">CRD nie ma (jeszcze albo już)</td></tr>
+        <tr><td data-h="Komunikat"><code>spec.retention in body should be greater than or equal to 1</code></td><td data-h="Co znaczy">schemat z CRD odrzucił obiekt; w etcd nic się nie zmieniło</td></tr>
+        <tr><td data-h="Komunikat"><code>strict decoding error: unknown field "spec.literowka"</code></td><td data-h="Co znaczy">pole spoza schematu; z <code>--validate=warn</code> tylko ostrzeżenie, a pole znika</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- 7 ============================================================ -->
+<section id="sciaga">
+  <h2><span class="n">7</span> Pułapki i komendy</h2>
+  <div class="cards">
+    <div class="card no">
+      <h3>Pułapki</h3>
+      <ul>
+        <li>CRD bez kontrolera nic nie robi: żaden backup się nie wykona.</li>
+        <li><code>kubectl delete crd</code> usuwa wszystkie obiekty tego typu we wszystkich namespace'ach, bez pytania. Odinstalowanie operatora razem z CRD = utrata wszystkich jego obiektów.</li>
+        <li>Nazwa CRD to zawsze <code>&lt;plural&gt;.&lt;group&gt;</code>.</li>
+        <li><code>forbidden … customresourcedefinitions</code>: CRD tworzy administrator klastra.</li>
+        <li><code>helm upgrade</code> nie aktualizuje CRD z katalogu <code>crds/</code> charta. Wiele operatorów ma na to osobną flagę albo osobny chart.</li>
+      </ul>
+    </div>
+    <div class="card yes">
+      <h3>Co dostajesz za darmo</h3>
+      <ul>
+        <li>REST, discovery, <code>kubectl get/apply/delete</code>, <code>-o yaml</code>, <code>-w</code>.</li>
+        <li>Walidację schematem i dokumentację w <code>kubectl explain</code>.</li>
+        <li>RBAC, audyt, admission (np. Kyverno) jak dla wbudowanych typów.</li>
+        <li>Watch, z którego korzystają kontrolery.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="cheat" style="margin-top:16px">
+    <div><pre>kubectl get crd
+kubectl get crd | grep cert-manager.io</pre><p>Jakie typy doinstalowano w klastrze</p></div>
+    <div><pre>kubectl api-resources --api-group=szkolenie.example.com</pre><p>Nazwa, skrót, wersja, czy w namespace, kind</p></div>
+    <div><pre>kubectl explain backup.spec
+kubectl explain backup.spec --recursive</pre><p>Pola i opisy ze schematu CRD</p></div>
+    <div><pre>kubectl get bk
+kubectl get bk nightly -o yaml</pre><p>Twoje obiekty, z kolumnami z <code>additionalPrinterColumns</code></p></div>
+    <div><pre>kubectl get bk -A</pre><p>Wszystkie namespace'y: trener tak, Ty <code>forbidden</code></p></div>
+    <div><pre>kubectl get crd backups.szkolenie.example.com -o yaml</pre><p>Cała definicja, w <code>status</code> warunki <code>Established</code> i <code>NamesAccepted</code></p></div>
+    <div><pre>kubectl auth can-i create backups</pre><p>Czy masz prawo do obiektów nowego typu</p></div>
+    <div><pre>kubectl get --raw /apis/szkolenie.example.com/v1</pre><p>Surowe discovery nowej grupy</p></div>
+  </div>
+  <p style="margin-top:16px">Gotowe manifesty: <a href="../../../przyklady/k8s/20-crd/"><code>przyklady/k8s/20-crd/</code></a>. Lab: <a href="../../../labs/lab16-downward-api-crd/"><code>labs/lab16-downward-api-crd/</code></a>.</p>
+</section>
+
+<footer>Kubernetes w praktyce · Dzień 4 · stan na październik 2026 (Kubernetes 1.35, <code>apiextensions.k8s.io/v1</code>). Wersja tekstowa: <a href="README.md">README.md</a>.</footer>
+</main>
+
+<script>
+(function () {
+  document.documentElement.classList.add('js');
+  var $ = function (id) { return document.getElementById(id); };
+  if (!$('s-api')) return;
+
+  var BUILTIN = [
+    ['/api/v1', 'pods, services, configmaps, secrets, …'],
+    ['/apis/apps/v1', 'deployments, replicasets, statefulsets, …'],
+    ['/apis/batch/v1', 'jobs, cronjobs'],
+    ['/apis/apiextensions.k8s.io/v1', 'customresourcedefinitions']
+  ];
+  var PIPE = [['disc', 'discovery'], ['authn', 'uwierzytelnienie'], ['rbac', 'RBAC'], ['mut', 'mutating admission'], ['schema', 'schemat'], ['val', 'validating admission'], ['etcd', 'etcd']];
+  var SCHEDULES = ['0 2 * * *', '0 3 * * *', '30 1 * * *'];
+  var CRD_NAME = 'backups.szkolenie.example.com';
+  var S;
+
+  function init() {
+    S = { crd: false, ctrl: false, ctrlInstalled: false, bk: {}, cj: {}, sched: 0,
+          pipe: null, pipeWho: '', ctl: null, ctlNote: '', fresh: {}, gone: [],
+          term: [], msg: '', msgCls: '', phase: 0, step: 0 };
+    cmd('anna', 'kubectl get bk');
+    out('error: the server doesn\'t have a resource type "bk"', 'er');
+    S.msg = 'Klaster bez CRD: typu <code>Backup</code> nie ma w API. Kliknij <strong>krok dalej</strong> albo wybierz akcję.';
+  }
+
+  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function cmd(who, c) { S.term.push('<span class="cmd">' + who + '$ ' + esc(c) + '</span>'); }
+  function out(t, cls) { S.term.push(cls ? '<span class="' + cls + '">' + esc(t) + '</span>' : esc(t)); }
+  function begin(phase) {
+    S.term = []; S.fresh = {}; S.gone = []; S.ctl = null; S.ctlNote = ''; S.msgCls = ''; S.pipe = null; S.pipeWho = '';
+    if (phase) S.phase = phase;
+  }
+  function pipe(who, upto, badAt) {
+    var st = {};
+    for (var i = 0; i < PIPE.length; i++) {
+      var k = PIPE[i][0];
+      if (k === badAt) { st[k] = 'bad'; break; }
+      st[k] = 'ok';
+      if (k === upto) break;
+    }
+    S.pipe = st; S.pipeWho = who;
+  }
+  function noType(file) {
+    pipe('anna', null, 'disc');
+    out('error: resource mapping not found for name: "nightly" namespace: "" from "' + file + '": no matches for kind "Backup" in version "szkolenie.example.com/v1"', 'er');
+    out('ensure CRDs are installed first', 'er');
+    S.msgCls = 'stuck';
+    S.msg = 'kubectl pyta discovery, pod jaką ścieżką jest <code>kind: Backup</code> w <code>szkolenie.example.com/v1</code>. Takiego typu nie ma, więc żądanie nawet nie wychodzi do zapisu. Najpierw CRD.';
+  }
+  function noRes() {
+    out('error: the server doesn\'t have a resource type "bk"', 'er');
+    S.msgCls = 'stuck';
+    S.msg = 'Bez CRD nie ma skrótu <code>bk</code> ani zasobu <code>backups</code>.';
+  }
+  function bkStr(b) { return b.schedule + ' · retention ' + b.retention; }
+  function cjName(b) { return b.name + '-backup'; }
+
+  // usuwa Backup i (przez garbage collector) CronJob z ownerReference
+  function dropBackup(k) {
+    var b = S.bk[k];
+    S.gone.push({ t: 'bk', ns: b.ns, name: b.name, d: bkStr(b) });
+    delete S.bk[k];
+    var ck = b.ns + '/' + cjName(b);
+    if (S.cj[ck]) {
+      S.gone.push({ t: 'cj', ns: b.ns, name: S.cj[ck].name, d: S.cj[ck].schedule });
+      delete S.cj[ck];
+      return true;
+    }
+    return false;
+  }
+
+  function reconcile() {
+    if (!S.ctrl) return [];
+    if (!S.crd) {
+      S.ctl = { obs: 'bad' };
+      S.ctlNote = 'watch na <code>backups</code> kończy się błędem <code>the server could not find the requested resource</code>. Kontroler ponawia i czeka, aż CRD wróci.';
+      return [];
+    }
+    var acts = [];
+    Object.keys(S.bk).sort().forEach(function (k) {
+      var b = S.bk[k], n = cjName(b), ck = b.ns + '/' + n, cj = S.cj[ck];
+      if (!cj) {
+        S.cj[ck] = { ns: b.ns, name: n, schedule: b.schedule, retention: b.retention };
+        S.fresh['cj:' + ck] = 1; acts.push('create CronJob ' + ck);
+      } else if (cj.schedule !== b.schedule || cj.retention !== b.retention) {
+        cj.schedule = b.schedule; cj.retention = b.retention;
+        S.fresh['cj:' + ck] = 1; acts.push('update CronJob ' + ck);
+      }
+      if (!b.status || b.status.og !== b.gen) {
+        b.status = { cj: n, og: b.gen };
+        S.fresh['st:' + k] = 1; acts.push('patch ' + k + '/status');
+      }
+    });
+    S.ctl = { obs: 'ok', cmp: 'ok', act: acts.length ? 'ok' : '' };
+    S.ctlNote = acts.length
+      ? acts.map(function (a) { return '<code>' + esc(a) + '</code>'; }).join('<br>')
+      : 'Stan zgodny ze <code>spec</code>, nic do zrobienia.';
+    return acts;
+  }
+
+  var A = {};
+
+  A.applyCRD = function () {
+    begin(1);
+    cmd('trener', 'kubectl apply -f crd-backup.yaml');
+    pipe('trener', 'etcd');
+    if (S.crd) {
+      out('customresourcedefinition.apiextensions.k8s.io/' + CRD_NAME + ' unchanged');
+      S.msg = 'CRD już jest. <code>kubectl apply</code> nic nie zmienił.';
+      return;
+    }
+    S.crd = true; S.fresh.crd = 1; S.fresh.ep = 1;
+    out('customresourcedefinition.apiextensions.k8s.io/' + CRD_NAME + ' created', 'okl');
+    S.msgCls = 'done';
+    S.msg = '<p>kube-apiserver zapisał CRD w etcd i po chwili ustawił w nim warunki <code>NamesAccepted</code> i <code>Established</code>. Od teraz obsługuje ścieżkę <code>/apis/szkolenie.example.com/v1/namespaces/&lt;ns&gt;/backups</code> i ogłasza ją w discovery.</p><p>Nie powstał żaden pod ani proces: nowy typ obsługuje sam kube-apiserver.</p>';
+    var acts = reconcile();
+    if (S.ctrl) S.msg += '<p>Kontroler odzyskał watch na <code>backups</code>' + (acts.length ? '.' : ', ale nie ma jeszcze żadnych obiektów.') + '</p>';
+  };
+
+  A.discover = function () {
+    begin(1);
+    cmd('anna', 'kubectl api-resources --api-group=szkolenie.example.com');
+    out('NAME      SHORTNAMES   APIVERSION                 NAMESPACED   KIND');
+    if (S.crd) out('backups   bk           szkolenie.example.com/v1   true         Backup', 'okl');
+    cmd('anna', 'kubectl explain backup.spec');
+    if (!S.crd) {
+      out('error: the server doesn\'t have a resource type "backup"', 'er');
+      S.msgCls = 'stuck';
+      S.msg = 'Discovery nie zna grupy <code>szkolenie.example.com</code>: lista jest pusta, <code>explain</code> nie ma czego opisać.';
+      return;
+    }
+    out('GROUP:      szkolenie.example.com\nKIND:       Backup\nVERSION:    v1\n\nFIELD: spec <Object>\n\nFIELDS:\n  retention\t<integer>\n    Ile kopii trzymać\n\n  schedule\t<string> -required-\n    Harmonogram w formacie cron, np. "0 2 * * *"');
+    S.msg = 'kubectl pobrał z discovery listę zasobów nowej grupy (stąd skrót <code>bk</code> i <code>NAMESPACED true</code>), a <code>explain</code> czyta opisy i <code>required</code> ze schematu w CRD. Dokumentacja nowego typu za darmo.';
+  };
+
+  A.crdAsTy = function () {
+    begin(1);
+    cmd('anna', 'kubectl apply -f crd-backup.yaml');
+    pipe('anna', null, 'rbac');
+    out('Error from server (Forbidden): error when creating "crd-backup.yaml": customresourcedefinitions.apiextensions.k8s.io is forbidden: User "anna" cannot create resource "customresourcedefinitions" in API group "apiextensions.k8s.io" at the cluster scope', 'er');
+    if (S.crd) out('(CRD i tak już jest: wgrał go trener)', 'cm');
+    S.msgCls = 'stuck';
+    S.msg = 'CRD to zasób klastrowy: nowy typ zobaczyłby cały klaster, a jego usunięcie skasowałoby obiekty wszystkich. Dlatego tworzy go administrator, na naszym klastrze trener. RBAC zatrzymuje żądanie, zanim dotrze do etcd.';
+  };
+
+  A.applyCR = function () {
+    begin(2);
+    cmd('anna', 'kubectl apply -f backup-nightly.yaml');
+    if (!S.crd) { noType('backup-nightly.yaml'); return; }
+    pipe('anna', 'etcd');
+    var k = 'anna/nightly', b = S.bk[k], first = false;
+    if (b && b.schedule === SCHEDULES[0] && b.retention === 7) {
+      out('backup.szkolenie.example.com/nightly unchanged');
+      S.msg = 'Obiekt jest identyczny z plikiem, nic się nie zmieniło.';
+    } else if (b) {
+      b.schedule = SCHEDULES[0]; b.retention = 7; b.gen++; S.sched = 0; S.fresh['bk:' + k] = 1;
+      out('backup.szkolenie.example.com/nightly configured', 'okl');
+      S.msg = '<code>apply</code> przywrócił <code>schedule</code> z pliku. <code>generation</code> = ' + b.gen + '.';
+    } else {
+      S.bk[k] = { ns: 'anna', name: 'nightly', schedule: SCHEDULES[0], retention: 7, gen: 1, status: null };
+      S.sched = 0; S.fresh['bk:' + k] = 1; first = true;
+      out('backup.szkolenie.example.com/nightly created', 'okl');
+      if (!S.bk['bartek/weekly'] && !S.seenBartek) {
+        S.bk['bartek/weekly'] = { ns: 'bartek', name: 'weekly', schedule: '0 4 * * 0', retention: 14, gen: 1, status: null };
+        S.fresh['bk:bartek/weekly'] = 1; S.seenBartek = true;
+      }
+      S.msg = '<p>Te same bramki co dla Poda: uwierzytelnienie, RBAC (zasób <code>backups</code> w grupie <code>szkolenie.example.com</code>; prawo dostałaś przez rolę <code>edit</code>), admission, walidacja schematem. Potem zapis w etcd. W tym czasie <code>bartek</code> wgrał swój Backup <code>weekly</code>.</p>';
+    }
+    S.msgCls = 'done';
+    var acts = reconcile();
+    if (!S.ctrl && first) S.msg += '<p><strong>I to wszystko.</strong> Nikt nie obserwuje <code>backups</code>, więc nie powstaje CronJob ani Pod.</p>';
+    else if (S.ctrl && acts.length) S.msg += '<p>Kontroler dostał zdarzenie z watch i od razu zadziałał.</p>';
+  };
+
+  A.ret0 = function () {
+    begin(2);
+    cmd('anna', "sed 's/retention: 7/retention: 0/' backup-nightly.yaml | kubectl apply -f -");
+    if (!S.crd) { noType('STDIN'); return; }
+    pipe('anna', null, 'schema');
+    out('The Backup "nightly" is invalid: spec.retention: Invalid value: 0: spec.retention in body should be greater than or equal to 1', 'er');
+    S.msgCls = 'stuck';
+    S.msg = 'Odrzucił kube-apiserver, nie kubectl: schemat z CRD ma <code>minimum: 1</code>. Obiekt nie dotarł do etcd' + (S.bk['anna/nightly'] ? ', zapisany wcześniej <code>nightly</code> ma dalej <code>retention: 7</code>.' : '.') + ' Tak samo działa walidacja wbudowanych typów.';
+  };
+
+  A.unknown = function () {
+    begin(2);
+    cmd('anna', 'kubectl apply -f backup-nightly.yaml          # dopisane spec.literowka: true');
+    if (!S.crd) { noType('backup-nightly.yaml'); return; }
+    var k = 'anna/nightly', b = S.bk[k];
+    pipe('anna', null, 'schema');
+    out('Error from server (BadRequest): error when ' + (b ? 'applying patch: … ' : 'creating "backup-nightly.yaml": ') + 'Backup in version "v1" cannot be handled as a Backup: strict decoding error: unknown field "spec.literowka"', 'er');
+    cmd('anna', 'kubectl apply -f backup-nightly.yaml --validate=warn');
+    out('Warning: unknown field "spec.literowka"', 'wa');
+    if (b) {
+      out('backup.szkolenie.example.com/nightly configured');
+    } else {
+      S.bk[k] = b = { ns: 'anna', name: 'nightly', schedule: SCHEDULES[0], retention: 7, gen: 1, status: null };
+      S.sched = 0; S.fresh['bk:' + k] = 1;
+      out('backup.szkolenie.example.com/nightly created', 'okl');
+    }
+    cmd('anna', "kubectl get bk nightly -o jsonpath='{.spec}'");
+    out('{"retention":' + b.retention + ',"schedule":"' + b.schedule + '"}');
+    reconcile();
+    S.msg = 'kubectl domyślnie prosi o walidację <code>Strict</code>: kube-apiserver porównuje pola ze schematem i odrzuca nieznane. Z <code>--validate=warn</code> dostajesz tylko ostrzeżenie, a pola i tak nie ma w etcd: kube-apiserver usuwa pola spoza schematu (pruning).';
+  };
+
+  A.check = function () {
+    begin(S.ctrl ? 3 : 2);
+    cmd('anna', "kubectl get bk nightly -o jsonpath='{.status}'");
+    if (!S.crd) { noRes(); return; }
+    var b = S.bk['anna/nightly'];
+    if (!b) {
+      out('Error from server (NotFound): backups.szkolenie.example.com "nightly" not found', 'er');
+    } else if (!b.status) {
+      out('(pusto)', 'cm');
+    } else {
+      out('{"cronJob":"' + b.status.cj + '","observedGeneration":' + b.status.og + '}', 'okl');
+    }
+    cmd('anna', 'kubectl get cronjobs');
+    var mine = Object.keys(S.cj).filter(function (ck) { return S.cj[ck].ns === 'anna'; });
+    if (!mine.length) out('No resources found in anna namespace.');
+    else {
+      out('NAME             SCHEDULE    TIMEZONE   SUSPEND   ACTIVE   LAST SCHEDULE   AGE');
+      mine.forEach(function (ck) { var c = S.cj[ck]; out(pad(c.name, 17) + pad(c.schedule, 12) + '<none>     False     0        <none>          12s'); });
+    }
+    if (!b) S.msg = 'Najpierw wgraj <code>nightly</code>.';
+    else if (!b.status && !mine.length) {
+      S.msgCls = 'stuck';
+      S.msg = '<strong>Nic się nie wykonało.</strong> Brak <code>status</code>, brak CronJoba. CRD dał typ, walidację i endpoint REST. Działania dostarcza dopiero kontroler: krok 3.';
+    } else if (b.status && b.status.og === b.gen && mine.length) {
+      S.msgCls = 'done';
+      S.msg = 'Kontroler zapisał <code>status</code> (<code>observedGeneration</code> = <code>generation</code> = ' + b.gen + ') i utworzył CronJob. O 2:00 CronJob uruchomi Job, a Job pod z backupem.';
+    } else {
+      S.msgCls = 'stuck';
+      S.msg = 'Status jest nieaktualny (<code>observedGeneration</code> ' + (b.status ? b.status.og : '—') + ', <code>generation</code> ' + b.gen + '): kontroler nie przetworzył ostatniej zmiany.';
+    }
+  };
+  function pad(s, n) { s = String(s); while (s.length < n) s += ' '; return s; }
+
+  A.ctrlSet = function (on) {
+    begin(3);
+    if (on === S.ctrl) {
+      reconcile();
+      S.msg = on ? 'Kontroler już działa.' : 'Kontroler już jest wyłączony.';
+      return;
+    }
+    S.ctrl = on;
+    if (on) {
+      if (!S.ctrlInstalled) {
+        cmd('trener', 'kubectl apply -f backup-operator.yaml     # SA, ClusterRole, Deployment (przykład)');
+        out('serviceaccount/backup-operator created\nclusterrole.rbac.authorization.k8s.io/backup-operator created\nclusterrolebinding.rbac.authorization.k8s.io/backup-operator created\ndeployment.apps/backup-operator created');
+        S.ctrlInstalled = true;
+      } else {
+        cmd('trener', 'kubectl scale deploy/backup-operator -n backup-system --replicas=1');
+        out('deployment.apps/backup-operator scaled');
+      }
+      var acts = reconcile();
+      S.msgCls = acts.length ? 'done' : '';
+      if (!S.crd) S.msg = 'Kontroler działa, ale bez CRD nie ma czego obserwować.';
+      else if (acts.length) S.msg = 'Kontroler startuje od pełnej listy (list), potem obserwuje zmiany (watch). Dla każdego Backupu porównał stan zadany z rzeczywistym i doprowadził do zgodności: CronJob z <code>ownerReferences</code> i <code>status</code>.' +
+        (acts.join(' ').indexOf('bartek/') >= 0 ? ' Także w namespace <code>bartek</code>: kontroler działa w całym klastrze.' : '');
+      else S.msg = 'Kontroler działa i obserwuje <code>backups</code>. Stan jest zgodny, więc nic nie robi.';
+    } else {
+      cmd('trener', 'kubectl scale deploy/backup-operator -n backup-system --replicas=0');
+      out('deployment.apps/backup-operator scaled');
+      S.msg = 'Kontroler wyłączony. CronJoby zostają (to zwykłe obiekty w etcd) i dalej uruchamiają Joby, ale nikt już nie pilnuje, czy zgadzają się z Backupami.';
+    }
+  };
+  A.ctrl = function () { A.ctrlSet(!S.ctrl); };
+  A.ctrlOn = function () { A.ctrlSet(true); };
+  A.ctrlOff = function () { A.ctrlSet(false); };
+
+  A.patch = function () {
+    begin(3);
+    var next = SCHEDULES[(S.sched + 1) % SCHEDULES.length];
+    cmd('anna', "kubectl patch bk nightly --type=merge -p '{\"spec\":{\"schedule\":\"" + next + "\"}}'");
+    if (!S.crd) { noRes(); return; }
+    var k = 'anna/nightly', b = S.bk[k];
+    if (!b) {
+      out('Error from server (NotFound): backups.szkolenie.example.com "nightly" not found', 'er');
+      S.msgCls = 'stuck'; S.msg = 'Najpierw wgraj <code>nightly</code>.';
+      return;
+    }
+    pipe('anna', 'etcd');
+    S.sched = (S.sched + 1) % SCHEDULES.length;
+    b.schedule = next; b.gen++; S.fresh['bk:' + k] = 1;
+    out('backup.szkolenie.example.com/nightly patched', 'okl');
+    var acts = reconcile();
+    var cj = S.cj['anna/' + cjName(b)];
+    if (S.ctrl) {
+      S.msgCls = 'done';
+      S.msg = 'Zmiana <code>spec</code> podniosła <code>generation</code> do ' + b.gen + '. Kontroler dostał zdarzenie, porównał i poprawił CronJob. <code>status.observedGeneration</code> = ' + b.gen + '.';
+    } else if (cj) {
+      S.msgCls = 'stuck';
+      S.msg = '<strong>Rozjazd:</strong> Backup chce <code>' + b.schedule + '</code>, CronJob ma <code>' + cj.schedule + '</code>. Rekord w etcd się zmienił, ale nikt tego nie przenosi na CronJob. Włącz kontroler.';
+    } else {
+      S.msg = 'Zmienił się tylko rekord w etcd (<code>generation</code> = ' + b.gen + '). Bez kontrolera nic poza tym.';
+    }
+  };
+
+  A.delCR = function () {
+    begin(4);
+    cmd('anna', 'kubectl delete bk nightly');
+    if (!S.crd) { noRes(); return; }
+    var k = 'anna/nightly';
+    if (!S.bk[k]) {
+      out('Error from server (NotFound): backups.szkolenie.example.com "nightly" not found', 'er');
+      S.msgCls = 'stuck'; S.msg = 'Nie ma czego usuwać.';
+      return;
+    }
+    pipe('anna', 'etcd');
+    var hadCj = dropBackup(k);
+    out('backup.szkolenie.example.com "nightly" deleted', 'okl');
+    reconcile();
+    S.msg = hadCj
+      ? 'Backup zniknął, a razem z nim CronJob. Usunął go garbage collector z kube-controller-manager, bo CronJob miał <code>ownerReferences</code> do Backupu. Kontroler nie musi nic robić.'
+      : 'Backup usunięty. Nie było CronJoba, więc nic więcej nie znika.';
+  };
+
+  A.getAll = function () {
+    begin(4);
+    cmd('trener', 'kubectl get bk -A');
+    if (!S.crd) { noRes(); return; }
+    var keys = Object.keys(S.bk).sort();
+    if (!keys.length) out('No resources found');
+    else {
+      out('NAMESPACE   NAME      SCHEDULE    RETENTION');
+      keys.forEach(function (k) { var b = S.bk[k]; out(pad(b.ns, 12) + pad(b.name, 10) + pad(b.schedule, 12) + b.retention); });
+    }
+    cmd('anna', 'kubectl get bk -A');
+    out('Error from server (Forbidden): backups.szkolenie.example.com is forbidden: User "anna" cannot list resource "backups" in API group "szkolenie.example.com" at the cluster scope', 'er');
+    S.msg = 'Trener (cluster-admin) widzi Backupy we wszystkich namespace\'ach. Ty nie: reguły na <code>backups</code> doklejono do <code>edit</code>, którą masz tylko w swoim namespace.';
+  };
+
+  A.delCRD = function () {
+    begin(4);
+    cmd('trener', 'kubectl delete crd ' + CRD_NAME);
+    if (!S.crd) {
+      out('Error from server (NotFound): customresourcedefinitions.apiextensions.k8s.io "' + CRD_NAME + '" not found', 'er');
+      S.msgCls = 'stuck'; S.msg = 'CRD już nie ma.';
+      return;
+    }
+    pipe('trener', 'etcd');
+    var keys = Object.keys(S.bk).sort(), n = keys.length, cjs = 0;
+    keys.forEach(function (k) { if (dropBackup(k)) cjs++; });
+    S.crd = false; S.gone.push({ t: 'crd' }); S.gone.push({ t: 'ep' });
+    out('customresourcedefinition.apiextensions.k8s.io "' + CRD_NAME + '" deleted', 'okl');
+    cmd('anna', 'kubectl get bk');
+    out('error: the server doesn\'t have a resource type "bk"', 'er');
+    reconcile();
+    S.msgCls = 'stuck';
+    S.msg = '<p><strong>Bez pytania i bez kosza.</strong> Razem z CRD zniknęły wszystkie obiekty Backup we wszystkich namespace\'ach (' + n + ')' + (cjs ? ', a garbage collector usunął CronJoby, których były właścicielami (' + cjs + ')' : '') + '. Endpoint zniknął z API.</p><p>Dlatego odinstalowanie operatora razem z jego CRD kasuje wszystkie jego obiekty. Ten sam wzorzec w prawdziwych narzędziach: sekcja 4.</p>';
+  };
+
+  var SCRIPT = ['applyCRD', 'discover', 'crdAsTy', 'applyCR', 'ret0', 'unknown', 'check', 'ctrlOn', 'check', 'patch', 'ctrlOff', 'patch', 'ctrlOn', 'getAll', 'delCRD'];
+
+  // ---------- render ----------
+  function isGone(t) { return S.gone.some(function (g) { return g.t === t; }); }
+
+  function renderApi() {
+    var h = '<p class="ph">kube-apiserver <small>· endpointy w discovery</small></p>';
+    BUILTIN.forEach(function (r) { h += '<div class="ep">' + esc(r[0]) + '<span>' + esc(r[1]) + '</span></div>'; });
+    if (S.crd) h += '<div class="ep cust' + (S.fresh.ep ? ' fresh' : '') + '">/apis/szkolenie.example.com/v1<span>backups (bk) · Namespaced</span></div>';
+    else if (isGone('ep')) h += '<div class="ep cust gone">/apis/szkolenie.example.com/v1<span>backups (bk)</span></div>';
+    h += '<p class="pipe-who">Ostatnie żądanie' + (S.pipeWho ? ' (' + S.pipeWho + ')' : '') + ':</p><ol class="pipe" aria-label="Bramki żądania">';
+    PIPE.forEach(function (p) {
+      var st = S.pipe && S.pipe[p[0]];
+      h += '<li class="' + (st || '') + '">' + p[1] + '</li>';
+    });
+    h += '</ol>';
+    if (!S.pipe) h += '<p class="empty-note" style="margin:4px 0 0">brak żądania zapisu</p>';
+    $('s-api').innerHTML = h;
+  }
+
+  function objRow(cls, title, lines, fresh) {
+    return '<div class="obj ' + cls + (fresh ? ' fresh' : '') + '"><b>' + title + '</b>' + lines.join('') + '</div>';
+  }
+
+  function renderEtcd() {
+    var h = '<p class="ph">etcd <small>· co jest zapisane</small></p>';
+    h += '<div class="grp"><div class="gh">zasoby klastrowe</div>';
+    if (S.crd) h += objRow('crd', 'CRD ' + CRD_NAME, ['<span class="m">Established: True</span>'], S.fresh.crd);
+    else if (isGone('crd')) h += '<div class="obj crd gone"><b>CRD ' + CRD_NAME + '</b></div>';
+    else h += '<div class="empty-note">brak CRD</div>';
+    h += '</div>';
+    ['anna', 'bartek'].forEach(function (ns) {
+      h += '<div class="grp"><div class="gh">namespace ' + ns + (ns === 'anna' ? ' (Ty)' : '') + '</div>';
+      var any = false;
+      Object.keys(S.bk).sort().forEach(function (k) {
+        var b = S.bk[k]; if (b.ns !== ns) return; any = true;
+        var st = b.status
+          ? '<span class="m st' + (S.fresh['st:' + k] ? ' fresh' : '') + '">status: cronJob ' + esc(b.status.cj) + ', observedGeneration ' + b.status.og + '</span>'
+          : '<span class="m">status: —</span>';
+        h += objRow('bk', 'Backup ' + esc(b.name), ['<span class="m">spec: ' + esc(bkStr(b)) + ' · generation ' + b.gen + '</span>', st], S.fresh['bk:' + k]);
+      });
+      Object.keys(S.cj).sort().forEach(function (ck) {
+        var c = S.cj[ck]; if (c.ns !== ns) return; any = true;
+        h += objRow('cj', 'CronJob ' + esc(c.name), ['<span class="m">schedule ' + esc(c.schedule) + ' · owner: Backup ' + esc(c.name.replace(/-backup$/, '')) + '</span>'], S.fresh['cj:' + ck]);
+      });
+      S.gone.forEach(function (g) {
+        if ((g.t === 'bk' || g.t === 'cj') && g.ns === ns) {
+          any = true;
+          h += '<div class="obj ' + g.t + ' gone"><b>' + (g.t === 'bk' ? 'Backup ' : 'CronJob ') + esc(g.name) + '</b><span class="m">' + esc(g.d) + '</span></div>';
+        }
+      });
+      if (!any) h += '<div class="empty-note">pusto</div>';
+      h += '</div>';
+    });
+    $('s-etcd').innerHTML = h;
+  }
+
+  function renderCtl() {
+    var el = $('s-ctl');
+    el.className = 'pane ' + (S.ctrl ? 'live' : 'off');
+    var h = '<p class="ph">kontroler <small>· backup-operator</small></p>';
+    if (!S.ctrl) {
+      h += '<p class="ctl-note"><strong>' + (S.ctrlInstalled ? 'Zatrzymany (0 replik).' : 'Nie zainstalowany.') + '</strong> Nikt nie obserwuje obiektów <code>Backup</code>.</p>';
+    } else {
+      h += '<ol class="pipe" aria-label="Pętla kontrolera">';
+      [['obs', 'obserwuj'], ['cmp', 'porównaj'], ['act', 'działaj']].forEach(function (p) {
+        var st = S.ctl && S.ctl[p[0]];
+        h += '<li class="' + (st || '') + '">' + p[1] + '</li>';
+      });
+      h += '</ol>';
+      h += '<p class="ctl-note">' + (S.ctlNote || 'Obserwuje <code>backups</code> i <code>cronjobs</code> w całym klastrze. Brak zdarzeń.') + '</p>';
+    }
+    el.innerHTML = h;
+    var btn = $('s-ctrl');
+    btn.setAttribute('aria-pressed', S.ctrl ? 'true' : 'false');
+    btn.textContent = S.ctrl ? 'włączony' : 'wyłączony';
+  }
+
+  function render() {
+    renderApi(); renderEtcd(); renderCtl();
+    $('s-term').innerHTML = S.term.join('\n');
+    var m = $('s-msg');
+    m.className = 'msg' + (S.msgCls ? ' ' + S.msgCls : '');
+    m.innerHTML = S.msg;
+    $('s-flow').querySelectorAll('li').forEach(function (li) {
+      var p = Number(li.getAttribute('data-p'));
+      li.classList.toggle('on', p === S.phase);
+      li.classList.toggle('past', S.phase > 0 && p < S.phase);
+    });
+    $('s-tick').textContent = 'krok ' + S.step + ' z ' + SCRIPT.length;
+    $('s-step').disabled = S.step >= SCRIPT.length;
+  }
+
+  function run(name) {
+    var f = A[name];
+    if (!f) return;
+    S.msg = '';
+    f();
+    render();
+  }
+
+  document.querySelectorAll('#symulator [data-a]').forEach(function (b) {
+    b.addEventListener('click', function () { run(b.getAttribute('data-a')); });
+  });
+  $('s-step').addEventListener('click', function () {
+    if (S.step >= SCRIPT.length) return;
+    var name = SCRIPT[S.step++];
+    run(name);
+  });
+  $('s-reset').addEventListener('click', function () { init(); render(); });
+
+  init();
+  render();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,43 @@
+# Downward API: env (raz, przy starcie) i wolumen z plikami (odświeżany przez kubelet).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: info
+  labels:
+    app: info
+  annotations:
+    build: "1234"
+spec:
+  containers:
+  - name: app
+    image: busybox:1.37
+    command: ["sh", "-c", "echo POD_NAME=$POD_NAME NODE_NAME=$NODE_NAME MEM_LIMIT=$MEM_LIMIT; sleep 3600"]
+    env:
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: MEM_LIMIT
+      valueFrom:
+        resourceFieldRef:       # requests/limits kontenera: limits.cpu, limits.memory, requests.cpu, requests.memory
+          resource: limits.memory
+    resources:
+      requests: {cpu: 10m, memory: 16Mi}
+      limits: {cpu: 100m, memory: 32Mi}
+    volumeMounts:
+    - name: podinfo
+      mountPath: /etc/podinfo
+  volumes:
+  - name: podinfo
+    downwardAPI:                # pliki z metadanymi poda; kubelet je aktualizuje po zmianie etykiet/adnotacji
+      items:
+      - path: labels
+        fieldRef:
+          fieldPath: metadata.labels
+      - path: annotations
+        fieldRef:
+          fieldPath: metadata.annotations

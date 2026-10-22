@@ -1,0 +1,29 @@
+# Manifest „z życia” do skanowania w lab14. Działa, ale ma kilka typowych błędów bezpieczeństwa.
+# Zadanie: znajdź je skanerem (trivy config, kubescape) i popraw tak, żeby pod przeszedł Pod Security „restricted”.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: skan-web
+  labels:
+    app: skan-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: skan-web
+  template:
+    metadata:
+      labels:
+        app: skan-web
+    spec:
+      containers:
+      - name: skan-web
+        image: nginx:1.29
+        ports:
+        - containerPort: 80
+        securityContext:
+          allowPrivilegeEscalation: true
+        resources:
+          requests:
+            cpu: 50m
+            memory: 32Mi

@@ -1,0 +1,112 @@
+# ToDos · dzień 4: MongoDB jako StatefulSet z własnym dyskiem. Zmiany od wczoraj: własny ServiceAccount bez tokenu,
+# securityContext pod PSA restricted (UID 999 zamiast roota, fsGroup dla PVC), system plików tylko do odczytu
+# i emptyDir na /tmp i /data/configdb. PVC data-mongo-0 z wczoraj zostaje: zadania nie przepadają.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo                    # ta nazwa jest w adresie bazy (Secret todos-mongo, klucz uri)
+  labels:
+    app.kubernetes.io/part-of: todos
+spec:
+  clusterIP: None                # headless: DNS mongo → IP poda, plus mongo-0.mongo
+  selector:
+    app: todos-mongo
+  ports:
+    - name: mongo
+      port: 27017
+      targetPort: mongo
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mongo
+  labels:
+    app: todos-mongo
+    app.kubernetes.io/part-of: todos
+spec:
+  serviceName: mongo             # headless Service wyżej
+  replicas: 1
+  selector:
+    matchLabels:
+      app: todos-mongo
+  template:
+    metadata:
+      labels:
+        app: todos-mongo
+        app.kubernetes.io/part-of: todos
+    spec:
+      serviceAccountName: mongo
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999                 # mongodb z obrazu. Jako root entrypoint sam robił chown i przechodził na 999,
+        runAsGroup: 999                # teraz startuje od razu jako 999
+        fsGroup: 999                   # kubelet daje grupie 999 prawo zapisu do PVC
+        fsGroupChangePolicy: OnRootMismatch   # chown całego dysku tylko wtedy, gdy grupa katalogu się nie zgadza
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: mongo
+          image: mongo:7.0
+          ports:
+            - name: mongo
+              containerPort: 27017
+          env:
+            - name: MONGO_INITDB_ROOT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: todos-mongo
+                  key: username
+            - name: MONGO_INITDB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: todos-mongo
+                  key: password
+          readinessProbe:              # mongosh to cały Node.js: sonda kosztuje CPU, więc rzadziej i z zapasem czasu
+            exec:
+              command:
+                - mongosh
+                - --quiet
+                - --eval
+                - "db.adminCommand('ping')"
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 10
+          resources:                   # requests = limits dla CPU i pamięci → QoS Guaranteed
+            requests:
+              cpu: 300m
+              memory: 512Mi
+            limits:
+              cpu: 300m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /data/db      # tu Mongo trzyma pliki bazy (i tu jest HOME użytkownika mongodb)
+            - name: tmp
+              mountPath: /tmp          # gniazdo mongod i pliki tymczasowe entrypointu
+            - name: configdb
+              mountPath: /data/configdb   # VOLUME z obrazu; przy readOnlyRootFilesystem musi być wolumenem
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+        - name: configdb
+          emptyDir:
+            sizeLimit: 16Mi
+  volumeClaimTemplates:
+    - metadata:
+        name: data                     # PVC: data-mongo-0
+        labels:
+          app.kubernetes.io/part-of: todos
+      spec:
+        accessModes: [ReadWriteOnce]
+        # bez storageClassName: domyślna klasa klastra (EKS: gp3)
+        resources:
+          requests:
+            storage: 1Gi

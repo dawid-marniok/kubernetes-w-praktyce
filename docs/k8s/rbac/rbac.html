@@ -1,0 +1,1015 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RBAC i ServiceAccount</title>
+<meta name="description" content="Dzień 4 — ściąga: droga żądania przez kube-apiserver (401, 403, admission), RBAC „kto – co – gdzie”, symulator kubectl auth can-i, ServiceAccount i jego token, po co dedykowany ServiceAccount, antywzorzec cluster-admin.">
+<style>
+:root {
+  --navy: #012438;
+  --acc: #41C0F0;
+  --light: #EBF8FD;
+  --light2: #E1EDF8;
+
+  --bg: #ffffff;
+  --ink: #0f2535;
+  --muted: #557080;
+  --panel: var(--light);
+  --card: #ffffff;
+  --card-line: #b9d3e2;
+  --strong: var(--navy);
+  --on-strong: #ffffff;
+  --strong-title: var(--acc);
+  --head: #0a7aa8;
+  --line: #34505f;
+  --code-bg: var(--light2);
+  --row-alt: #f4fafd;
+  --border: #d5e4ed;
+
+  --ok: #1d7a44;
+  --ok-bg: #dcf2e4;
+  --bad: #b42318;
+  --bad-bg: #fde3df;
+  --warn: #8a5300;
+  --warn-bg: #fff0d4;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #08151e;
+    --ink: #e3eef4;
+    --muted: #9cb4c3;
+    --panel: #0f2532;
+    --card: #142f3f;
+    --card-line: #2c5065;
+    --strong: #0d4b70;
+    --on-strong: #ffffff;
+    --strong-title: #7fd6f7;
+    --head: #41C0F0;
+    --line: #a8c3d2;
+    --code-bg: #12293a;
+    --row-alt: #0d1f2b;
+    --border: #23404f;
+
+    --ok: #6fd99a;
+    --ok-bg: #12382a;
+    --bad: #ff9a8c;
+    --bad-bg: #4a1c18;
+    --warn: #ffcf70;
+    --warn-bg: #3d2e0e;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px 64px; }
+header.hero { background: var(--navy); color: #fff; padding: 40px 0 32px; border-bottom: 6px solid var(--acc); }
+header.hero .wrap { padding-bottom: 0; }
+.kicker { color: var(--acc); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; font-size: 13px; margin: 0 0 6px; }
+.kicker a { color: var(--acc); }
+h1 { font-size: clamp(28px, 6vw, 44px); line-height: 1.15; margin: 0 0 12px; }
+.hero p.lead { max-width: 720px; margin: 0; color: #d6e9f3; font-size: 17px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0 0; padding: 0; list-style: none; }
+.chips li { background: rgba(65,192,240,.14); border: 1px solid rgba(65,192,240,.45); color: #e6f6fd; border-radius: 999px; padding: 3px 12px; font-size: 14px; }
+nav.toc { margin: 28px 0 8px; }
+nav.toc ol { display: flex; flex-wrap: wrap; gap: 6px 8px; padding: 0; margin: 0; list-style: none; counter-reset: toc; }
+nav.toc li { counter-increment: toc; }
+nav.toc a { display: inline-block; text-decoration: none; color: var(--ink); background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 4px 10px; font-size: 14px; }
+nav.toc a::before { content: counter(toc) ". "; color: var(--head); font-weight: 700; }
+nav.toc a:hover, nav.toc a:focus-visible { border-color: var(--acc); }
+section { margin-top: 48px; scroll-margin-top: 16px; }
+h2 { font-size: clamp(22px, 4.5vw, 28px); line-height: 1.25; margin: 0 0 10px; display: flex; gap: 12px; align-items: baseline; }
+h2 .n { color: var(--acc); font-weight: 800; font-size: 1.25em; line-height: 1; }
+h3 { font-size: 18px; margin: 24px 0 8px; }
+p { margin: 0 0 12px; }
+a { color: var(--head); }
+code, kbd, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: .9em; }
+:not(pre) > code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+pre { background: var(--code-bg); padding: 12px 14px; border-radius: 8px; overflow-x: auto; margin: 0 0 12px; }
+pre .c { color: var(--muted); }
+.key { border-left: 5px solid var(--acc); background: var(--panel); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; }
+.key strong { color: var(--ink); }
+.key.warnk { border-left-color: var(--bad); }
+figure { margin: 20px 0; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px; min-width: 0; }
+figure .scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+figure svg { display: block; width: 100%; height: auto; }
+figcaption { font-size: 14px; color: var(--muted); margin-top: 8px; }
+figcaption .hint { display: none; }
+@media (max-width: 640px) {
+  figure { padding: 8px; margin-left: -4px; margin-right: -4px; }
+  figure .scroll svg.wide { min-width: 760px; }
+  figcaption .hint { display: inline; }
+}
+.grid2 { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+.grid2 > * { min-width: 0; }
+@media (min-width: 820px) { .grid2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.tablewrap { overflow-x: auto; margin: 16px 0; border: 1px solid var(--border); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+thead th { background: var(--navy); color: #fff; font-size: 14px; }
+tbody tr:nth-child(even) { background: var(--row-alt); }
+tbody tr:last-child td { border-bottom: 0; }
+td:first-child { font-weight: 700; }
+@media (max-width: 640px) {
+  table.stack thead { display: none; }
+  table.stack, table.stack tbody, table.stack tr, table.stack td { display: block; width: 100%; }
+  table.stack tr { border-bottom: 1px solid var(--border); padding: 6px 0; }
+  table.stack td { border: 0; padding: 4px 12px; }
+  table.stack td[data-h]::before { content: attr(data-h); display: block; font-size: 12px; font-weight: 700; color: var(--head); text-transform: uppercase; letter-spacing: .05em; }
+}
+.cheat { display: grid; gap: 10px; grid-template-columns: 1fr; }
+@media (min-width: 760px) { .cheat { grid-template-columns: 1fr 1fr; } }
+.cheat div { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--bg); min-width: 0; }
+.cheat pre { margin: 0 0 6px; font-size: 14px; }
+.cheat p { margin: 0; font-size: 14px; color: var(--muted); }
+footer { margin-top: 56px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--border); padding-top: 16px; }
+
+/* --- sterowanie (wspólne) --- */
+.sim-controls { display: grid; gap: 12px 20px; grid-template-columns: minmax(0, 1fr); background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+@media (min-width: 720px) { .sim-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ctl { min-width: 0; }
+.ctl .cl { display: flex; justify-content: space-between; gap: 8px; font-weight: 700; font-size: 15px; }
+.ctl small { display: block; color: var(--muted); font-size: 13px; line-height: 1.4; }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 4px; }
+.seg button { font: inherit; font-size: 13.5px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel); color: var(--ink); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--strong); color: var(--on-strong); border-color: var(--strong); }
+.seg button:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; }
+.seg button:disabled { opacity: .45; cursor: not-allowed; }
+.seg.mono button { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; }
+.checks { display: flex; flex-direction: column; gap: 6px; font-size: 15px; margin-top: 6px; }
+.checks label { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; }
+.checks input { margin-top: 5px; accent-color: var(--head); width: 16px; height: 16px; flex: none; }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; align-items: center; }
+button.b { font: inherit; font-size: 15px; padding: 7px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--ink); cursor: pointer; }
+button.b.primary { background: var(--strong); color: var(--on-strong); border-color: var(--strong); font-weight: 700; }
+button.b:hover, button.b:focus-visible { border-color: var(--acc); }
+button.b:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; }
+button.b:disabled { opacity: .45; cursor: not-allowed; }
+.tickno { font-size: 14px; color: var(--muted); margin-left: auto; }
+.msg { margin: 10px 0 0; font-size: 14.5px; min-height: 3.2em; border-left: 4px solid var(--acc); padding: 6px 10px; background: var(--bg); border-radius: 0 6px 6px 0; }
+.msg.stuck { border-left-color: var(--bad); }
+.msg.done { border-left-color: var(--ok); }
+.msg.warnm { border-left-color: var(--warn); }
+.msg p { margin: 0 0 6px; }
+.msg p:last-child { margin: 0; }
+pre.term { background: var(--navy); color: #d6e9f3; font-size: 12.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; margin: 10px 0 0; min-height: 3.2em; }
+pre.term .cmd { color: var(--acc); font-weight: 700; }
+pre.term .er { color: #ffb4a8; }
+pre.term .wa { color: #ffd98a; }
+pre.term .okl { color: #8fe3b0; }
+pre.term .c { color: #8fa9b8; }
+.side { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; min-width: 0; margin-top: 12px; }
+.side h3 { margin: 0 0 6px; font-size: 16px; }
+
+/* --- bramki apiservera --- */
+.gates { display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr); margin: 4px 0 0; padding: 0; list-style: none; }
+@media (min-width: 760px) { .gates { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+.gate { border: 1.5px solid var(--card-line); border-radius: 10px; background: var(--card); padding: 8px 10px; min-width: 0; transition: background-color .25s, border-color .25s, opacity .25s; }
+.gate .gt { font-weight: 800; font-size: 14px; display: flex; justify-content: space-between; gap: 6px; }
+.gate .gt span { font: 700 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--muted); }
+.gate .gs { font-size: 12.5px; color: var(--muted); line-height: 1.35; margin-top: 4px; }
+.gate.todo { opacity: .55; }
+.gate.cur { border-color: var(--acc); box-shadow: 0 0 0 3px var(--acc); opacity: 1; }
+.gate.pass { border-color: var(--ok); }
+.gate.pass .gt span { color: var(--ok); }
+.gate.fail { border-color: var(--bad); background: var(--bad-bg); }
+.gate.fail .gt span { color: var(--bad); }
+.gate.skip { opacity: .35; border-style: dashed; }
+.who { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13.5px; margin: 0 0 8px; color: var(--muted); }
+.who b { color: var(--ink); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; }
+
+/* --- can-i --- */
+.verdict { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 4px 0 8px; }
+.verdict .big { font: 800 28px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padding: 6px 16px; border-radius: 10px; }
+.verdict .big.yes { background: var(--ok-bg); color: var(--ok); }
+.verdict .big.no { background: var(--bad-bg); color: var(--bad); }
+.verdict code { font-size: 12.5px; }
+.binds { display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr); margin: 8px 0 0; }
+@media (min-width: 720px) { .binds { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.bcard { border: 1.5px solid var(--card-line); border-radius: 10px; background: var(--card); padding: 8px 10px; min-width: 0; font-size: 13.5px; line-height: 1.4; }
+.bcard .bh { font: 700 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+.bcard .bk { font-size: 12px; color: var(--muted); }
+.bcard .bv { margin-top: 4px; }
+.bcard.win { border-color: var(--ok); box-shadow: 0 0 0 2px var(--ok); }
+.bcard.out { border-style: dashed; opacity: .75; }
+.bcard.miss { }
+.bcard .ok { color: var(--ok); font-weight: 700; }
+.bcard .bad { color: var(--bad); font-weight: 700; }
+.bcard .na { color: var(--muted); font-weight: 700; }
+.bcard pre { font-size: 11.5px; margin: 6px 0 0; padding: 6px 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.note { font-size: 13.5px; background: var(--warn-bg); color: var(--ink); border-left: 4px solid var(--warn); padding: 6px 10px; border-radius: 0 6px 6px 0; margin: 8px 0 0; }
+.note[hidden] { display: none; }
+
+/* --- karty --- */
+.cards { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 720px) { .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 960px) { .cards.c3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.card { border: 1px solid var(--border); border-radius: 12px; background: var(--bg); padding: 14px; min-width: 0; }
+.card h3 { margin: 0 0 6px; }
+.card p { font-size: 15px; }
+.card ul { margin: 0; padding-left: 20px; }
+.card li { margin-bottom: 4px; }
+.card.yes { border-top: 5px solid var(--ok); }
+.card.no { border-top: 5px solid var(--bad); }
+.card.mid { border-top: 5px solid var(--acc); }
+.card pre { font-size: 12.5px; }
+.formula { font: 700 15px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--code-bg); border-radius: 8px; padding: 10px 12px; overflow-wrap: anywhere; }
+.tag { display: inline-block; font-size: 12.5px; font-weight: 700; padding: 0 8px; border-radius: 999px; white-space: nowrap; }
+.tag.hard { background: var(--bad-bg); color: var(--bad); }
+.tag.soft { background: var(--ok-bg); color: var(--ok); }
+.tag.mid { background: var(--warn-bg); color: var(--warn); }
+
+/* --- SVG --- */
+svg text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; fill: var(--ink); font-size: 14px; }
+svg .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+svg .b { font-weight: 700; }
+svg .s { font-size: 12.5px; fill: var(--muted); }
+svg .h { font-size: 13px; font-weight: 800; letter-spacing: .06em; fill: var(--head); }
+svg .ttl { font-size: 16px; font-weight: 800; fill: var(--strong-title); }
+svg .on { fill: var(--on-strong); }
+svg .on.s { fill: var(--on-strong); opacity: .85; }
+svg .panel { fill: var(--bg); stroke: var(--card-line); stroke-width: 1; }
+svg .box { fill: var(--card); stroke: var(--card-line); stroke-width: 1.2; }
+svg .strong { fill: var(--strong); }
+svg .okb { fill: var(--ok-bg); stroke: var(--ok); stroke-width: 1.4; }
+svg .badb { fill: var(--bad-bg); stroke: var(--bad); stroke-width: 1.4; }
+svg .okt { fill: var(--ok); font-weight: 800; }
+svg .badt { fill: var(--bad); font-weight: 800; }
+svg .ns { fill: none; stroke: var(--head); stroke-width: 1.6; stroke-dasharray: 8 6; }
+svg .ln { fill: none; stroke: var(--line); stroke-width: 1.8; }
+svg .ln.dash { stroke-dasharray: 6 5; }
+svg .ln.acc { stroke: var(--acc); stroke-width: 2.6; }
+svg .mk { fill: var(--line); }
+svg .mk-acc { fill: var(--acc); }
+svg .lbl { font-size: 12.5px; fill: var(--muted); font-style: italic; }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="kicker">Dzień 4 · ściąga · <a href="README.md">wersja tekstowa</a></p>
+    <h1>RBAC i ServiceAccount</h1>
+    <p class="lead">Każde żądanie do klastra przechodzi przez trzy bramki: kim jesteś, co ci wolno i czy obiekt spełnia zasady. RBAC to druga bramka. ServiceAccount to tożsamość poda: sam niewiele daje, liczy się to, co do niego podepniesz.</p>
+    <ul class="chips" aria-label="Kontekst">
+      <li>401 → 403 → admission</li>
+      <li>kto – co – gdzie</li>
+      <li>Role · ClusterRole · Binding</li>
+      <li>kubectl auth can-i</li>
+      <li>ServiceAccount i token</li>
+      <li>Kubernetes 1.35</li>
+    </ul>
+  </div>
+</header>
+
+<main class="wrap">
+<nav class="toc" aria-label="Spis treści">
+  <ol>
+    <li><a href="#droga">Droga żądania</a></li>
+    <li><a href="#kto-co-gdzie">Kto – co – gdzie</a></li>
+    <li><a href="#can-i">Symulator can-i</a></li>
+    <li><a href="#sa">ServiceAccount</a></li>
+    <li><a href="#po-co">Po co dedykowany SA</a></li>
+    <li><a href="#antywzorzec">Antywzorzec cluster-admin</a></li>
+    <li><a href="#sciaga">Komendy</a></li>
+  </ol>
+</nav>
+
+<!-- 1 ============================================================ -->
+<section id="droga">
+  <h2><span class="n">1</span> Droga żądania przez kube-apiserver</h2>
+  <p>Każda komenda <code>kubectl</code>, każdy kontroler i każdy pod, który rozmawia z klastrem, wysyła żądanie HTTPS do kube-apiservera. Ten sprawdza je po kolei. Pierwsza bramka, która powie „nie”, kończy sprawę.</p>
+
+  <figure>
+    <div class="sim-controls" id="r-controls">
+      <div class="ctl">
+        <span class="cl">kto wysyła żądanie</span>
+        <div class="seg" data-k="who" role="group" aria-label="Kto wysyła żądanie">
+          <button type="button" data-v="human" aria-pressed="true">człowiek z kubectl</button>
+          <button type="button" data-v="pod" aria-pressed="false">pod z tokenem SA</button>
+          <button type="button" data-v="ci" aria-pressed="false">pipeline CI</button>
+        </div>
+        <small>każdy przychodzi z innym dowodem tożsamości</small>
+      </div>
+      <div class="ctl">
+        <span class="cl">scenariusz</span>
+        <div class="seg" data-k="sc" role="group" aria-label="Scenariusz">
+          <button type="button" data-v="ok" aria-pressed="true">wszystko gra</button>
+          <button type="button" data-v="401" aria-pressed="false">zły dowód (401)</button>
+          <button type="button" data-v="403" aria-pressed="false">brak uprawnień (403)</button>
+          <button type="button" data-v="adm" aria-pressed="false">admission mówi nie</button>
+        </div>
+        <small>przejdź krok po kroku i zobacz, gdzie się zatrzyma</small>
+      </div>
+    </div>
+
+    <div class="btns">
+      <button type="button" class="b primary" id="r-step">krok dalej →</button>
+      <button type="button" class="b" id="r-all">do końca</button>
+      <button type="button" class="b" id="r-reset">od nowa</button>
+      <span class="tickno" id="r-tick" aria-live="polite">krok 0</span>
+    </div>
+
+    <div class="side">
+      <div class="who" id="r-who"></div>
+      <ol class="gates" id="r-gates" aria-label="Bramki kube-apiservera"></ol>
+      <div class="msg" id="r-msg" aria-live="polite"></div>
+      <pre class="term" id="r-term"></pre>
+    </div>
+    <figcaption>Uproszczone: między bramkami są jeszcze limity żądań (API Priority and Fairness) i walidacja schematu obiektu. Admission dotyczy tylko zapisu (create, update, patch, delete); odczyt (<code>get</code>, <code>list</code>) po autoryzacji od razu dostaje odpowiedź.</figcaption>
+  </figure>
+
+  <div class="tablewrap">
+    <table class="stack">
+      <thead><tr><th>Bramka</th><th>Pytanie</th><th>Gdy „nie”</th><th>Kto ją konfiguruje</th></tr></thead>
+      <tbody>
+        <tr><td data-h="Bramka">Uwierzytelnienie (authentication)</td><td data-h="Pytanie">kim jesteś? Wynik: nazwa użytkownika i lista grup</td><td data-h="Gdy „nie”"><code>401 Unauthorized</code>, w kubectl: <code>You must be logged in to the server</code></td><td data-h="Kto ją konfiguruje">administrator klastra albo dostawca chmury (certyfikaty, OIDC, IAM). Szczegóły: <a href="uwierzytelnianie.html">uwierzytelnianie.html</a></td></tr>
+        <tr><td data-h="Bramka">Autoryzacja (authorization)</td><td data-h="Pytanie">czy ten użytkownik może wykonać ten czasownik na tym zasobie w tym namespace?</td><td data-h="Gdy „nie”"><code>403 Forbidden</code> z treścią <code>User "…" cannot &lt;verb&gt; resource "…"</code></td><td data-h="Kto ją konfiguruje">obiekty RBAC w klastrze (Role, RoleBinding…); na EKS dodatkowo access policies</td></tr>
+        <tr><td data-h="Bramka">Admission</td><td data-h="Pytanie">czy ten konkretny obiekt jest dopuszczalny? Najpierw kontrolery mutujące (dopisują), potem walidujące (odrzucają)</td><td data-h="Gdy „nie”">też <code>403 Forbidden</code>, ale z powodem: <code>exceeded quota</code>, <code>violates PodSecurity</code>, odmowa webhooka</td><td data-h="Kto ją konfiguruje">ResourceQuota, LimitRange, Pod Security, webhooki (np. Kyverno), ServiceAccount (dopisuje wolumen z tokenem)</td></tr>
+        <tr><td data-h="Bramka">Zapis w etcd</td><td data-h="Pytanie">—</td><td data-h="Gdy „nie”"><code>409 Conflict</code> (obiekt istnieje albo zmienił się w międzyczasie)</td><td data-h="Kto ją konfiguruje">—</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="key"><strong>401 czy 403?</strong> 401: klaster nie wie, kim jesteś. Szukaj problemu w kubeconfigu, wygasłej sesji albo tokenie. 403: klaster wie, kim jesteś, tylko ci nie wolno. Komunikat podaje użytkownika, czasownik, zasób, grupę API i namespace, czyli dokładnie to, czego brakuje w roli.</div>
+</section>
+
+<!-- 2 ============================================================ -->
+<section id="kto-co-gdzie">
+  <h2><span class="n">2</span> RBAC: kto – co – gdzie</h2>
+  <p>RBAC ma cztery rodzaje obiektów. <strong>Role</strong> i <strong>ClusterRole</strong> mówią <em>co</em>: listę reguł (grupa API, zasoby, czasowniki). <strong>RoleBinding</strong> i <strong>ClusterRoleBinding</strong> łączą rolę z tym, <em>kto</em> ją dostaje, i wyznaczają, <em>gdzie</em> działa.</p>
+
+  <figure>
+    <div class="scroll">
+    <svg class="wide" viewBox="0 0 1000 350" role="img" aria-labelledby="kcg-t kcg-d">
+      <title id="kcg-t">Kto – co – gdzie</title>
+      <desc id="kcg-d">Po lewej podmioty: User, Group i ServiceAccount. W środku powiązania: RoleBinding, który działa w jednym namespace, i ClusterRoleBinding, który działa w całym klastrze. Po prawej role: Role z namespace i ClusterRole całego klastra. RoleBinding może wskazać Role albo ClusterRole, ClusterRoleBinding tylko ClusterRole.</desc>
+      <defs>
+        <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk" d="M0 0L10 5L0 10z"/></marker>
+        <marker id="a1c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="mk-acc" d="M0 0L10 5L0 10z"/></marker>
+      </defs>
+      <rect class="panel" x="12" y="12" width="270" height="326" rx="14"/>
+      <text class="h" x="28" y="38">KTO · subjects</text>
+      <rect class="box" x="30" y="54" width="234" height="74" rx="8"/>
+      <text class="b" x="44" y="80">User</text>
+      <text class="s mono" x="44" y="100">anna, jan</text>
+      <text class="s" x="44" y="118">nie ma obiektu User: to tylko nazwa</text>
+      <rect class="box" x="30" y="140" width="234" height="74" rx="8"/>
+      <text class="b" x="44" y="166">Group</text>
+      <text class="s mono" x="44" y="186">devs, system:authenticated</text>
+      <text class="s" x="44" y="204">grupy też podaje uwierzytelnienie</text>
+      <rect class="box" x="30" y="226" width="234" height="96" rx="8"/>
+      <text class="b" x="44" y="252">ServiceAccount</text>
+      <text class="s mono" x="44" y="272">system:serviceaccount:</text>
+      <text class="s mono" x="44" y="290">  anna:api</text>
+      <text class="s" x="44" y="310">obiekt w namespace</text>
+
+      <rect class="panel" x="364" y="12" width="270" height="326" rx="14"/>
+      <text class="h" x="380" y="38">GDZIE · binding</text>
+      <rect class="ns" x="380" y="54" width="238" height="124" rx="10"/>
+      <text class="s" x="394" y="74">namespace anna</text>
+      <rect class="strong" x="394" y="84" width="210" height="80" rx="8"/>
+      <text class="ttl" x="499" y="114" text-anchor="middle">RoleBinding</text>
+      <text class="on s" x="499" y="136" text-anchor="middle">działa tylko w tym namespace</text>
+      <text class="on s" x="499" y="154" text-anchor="middle">subjects + roleRef</text>
+      <rect class="strong" x="394" y="206" width="210" height="80" rx="8"/>
+      <text class="ttl" x="499" y="236" text-anchor="middle">ClusterRoleBinding</text>
+      <text class="on s" x="499" y="258" text-anchor="middle">działa w całym klastrze</text>
+      <text class="on s" x="499" y="276" text-anchor="middle">i dla zasobów klastrowych</text>
+      <text class="s" x="499" y="318" text-anchor="middle">roleRef nie da się zmienić: usuń i utwórz</text>
+
+      <rect class="panel" x="716" y="12" width="272" height="326" rx="14"/>
+      <text class="h" x="732" y="38">CO · role</text>
+      <rect class="ns" x="732" y="54" width="240" height="124" rx="10"/>
+      <text class="s" x="746" y="74">namespace anna</text>
+      <rect class="box" x="746" y="84" width="212" height="80" rx="8"/>
+      <text class="b" x="852" y="110" text-anchor="middle">Role pod-reader</text>
+      <text class="s mono" x="852" y="132" text-anchor="middle">pods: get, list, watch</text>
+      <text class="s" x="852" y="152" text-anchor="middle">widoczna tylko w anna</text>
+      <rect class="box" x="746" y="206" width="212" height="80" rx="8"/>
+      <text class="b" x="852" y="232" text-anchor="middle">ClusterRole view / edit</text>
+      <text class="s mono" x="852" y="254" text-anchor="middle">szablon reguł</text>
+      <text class="s" x="852" y="274" text-anchor="middle">obiekt całego klastra</text>
+
+      <path class="ln" d="M266 92 C 320 92, 330 120, 390 120" marker-end="url(#a1)"/>
+      <path class="ln" d="M266 178 C 320 178, 330 130, 390 128" marker-end="url(#a1)"/>
+      <path class="ln" d="M266 270 C 320 270, 330 140, 390 138" marker-end="url(#a1)"/>
+      <path class="ln dash" d="M266 274 C 320 274, 340 246, 390 246" marker-end="url(#a1)"/>
+      <path class="ln acc" d="M606 120 H740" marker-end="url(#a1c)"/>
+      <text class="lbl" x="672" y="112" text-anchor="middle">Role</text>
+      <path class="ln acc" d="M606 132 C 670 132, 680 236, 740 240" marker-end="url(#a1c)"/>
+      <text class="lbl" x="612" y="214">lub ClusterRole</text>
+      <path class="ln" d="M606 250 H740" marker-end="url(#a1)"/>
+      <text class="lbl" x="672" y="272" text-anchor="middle">tylko ClusterRole</text>
+    </svg>
+    </div>
+    <figcaption>Binding ma dwie części: <code>subjects</code> (kto, może być kilku) i <code>roleRef</code> (jedna rola). <span class="hint">Na telefonie diagram przewiniesz w bok.</span></figcaption>
+  </figure>
+
+  <h3>Trzy kombinacje, które spotkasz</h3>
+  <div class="cards c3">
+    <article class="card mid">
+      <h3>Role + RoleBinding</h3>
+      <p>Reguły i uprawnienie w jednym namespace. Typowe dla aplikacji: „SA <code>ci-deployer</code> może zmieniać Deploymenty w <code>anna</code>”.</p>
+<pre>kubectl create role deployer \
+  --verb=get,list,patch \
+  --resource=deployments.apps
+kubectl create rolebinding ci \
+  --role=deployer \
+  --serviceaccount=anna:ci-deployer</pre>
+    </article>
+    <article class="card mid">
+      <h3>ClusterRole + RoleBinding</h3>
+      <p>Wspólny szablon reguł, użyty w jednym namespace. Tak dostajesz <code>edit</code> w swoim namespace na szkoleniu. Nie trzeba kopiować tej samej Role do każdego namespace.</p>
+<pre>kubectl create rolebinding kursant-edit \
+  --clusterrole=edit --user=anna \
+  -n anna</pre>
+    </article>
+    <article class="card mid">
+      <h3>ClusterRole + ClusterRoleBinding</h3>
+      <p>Wszystkie namespace'y naraz oraz zasoby klastrowe (nodes, PV, StorageClass, namespaces). Na szkoleniu: <code>view</code> w całym klastrze. Dla aplikacji rzadko potrzebne.</p>
+<pre>kubectl create clusterrolebinding \
+  kursant-view-anna \
+  --clusterrole=view --user=anna</pre>
+    </article>
+  </div>
+  <p style="margin-top:14px">Czwartej kombinacji nie ma: ClusterRoleBinding nie może wskazać Role, bo Role istnieje tylko w jednym namespace.</p>
+
+  <h3>Zasady, które warto znać na pamięć</h3>
+  <ul>
+    <li><strong>Reguły tylko dodają.</strong> Nie ma „deny”. Uprawnienia to suma wszystkich bindingów, które cię dotyczą (twoja nazwa i każda twoja grupa). Gdy żadna reguła nie pasuje: odmowa.</li>
+    <li><strong>Grupa API ma znaczenie.</strong> Pody, Secrety, ConfigMapy to grupa <code>""</code> (core), Deploymenty i StatefulSety to <code>apps</code>, Joby to <code>batch</code>. Reguła na <code>deployments</code> w grupie <code>""</code> nie działa. Sprawdzisz to w <code>kubectl api-resources</code>.</li>
+    <li><strong>Subresource to osobny zasób.</strong> <code>pods/log</code>, <code>pods/exec</code>, <code>pods/portforward</code>, <code>deployments/scale</code>. Prawo do <code>pods</code> nie daje <code>kubectl logs</code> ani <code>kubectl exec</code>.</li>
+    <li><strong>Wbudowane ClusterRole:</strong> <code>view</code> (odczyt, bez Secretów i bez obiektów RBAC), <code>edit</code> (zapis, w tym Secrety, bez Role i RoleBinding), <code>admin</code> (pełnia w namespace, z Role i RoleBinding), <code>cluster-admin</code> (wszystko wszędzie).</li>
+    <li><strong>Nie dasz więcej, niż masz.</strong> Utworzenie Role albo bindingu z uprawnieniami, których sam nie masz, kończy się odmową. Wyjątek: czasowniki <code>escalate</code> i <code>bind</code> na rolach; wbudowane <code>admin</code> i <code>edit</code> ich nie mają, ma je <code>cluster-admin</code>.</li>
+    <li><code>resourceNames</code> zawęża regułę do konkretnych obiektów. Nie działa z <code>create</code> (obiekt jeszcze nie ma nazwy w adresie), a <code>list</code> i <code>watch</code> zawęża tylko wtedy, gdy klient pyta o jedną nazwę (<code>fieldSelector=metadata.name=…</code>). Zwykłe <code>kubectl get secrets</code> dostanie 403.</li>
+  </ul>
+</section>
+
+<!-- 3 ============================================================ -->
+<section id="can-i">
+  <h2><span class="n">3</span> Symulator <code>kubectl auth can-i</code></h2>
+  <p>Wybierz, kto pyta, o jaki czasownik, zasób i namespace. Symulator przegląda bindingi tego podmiotu tak jak RBAC: szuka choć jednej pasującej reguły. Role są uproszczone, ale wzorowane na wbudowanych i na tym, co masz na szkoleniu.</p>
+
+  <figure>
+    <div class="sim-controls" id="c-controls">
+      <div class="ctl">
+        <span class="cl">kto (--as)</span>
+        <div class="seg" data-k="sub" role="group" aria-label="Podmiot">
+          <button type="button" data-v="anna" aria-pressed="true">anna (kursantka)</button>
+          <button type="button" data-v="jan" aria-pressed="false">jan (grupa devs)</button>
+          <button type="button" data-v="reader" aria-pressed="false">SA pod-reader</button>
+          <button type="button" data-v="ci" aria-pressed="false">SA ci-deployer</button>
+          <button type="button" data-v="default" aria-pressed="false">SA default</button>
+          <button type="button" data-v="app" aria-pressed="false">SA app (antywzorzec)</button>
+        </div>
+        <small id="c-sub-note">użytkownik z IAM, jak Ty na szkoleniu</small>
+      </div>
+      <div class="ctl">
+        <span class="cl">czasownik</span>
+        <div class="seg mono" data-k="verb" role="group" aria-label="Czasownik">
+          <button type="button" data-v="get" aria-pressed="false">get</button>
+          <button type="button" data-v="list" aria-pressed="true">list</button>
+          <button type="button" data-v="create" aria-pressed="false">create</button>
+          <button type="button" data-v="patch" aria-pressed="false">patch</button>
+          <button type="button" data-v="delete" aria-pressed="false">delete</button>
+        </div>
+        <small><code>kubectl get x</code> = get, <code>kubectl get</code> listy = list, <code>apply</code> = get + create/patch</small>
+      </div>
+      <div class="ctl">
+        <span class="cl">zasób</span>
+        <div class="seg mono" data-k="res" role="group" aria-label="Zasób">
+          <button type="button" data-v="pods" aria-pressed="true">pods</button>
+          <button type="button" data-v="pods/log" aria-pressed="false">pods/log</button>
+          <button type="button" data-v="deployments" aria-pressed="false">deployments</button>
+          <button type="button" data-v="secrets" aria-pressed="false">secrets</button>
+          <button type="button" data-v="configmaps" aria-pressed="false">configmaps</button>
+          <button type="button" data-v="roles" aria-pressed="false">roles</button>
+          <button type="button" data-v="nodes" aria-pressed="false">nodes</button>
+        </div>
+        <small id="c-res-note">grupa API: "" (core)</small>
+      </div>
+      <div class="ctl">
+        <span class="cl">namespace (-n)</span>
+        <div class="seg mono" data-k="ns" role="group" aria-label="Namespace">
+          <button type="button" data-v="anna" aria-pressed="true">anna</button>
+          <button type="button" data-v="bartek" aria-pressed="false">bartek</button>
+          <button type="button" data-v="kube-system" aria-pressed="false">kube-system</button>
+        </div>
+        <div class="checks">
+          <label><input type="checkbox" id="c-oops"> <span>ktoś dodał RoleBinding <code>edit</code> dla SA <code>default</code> w <code>anna</code></span></label>
+        </div>
+      </div>
+    </div>
+
+    <div class="side">
+      <pre class="term" id="c-cmd" style="margin:0 0 10px"></pre>
+      <div class="verdict" id="c-verdict"></div>
+      <div class="msg" id="c-msg" aria-live="polite"></div>
+      <p class="note" id="c-note" hidden></p>
+      <h3 style="margin-top:14px">Bindingi tego podmiotu</h3>
+      <div class="binds" id="c-binds"></div>
+    </div>
+    <figcaption>Na zielono binding, który dał „yes”. Przerywana ramka: binding nie działa w wybranym miejscu (RoleBinding z innego namespace albo zasób klastrowy). Na prawdziwym klastrze: <code>kubectl auth can-i &lt;verb&gt; &lt;zasób&gt; -n &lt;ns&gt; --as=&lt;kto&gt;</code>, a <code>--as</code> wymaga prawa <code>impersonate</code>.</figcaption>
+  </figure>
+
+  <div class="grid2">
+    <div class="key" style="margin:0"><strong>Spróbuj:</strong> anna, <code>get secrets</code> w <code>kube-system</code>. ClusterRoleBinding do <code>view</code> działa wszędzie, ale <code>view</code> celowo pomija Secrety. W <code>anna</code> to samo pytanie daje „yes” z <code>edit</code>.</div>
+    <div class="key" style="margin:0"><strong>Pułapka:</strong> SA <code>pod-reader</code> i <code>pods/log</code>. Gdyby w roli było samo <code>pods</code>, <code>kubectl logs</code> dostałby 403. Subresource trzeba wymienić osobno. Zaznacz też RoleBinding dla <code>default</code> i zobacz, co nagle może każdy pod bez własnego SA.</div>
+  </div>
+</section>
+
+<!-- 4 ============================================================ -->
+<section id="sa">
+  <h2><span class="n">4</span> ServiceAccount: tożsamość poda</h2>
+  <p>Ludzie przychodzą do klastra z zewnątrz (IAM, certyfikat, OIDC). Pod potrzebuje własnej tożsamości, gdy sam rozmawia z API: operator, Prometheus, pipeline uruchomiony w klastrze. Tą tożsamością jest <strong>ServiceAccount</strong>: zwykły obiekt w namespace. Jego nazwa użytkownika w RBAC to <code>system:serviceaccount:&lt;namespace&gt;:&lt;nazwa&gt;</code>, a grupy to <code>system:serviceaccounts</code> i <code>system:serviceaccounts:&lt;namespace&gt;</code>.</p>
+
+  <figure>
+    <div class="scroll">
+    <svg class="wide" viewBox="0 0 1000 300" role="img" aria-labelledby="sa-t sa-d">
+      <title id="sa-t">Jak pod dostaje i używa tokenu ServiceAccount</title>
+      <desc id="sa-d">Pod wskazuje serviceAccountName api. Kubelet prosi API o token dla tego poda i montuje go jako plik. Aplikacja wysyła token w nagłówku Authorization. kube-apiserver sprawdza podpis, ważność i to, czy pod jeszcze istnieje, a potem traktuje żądanie jako system:serviceaccount:anna:api i przepuszcza do RBAC.</desc>
+      <defs>
+        <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk" d="M0 0L10 5L0 10z"/></marker>
+        <marker id="a2c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="mk-acc" d="M0 0L10 5L0 10z"/></marker>
+      </defs>
+      <rect class="ns" x="12" y="12" width="548" height="276" rx="14"/>
+      <text class="h" x="28" y="38">NAMESPACE · anna</text>
+      <rect class="box" x="32" y="56" width="180" height="74" rx="8"/>
+      <text class="b" x="122" y="84" text-anchor="middle">ServiceAccount api</text>
+      <text class="s mono" x="122" y="106" text-anchor="middle">automount: false?</text>
+      <text class="s" x="122" y="122" text-anchor="middle">imagePullSecrets?</text>
+      <rect class="strong" x="262" y="48" width="280" height="224" rx="10"/>
+      <text class="ttl" x="402" y="76" text-anchor="middle">Pod api-7d9…</text>
+      <text class="on s mono" x="402" y="98" text-anchor="middle">serviceAccountName: api</text>
+      <rect class="box" x="278" y="114" width="248" height="140" rx="8"/>
+      <text class="b mono" x="290" y="138" style="font-size:12px">/var/run/secrets/</text>
+      <text class="b mono" x="290" y="156" style="font-size:12px">  kubernetes.io/serviceaccount/</text>
+      <text class="s mono" x="300" y="180">token      ← JWT, ok. 1 h</text>
+      <text class="s mono" x="300" y="200">ca.crt     ← CA apiservera</text>
+      <text class="s mono" x="300" y="220">namespace  ← anna</text>
+      <text class="s" x="290" y="244">wolumen projected, odświeża kubelet</text>
+      <path class="ln dash" d="M214 92 H256" marker-end="url(#a2)"/>
+      <text class="lbl" x="237" y="84" text-anchor="middle">używa</text>
+
+      <rect class="panel" x="640" y="12" width="348" height="276" rx="14"/>
+      <text class="h" x="656" y="38">KUBE-APISERVER</text>
+      <rect class="box" x="656" y="54" width="316" height="66" rx="8"/>
+      <text class="b" x="670" y="78">1 · token: podpis, ważność, audience</text>
+      <text class="s" x="670" y="100">i czy pod, do którego jest przypięty, istnieje</text>
+      <rect class="okb" x="656" y="132" width="316" height="56" rx="8"/>
+      <text class="okt mono" x="670" y="156" style="font-size:13px">system:serviceaccount:anna:api</text>
+      <text class="s" x="670" y="176">grupy: system:serviceaccounts, …:anna</text>
+      <rect class="box" x="656" y="200" width="316" height="70" rx="8"/>
+      <text class="b" x="670" y="224">2 · RBAC: co zbindowano do tego SA</text>
+      <text class="s" x="670" y="246">nic nie zbindowano = tylko discovery API,</text>
+      <text class="s" x="670" y="262">zwykle 403 na wszystko</text>
+      <path class="ln acc" d="M528 184 H650" marker-end="url(#a2c)"/>
+      <text class="lbl" x="600" y="174" text-anchor="middle">Bearer</text>
+      <text class="lbl" x="600" y="204" text-anchor="middle">token</text>
+    </svg>
+    </div>
+    <figcaption>Token to JWT podpisany kluczem klastra. Nikt go nie przechowuje w Secrecie: kubelet pobiera go przez TokenRequest API i montuje do poda. <span class="hint">Na telefonie diagram przewiniesz w bok.</span></figcaption>
+  </figure>
+
+  <div class="cards">
+    <article class="card mid">
+      <h3>Token projected (domyślny)</h3>
+      <ul>
+        <li>Żyje ok. 1 godziny (w wolumenie <code>expirationSeconds: 3607</code>). Kubelet wymienia go, zanim wygaśnie, a klient (kubectl, client-go) czyta plik od nowa.</li>
+        <li>Przypięty do poda: po usunięciu poda token przestaje działać, nawet jeśli ktoś go wcześniej skopiował.</li>
+        <li>Ma <code>audience</code>, więc nie nadaje się do logowania gdzie indziej (chyba że ktoś zamówi token z innym audience).</li>
+        <li>Stare tokeny w Secretach typu <code>kubernetes.io/service-account-token</code> nie wygasają. Od 1.24 Kubernetes nie tworzy ich sam; twórz je tylko świadomie.</li>
+      </ul>
+    </article>
+    <article class="card mid">
+      <h3>SA <code>default</code> i automount</h3>
+      <ul>
+        <li>Każdy namespace ma SA <code>default</code>. Pod bez <code>serviceAccountName</code> dostaje właśnie jego.</li>
+        <li><code>default</code> nie ma żadnych ról, dopóki ktoś mu ich nie da.</li>
+        <li>Token jest montowany zawsze, chyba że ustawisz <code>automountServiceAccountToken: false</code> w SA albo w podzie. Ustawienie w podzie wygrywa.</li>
+        <li>SA może mieć <code>imagePullSecrets</code>: każdy pod z tym SA dostaje je automatycznie, bez wpisywania w manifest.</li>
+      </ul>
+    </article>
+  </div>
+
+<pre><span class="c"># token „na rękę”: do testu, skryptu albo pipeline'u spoza klastra</span>
+kubectl create token ci-deployer --duration=30m        <span class="c"># domyślnie ważny 1 h; nie trafia do żadnego Secretu</span>
+kubectl auth whoami --token="$(kubectl create token ci-deployer)"
+<span class="c"># w podzie</span>
+cat /var/run/secrets/kubernetes.io/serviceaccount/token</pre>
+
+  <h3>Mini-symulator: co ma włamywacz, który przejął kontener</h3>
+  <figure>
+    <div class="sim-controls" id="s-controls">
+      <div class="ctl">
+        <span class="cl">serviceAccountName</span>
+        <div class="seg mono" data-k="sa" role="group" aria-label="serviceAccountName">
+          <button type="button" data-v="default" aria-pressed="true">(brak) → default</button>
+          <button type="button" data-v="api" aria-pressed="false">api</button>
+          <button type="button" data-v="reader" aria-pressed="false">pod-reader</button>
+        </div>
+        <small><code>api</code> ma przypisaną rolę IAM przez EKS Pod Identity; <code>pod-reader</code> ma Role z odczytem podów</small>
+      </div>
+      <div class="ctl">
+        <span class="cl">automountServiceAccountToken</span>
+        <div class="seg mono" data-k="am_sa" role="group" aria-label="automount w ServiceAccount">
+          <button type="button" data-v="unset" aria-pressed="true">SA: (brak)</button>
+          <button type="button" data-v="false" aria-pressed="false">SA: false</button>
+        </div>
+        <div class="seg mono" data-k="am_pod" role="group" aria-label="automount w podzie">
+          <button type="button" data-v="unset" aria-pressed="true">pod: (brak)</button>
+          <button type="button" data-v="false" aria-pressed="false">pod: false</button>
+          <button type="button" data-v="true" aria-pressed="false">pod: true</button>
+        </div>
+        <div class="checks">
+          <label><input type="checkbox" id="s-oops"> <span>ktoś zbindował <code>edit</code> do SA <code>default</code></span></label>
+        </div>
+      </div>
+    </div>
+    <div class="side">
+      <pre class="term" id="s-term"></pre>
+      <div class="msg" id="s-msg" aria-live="polite"></div>
+    </div>
+    <figcaption>Włamywacz w kontenerze ma to, co ma proces aplikacji: pliki, zmienne środowiskowe i sieć. Token Kubernetes i dane AWS to dwa osobne mechanizmy: Pod Identity montuje własny token (audience <code>pods.eks.amazonaws.com</code>) w innym katalogu, więc <code>automountServiceAccountToken: false</code> go nie wyłącza.</figcaption>
+  </figure>
+</section>
+
+<!-- 5 ============================================================ -->
+<section id="po-co">
+  <h2><span class="n">5</span> Po co dedykowany ServiceAccount i kiedy</h2>
+  <p>Zasada: <strong>jedna aplikacja, jeden ServiceAccount</strong>. Sam SA niczego nie daje ani nie zabiera. Jego wartość to osobna, nazwana tożsamość, do której podpinasz dokładnie to, czego aplikacja potrzebuje, i tylko jej.</p>
+
+  <div class="tablewrap">
+    <table class="stack">
+      <thead><tr><th>Sytuacja</th><th>Przykład</th><th>Co robisz</th><th>Co zyskujesz</th></tr></thead>
+      <tbody>
+        <tr><td data-h="Sytuacja">Aplikacja nie rozmawia z API Kubernetesa</td><td data-h="Przykład">ToDos: <code>api</code> i <code>web</code>, większość aplikacji biznesowych</td><td data-h="Co robisz">własny SA (<code>api</code>, <code>web</code>) + <code>automountServiceAccountToken: false</code></td><td data-h="Co zyskujesz">przejęty kontener nie ma tokenu do klastra; nic do ukradzenia</td></tr>
+        <tr><td data-h="Sytuacja">Aplikacja rozmawia z API</td><td data-h="Przykład">Prometheus (list/watch podów i endpointów), external-dns (Service, Ingress), runner CI (Deploymenty), operator (swoje CRD)</td><td data-h="Co robisz">Role (albo ClusterRole, gdy naprawdę cały klaster) z dokładnymi czasownikami, binding tylko dla tego SA</td><td data-h="Co zyskujesz">inne pody w namespace tych praw nie mają; włamanie do jednej aplikacji nie otwiera reszty</td></tr>
+        <tr><td data-h="Sytuacja">Aplikacja potrzebuje AWS</td><td data-h="Przykład"><code>api</code> czyta i zapisuje tylko swój bucket S3; <code>web</code> nie potrzebuje niczego</td><td data-h="Co robisz">EKS Pod Identity (albo starsze IRSA): rola IAM przypisana do pary namespace + SA</td><td data-h="Co zyskujesz">uprawnienia AWS per aplikacja zamiast jednej roli węzła dla wszystkich podów; bez kluczy w Secretach</td></tr>
+        <tr><td data-h="Sytuacja">Audyt i debugowanie</td><td data-h="Przykład">log audytu, komunikaty 403</td><td data-h="Co robisz">nic więcej</td><td data-h="Co zyskujesz">widzisz <code>system:serviceaccount:anna:api</code> zamiast <code>…:anna:default</code>, więc wiesz, która aplikacja co zrobiła</td></tr>
+        <tr><td data-h="Sytuacja">Prywatny rejestr</td><td data-h="Przykład">obrazy z rejestru z hasłem</td><td data-h="Co robisz"><code>imagePullSecrets</code> w SA</td><td data-h="Co zyskujesz">nie powtarzasz sekretu w każdym manifeście (na EKS z ECR zwykle niepotrzebne: węzły pobierają obrazy rolą IAM)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="key warnk"><strong>Ryzyko wspólnego <code>default</code>:</strong> wystarczy, że ktoś „na szybko” zbinduje rolę do <code>default</code>, żeby dostał ją każdy pod w namespace, który nie ma własnego SA, także te dodane za pół roku. Z dedykowanymi SA taki błąd dotyczy jednej aplikacji, a <code>default</code> może zostać bez praw i bez tokenu.</div>
+
+  <p><strong>Uczciwie:</strong> dla aplikacji, która nie rozmawia z API i nie potrzebuje AWS, dedykowany SA z <code>automount: false</code> daje niewiele ponad to samo ustawione na <code>default</code>. Daje za to porządek: czytelny audyt, gotowe miejsce na Pod Identity, gdy aplikacja kiedyś zacznie korzystać z AWS, i odporność na cudzy błąd z <code>default</code>. Kosztuje kilka linii YAML-a, więc rób to zawsze.</p>
+
+<pre>apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: api
+automountServiceAccountToken: false     <span class="c"># api nie rozmawia z Kubernetesem</span>
+---
+<span class="c"># w Deployment api: spec.template.spec</span>
+serviceAccountName: api</pre>
+</section>
+
+<!-- 6 ============================================================ -->
+<section id="antywzorzec">
+  <h2><span class="n">6</span> Antywzorzec: cluster-admin dla aplikacji</h2>
+  <p>„Nie działa, bo 403” kusi, żeby dać aplikacji <code>cluster-admin</code> albo ClusterRole z <code>*</code> na wszystkim. Działa od razu i zostaje na lata.</p>
+  <div class="grid2">
+<pre><span class="c"># NIE RÓB TEGO</span>
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: app-admin
+subjects:
+- kind: ServiceAccount
+  name: app
+  namespace: anna
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin</pre>
+    <div class="card no">
+      <h3>Co ma włamywacz w takim podzie</h3>
+      <ul>
+        <li>wszystkie Secrety w klastrze: hasła baz, klucze API, tokeny innych SA</li>
+        <li>może uruchomić uprzywilejowany pod na dowolnym węźle i z niego przejąć węzeł</li>
+        <li>może nadać sobie trwały dostęp: nowy SA, nowy binding, webhook</li>
+        <li>może usunąć cudze namespace'y i dane</li>
+      </ul>
+    </div>
+  </div>
+  <p style="margin-top:14px">Zamiast tego: przeczytaj komunikat 403 (podaje czasownik, zasób i grupę API), dopisz dokładnie tę regułę do Role aplikacji i sprawdź <code>kubectl auth can-i … --as=system:serviceaccount:&lt;ns&gt;:&lt;sa&gt;</code>. Przykład do przeczytania: <a href="../../../przyklady/k8s/17-rbac/">przyklady/k8s/17-rbac/</a> (<code>ANTYWZORZEC-cluster-admin.yaml</code>).</p>
+</section>
+
+<!-- 7 ============================================================ -->
+<section id="sciaga">
+  <h2><span class="n">7</span> Ściąga: komendy</h2>
+  <div class="cheat">
+    <div><pre>kubectl auth whoami
+kubectl auth can-i --list -n &lt;ns&gt;</pre><p>Kim jestem dla klastra (nazwa i grupy) i co mogę w namespace. Na EKS lista może być niepełna: <a href="uwierzytelnianie.html#eks">dlaczego</a>.</p></div>
+    <div><pre>kubectl auth can-i delete pods -n anna
+kubectl auth can-i get pods --subresource=log
+kubectl auth can-i list pods \
+  --as=system:serviceaccount:anna:pod-reader</pre><p>Pojedyncze pytanie: yes/no. Subresource przez <code>--subresource</code> (<code>pods/x</code> to pod o nazwie x). <code>--as</code> wymaga prawa impersonate.</p></div>
+    <div><pre>kubectl create serviceaccount app-sa
+kubectl create role pod-reader \
+  --verb=get,list,watch --resource=pods,pods/log
+kubectl create rolebinding read-pods \
+  --role=pod-reader --serviceaccount=anna:app-sa</pre><p>SA, Role i RoleBinding bez pisania YAML-a. <code>--dry-run=client -o yaml</code> wypisze gotowy manifest.</p></div>
+    <div><pre>kubectl get roles,rolebindings -n anna
+kubectl describe rolebinding read-pods
+kubectl describe clusterrole view</pre><p>Co jest w namespace i co zawiera rola. Wbudowane ClusterRole są w każdym klastrze.</p></div>
+    <div><pre>kubectl api-resources -o wide | grep -i deploy</pre><p>Grupa API, czy zasób jest namespaced i jakie czasowniki obsługuje.</p></div>
+    <div><pre>kubectl create token ci-deployer --duration=30m</pre><p>Krótki token SA, np. do testu. Domyślnie 1 h.</p></div>
+  </div>
+  <p style="margin-top:16px">Jak klaster ustala, kim jesteś (certyfikat, OIDC, IAM na EKS): <a href="uwierzytelnianie.html">uwierzytelnianie.html</a>. Tworzenie użytkownika z certyfikatem krok po kroku: <a href="README.md#certyfikat">README.md</a>. Gotowe manifesty: <a href="../../../przyklady/k8s/17-rbac/">przyklady/k8s/17-rbac/</a>.</p>
+</section>
+
+<footer>Kubernetes w praktyce · Dzień 4 · stan na październik 2026 (Kubernetes 1.35). Wersja tekstowa: <a href="README.md">README.md</a>.</footer>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function segInit(box, cb) {
+    box.addEventListener('click', function (e) {
+      var b = e.target.closest('button');
+      if (!b || b.disabled || !box.contains(b)) return;
+      box.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+      cb(box.getAttribute('data-k'), b.getAttribute('data-v'));
+    });
+  }
+  function segSet(box, v) {
+    box.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', x.getAttribute('data-v') === v ? 'true' : 'false'); });
+  }
+
+  /* ================= 1. droga żądania ================= */
+  var GATES = [
+    { id: 'send', t: 'Klient', k: 'HTTPS' },
+    { id: 'authn', t: '1 · Uwierzytelnienie', k: '401' },
+    { id: 'authz', t: '2 · Autoryzacja', k: '403' },
+    { id: 'adm', t: '3 · Admission', k: '403' },
+    { id: 'etcd', t: '4 · etcd', k: '201/200' }
+  ];
+  var CALLERS = {
+    human: {
+      who: [['kto', 'anna'], ['dowód', 'token z aws eks get-token'], ['grupy', 'system:authenticated']],
+      sc: {
+        ok: { cmd: 'kubectl create deployment web --image=nginx -n anna', verb: 'create deployments.apps w anna',
+          out: '<span class="okl">deployment.apps/web created</span>' },
+        '401': { cmd: 'kubectl get pods -n anna', fail: 'authn',
+          authn: 'Token jest poprawnie podpisany przez AWS, ale to konto IAM nie ma w klastrze wpisu dostępu (access entry). Klaster nie umie przypisać mu nazwy użytkownika. To samo zobaczysz z kubeconfigiem od innego klastra.',
+          out: '<span class="er">error: You must be logged in to the server (Unauthorized)</span>' },
+        '403': { cmd: 'kubectl get secrets -n kube-system', verb: 'list secrets w kube-system', fail: 'authz',
+          authz: 'anna ma <code>edit</code> tylko w swoim namespace i <code>view</code> w całym klastrze. <code>view</code> nie obejmuje Secretów, więc żadna reguła nie pasuje.',
+          out: '<span class="er">Error from server (Forbidden): secrets is forbidden: User "anna" cannot list resource "secrets" in API group "" in the namespace "kube-system"</span>' },
+        adm: { cmd: 'kubectl apply -f duzy-pod.yaml -n anna', verb: 'create pods w anna', fail: 'adm',
+          adm: 'Kontrolery mutujące dopisały wolumen z tokenem SA i domyślne limity z LimitRange. Walidacja ResourceQuota liczy: pod chce więcej CPU, niż zostało w limicie namespace.',
+          out: '<span class="er">Error from server (Forbidden): error when creating "duzy-pod.yaml": pods "duzy" is forbidden: exceeded quota: kursant, requested: requests.cpu=1500m, used: requests.cpu=500m, limited: requests.cpu=1</span>' }
+      }
+    },
+    pod: {
+      who: [['kto', 'system:serviceaccount:anna:pod-reader'], ['dowód', 'token z /var/run/secrets/…/token'], ['grupy', 'system:serviceaccounts, system:serviceaccounts:anna']],
+      sc: {
+        ok: { cmd: 'kubectl get pods   # w kontenerze z obrazem kubectl', verb: 'list pods w anna',
+          out: 'NAME               READY   STATUS    RESTARTS   AGE\napi-7d9f8-x2k4p    1/1     Running   0          3h\nweb-5c4b9-q8rtn    1/1     Running   0          3h' },
+        '401': { cmd: 'kubectl get pods --token="$SKRADZIONY_TOKEN"', fail: 'authn',
+          authn: 'Token skopiowany z poda, którego już nie ma. Token projected jest przypięty do poda: po jego usunięciu (albo po ok. godzinie) apiserver go nie przyjmie.',
+          out: '<span class="er">error: You must be logged in to the server (Unauthorized)</span>' },
+        '403': { cmd: 'kubectl delete pod web-5c4b9-q8rtn', verb: 'delete pods w anna', fail: 'authz',
+          authz: 'Role <code>pod-reader</code> ma tylko <code>get</code>, <code>list</code>, <code>watch</code>. Na <code>delete</code> nie ma reguły, a RBAC domyślnie odmawia.',
+          out: '<span class="er">Error from server (Forbidden): pods "web-5c4b9-q8rtn" is forbidden: User "system:serviceaccount:anna:pod-reader" cannot delete resource "pods" in API group "" in the namespace "anna"</span>' },
+        adm: null
+      }
+    },
+    ci: {
+      who: [['kto', 'system:serviceaccount:anna:ci-deployer'], ['dowód', 'token z kubectl create token --duration=1h'], ['grupy', 'system:serviceaccounts, system:serviceaccounts:anna']],
+      sc: {
+        ok: { cmd: 'kubectl set image deployment/api api=…/todos-api:1.4 -n anna', verb: 'patch deployments.apps w anna',
+          out: '<span class="okl">deployment.apps/api image updated</span>' },
+        '401': { cmd: 'kubectl set image deployment/api api=…/todos-api:1.4 -n anna', fail: 'authn',
+          authn: 'Pipeline użył tokenu wygenerowanego wczoraj z <code>--duration=1h</code>. Wygasł. Krótki token to dobra praktyka; trzeba go tylko wystawiać przy każdym uruchomieniu.',
+          out: '<span class="er">error: You must be logged in to the server (Unauthorized)</span>' },
+        '403': { cmd: 'kubectl apply -f k8s/ -n anna   # w katalogu jest też secret.yaml', verb: 'create secrets w anna', fail: 'authz',
+          authz: 'Role <code>deployer</code> pozwala zmieniać Deploymenty (grupa <code>apps</code>), ale nie Secrety. Deployment przeszedł, Secret nie.',
+          out: 'deployment.apps/api configured\n<span class="er">Error from server (Forbidden): error when creating "k8s/secret.yaml": secrets is forbidden: User "system:serviceaccount:anna:ci-deployer" cannot create resource "secrets" in API group "" in the namespace "anna"</span>' },
+        adm: { cmd: 'kubectl set image deployment/api api=…/todos-api:1.5-root -n anna', verb: 'patch deployments.apps w anna', late: true,
+          out: '<span class="okl">deployment.apps/api image updated</span>\n<span class="cmd">$ kubectl get events -n anna --field-selector reason=FailedCreate</span>\n<span class="wa">Warning  FailedCreate  replicaset/api-6f…  Error creating: pods "api-6f…" is forbidden: violates PodSecurity "restricted:latest": runAsNonRoot != true …</span>' }
+      }
+    }
+  };
+  var rCfg = { who: 'human', sc: 'ok' }, rStep = 0;
+  function rPlan() {
+    var c = CALLERS[rCfg.who], s = c.sc[rCfg.sc];
+    var write = /create|patch|delete|apply|set image|update/.test(s.cmd) && !/^kubectl get/.test(s.cmd);
+    var steps = [];
+    steps.push({ g: 'send', st: 'pass', txt: '<code>' + esc(s.cmd) + '</code> → żądanie HTTPS do kube-apiservera z dowodem tożsamości w nagłówku.' });
+    if (s.fail === 'authn') { steps.push({ g: 'authn', st: 'fail', txt: s.authn }); return steps; }
+    var who = c.who[0][1];
+    steps.push({ g: 'authn', st: 'pass', txt: 'Dowód poprawny. Od teraz żądanie ma tożsamość: <code>' + esc(who) + '</code> plus grupy. Kubernetes nie przechowuje użytkowników: ta nazwa pochodzi z dowodu.' });
+    if (s.fail === 'authz') { steps.push({ g: 'authz', st: 'fail', txt: '<strong>Pytanie do RBAC:</strong> ' + esc(s.verb) + '? ' + s.authz }); return steps; }
+    steps.push({ g: 'authz', st: 'pass', txt: '<strong>Pytanie do RBAC:</strong> ' + esc(s.verb) + '? Pasuje reguła z roli zbindowanej do tego podmiotu: <strong>tak</strong>.' });
+    if (!write) {
+      steps.push({ g: 'adm', st: 'skip', txt: 'Odczyt nie przechodzi przez admission.' });
+      steps.push({ g: 'etcd', st: 'pass', txt: 'apiserver czyta obiekty (z etcd albo z pamięci podręcznej) i odsyła listę.', end: true });
+      return steps;
+    }
+    if (s.fail === 'adm') { steps.push({ g: 'adm', st: 'fail', txt: s.adm }); return steps; }
+    steps.push({ g: 'adm', st: 'pass', txt: 'Mutujące kontrolery dopisują, co trzeba, walidujące nie mają zastrzeżeń.' });
+    steps.push({ g: 'etcd', st: 'pass', end: true, txt: s.late
+      ? 'Deployment zapisany, kubectl melduje sukces. Ale to kontroler ReplicaSet tworzy pody, każdy osobnym żądaniem przez te same bramki. Pod Security (gdyby namespace miał <code>enforce: restricted</code>) odrzuca pody z obrazu działającego jako root. W kubectl wszystko zielone, a nowych podów brak: szukaj w eventach.'
+      : 'Obiekt zapisany w etcd. Kontrolery i scheduler dowiadują się o nim przez watch i robią resztę.' });
+    return steps;
+  }
+  function rRender() {
+    var c = CALLERS[rCfg.who], s = c.sc[rCfg.sc], steps = rPlan();
+    $('r-who').innerHTML = c.who.map(function (w) { return '<span>' + w[0] + ': <b>' + esc(w[1]) + '</b></span>'; }).join('');
+    var state = {}, last = steps[rStep - 1];
+    steps.slice(0, rStep).forEach(function (x) { state[x.g] = x.st; });
+    $('r-gates').innerHTML = GATES.map(function (g) {
+      var st = state[g.id], cls = st ? st : 'todo';
+      if (last && last.g === g.id && st === 'pass' && !last.end) cls = 'pass cur';
+      var mark = st === 'pass' ? '✓' : st === 'fail' ? '✗ ' + g.k : st === 'skip' ? 'pominięte' : g.k;
+      var sub = { send: 'kubectl, kontroler, pod', authn: 'kim jesteś?', authz: 'czy wolno? (RBAC)', adm: 'czy obiekt OK?', etcd: 'zapis / odczyt' }[g.id];
+      return '<li class="gate ' + cls + '"><div class="gt">' + g.t + ' <span>' + mark + '</span></div><div class="gs">' + sub + '</div></li>';
+    }).join('');
+    var msg = $('r-msg'), done = rStep >= steps.length;
+    msg.className = 'msg' + (done ? (last.st === 'fail' ? ' stuck' : (s.late ? ' warnm' : ' done')) : '');
+    msg.innerHTML = rStep === 0 ? '<p>Naciśnij „krok dalej”. Żądanie: <code>' + esc(s.cmd) + '</code></p>' : '<p>' + last.txt + '</p>';
+    $('r-term').innerHTML = '<span class="cmd">$ ' + esc(s.cmd) + '</span>' + (done ? '\n' + s.out : '');
+    $('r-tick').textContent = 'krok ' + rStep + ' z ' + steps.length + (done ? ' · koniec' : '');
+    $('r-step').disabled = done; $('r-all').disabled = done;
+  }
+  function rFix() {
+    var admBtn = document.querySelector('#r-controls [data-k="sc"] [data-v="adm"]');
+    admBtn.disabled = !CALLERS[rCfg.who].sc.adm;
+    if (admBtn.disabled && rCfg.sc === 'adm') { rCfg.sc = 'ok'; segSet(document.querySelector('#r-controls [data-k="sc"]'), 'ok'); }
+    admBtn.title = admBtn.disabled ? 'pod-reader nic nie zapisuje, więc nie dochodzi do admission' : '';
+  }
+  document.querySelectorAll('#r-controls .seg').forEach(function (b) { segInit(b, function (k, v) { rCfg[k] = v; rStep = 0; rFix(); rRender(); }); });
+  $('r-step').addEventListener('click', function () { rStep++; rRender(); });
+  $('r-all').addEventListener('click', function () { rStep = rPlan().length; rRender(); });
+  $('r-reset').addEventListener('click', function () { rStep = 0; rRender(); });
+  rFix(); rRender();
+
+  /* ================= 3. can-i ================= */
+  var ALLV = ['get', 'list', 'watch', 'create', 'update', 'patch', 'delete'];
+  var RO = ['get', 'list', 'watch'];
+  var RES = {
+    pods: { g: '', ns: true }, 'pods/log': { g: '', ns: true }, deployments: { g: 'apps', ns: true },
+    secrets: { g: '', ns: true }, configmaps: { g: '', ns: true }, roles: { g: 'rbac.authorization.k8s.io', ns: true }, nodes: { g: '', ns: false }
+  };
+  var ROLES = {
+    'ClusterRole/view': [
+      { g: [''], r: ['pods', 'pods/log', 'configmaps', 'services'], v: RO },
+      { g: ['apps'], r: ['deployments', 'statefulsets'], v: RO }
+    ],
+    'ClusterRole/edit': [
+      { g: [''], r: ['pods', 'configmaps', 'secrets', 'services'], v: ALLV },
+      { g: [''], r: ['pods/log'], v: RO },
+      { g: ['apps'], r: ['deployments', 'statefulsets'], v: ALLV }
+    ],
+    'ClusterRole/cluster-admin': [{ g: ['*'], r: ['*'], v: ['*'] }],
+    'Role/kursant-lab': [
+      { g: ['rbac.authorization.k8s.io'], r: ['roles', 'rolebindings'], v: ALLV },
+      { g: [''], r: ['limitranges'], v: ALLV }
+    ],
+    'ClusterRole/kursant-klaster': [
+      { g: [''], r: ['pods', 'configmaps', 'services', 'nodes', 'namespaces', 'persistentvolumes'], v: RO },
+      { g: ['apps'], r: ['deployments', 'statefulsets'], v: RO },
+      { g: ['rbac.authorization.k8s.io'], r: ['roles', 'rolebindings'], v: RO },
+      { g: ['storage.k8s.io'], r: ['storageclasses'], v: RO }
+    ],
+    'Role/pod-reader': [{ g: [''], r: ['pods', 'pods/log'], v: RO }],
+    'Role/deployer': [{ g: ['apps'], r: ['deployments'], v: ['get', 'list', 'watch', 'patch', 'update'] }, { g: [''], r: ['pods'], v: ['get', 'list'] }]
+  };
+  var SUBJ = {
+    anna: { as: 'anna', note: 'użytkownik z IAM, jak Ty na szkoleniu; grupy: system:authenticated', b: [
+      { k: 'RoleBinding', n: 'kursant-edit', ns: 'anna', role: 'ClusterRole/edit', s: 'User anna' },
+      { k: 'RoleBinding', n: 'kursant-lab', ns: 'anna', role: 'Role/kursant-lab', s: 'User anna' },
+      { k: 'ClusterRoleBinding', n: 'kursant-view-anna', role: 'ClusterRole/view', s: 'User anna' },
+      { k: 'ClusterRoleBinding', n: 'kursant-klaster-anna', role: 'ClusterRole/kursant-klaster', s: 'User anna' }] },
+    jan: { as: 'jan --as-group=devs', note: 'użytkownik z certyfikatem CN=jan, O=devs; uprawnienia dostał przez grupę', b: [
+      { k: 'RoleBinding', n: 'devs-view', ns: 'anna', role: 'ClusterRole/view', s: 'Group devs' }] },
+    reader: { as: 'system:serviceaccount:anna:pod-reader', note: 'SA aplikacji, która tylko czyta pody i logi', b: [
+      { k: 'RoleBinding', n: 'read-pods', ns: 'anna', role: 'Role/pod-reader', s: 'ServiceAccount anna/pod-reader' }] },
+    ci: { as: 'system:serviceaccount:anna:ci-deployer', note: 'SA pipeline\'u, który podmienia obraz w Deploymentach', b: [
+      { k: 'RoleBinding', n: 'ci-deployer', ns: 'anna', role: 'Role/deployer', s: 'ServiceAccount anna/ci-deployer' }] },
+    'default': { as: 'system:serviceaccount:anna:default', note: 'SA, który dostaje każdy pod bez serviceAccountName', b: [] },
+    app: { as: 'system:serviceaccount:anna:app', note: 'SA aplikacji z ClusterRoleBinding do cluster-admin: tak nie rób', b: [
+      { k: 'ClusterRoleBinding', n: 'app-admin', role: 'ClusterRole/cluster-admin', s: 'ServiceAccount anna/app' }] }
+  };
+  var OOPS = { k: 'RoleBinding', n: 'oops-default-edit', ns: 'anna', role: 'ClusterRole/edit', s: 'ServiceAccount anna/default', oops: true };
+  var cCfg = { sub: 'anna', verb: 'list', res: 'pods', ns: 'anna' };
+
+  function ruleMatch(rule, res, verb) {
+    var R = RES[res];
+    var gOk = rule.g.indexOf('*') >= 0 || rule.g.indexOf(R.g) >= 0;
+    var rOk = rule.r.indexOf('*') >= 0 || rule.r.indexOf(res) >= 0;
+    var vOk = rule.v.indexOf('*') >= 0 || rule.v.indexOf(verb) >= 0;
+    return { ok: gOk && rOk && vOk, rOk: gOk && rOk };
+  }
+  function ruleYaml(rule) {
+    function arr(a) { return '[' + a.map(function (x) { return x === '' ? '""' : x; }).join(', ') + ']'; }
+    return '- apiGroups: ' + arr(rule.g) + '\n  resources: ' + arr(rule.r) + '\n  verbs: ' + arr(rule.v);
+  }
+  function cRender() {
+    var S = SUBJ[cCfg.sub], R = RES[cCfg.res], res = cCfg.res;
+    var binds = S.b.slice();
+    if ($('c-oops').checked && cCfg.sub === 'default') binds.push(OOPS);
+    $('c-sub-note').textContent = S.note;
+    $('c-res-note').textContent = 'grupa API: ' + (R.g === '' ? '"" (core)' : R.g) + (R.ns ? ' · zasób w namespace' : ' · zasób klastrowy, namespace bez znaczenia') + (res === 'pods/log' ? ' · subresource' : '');
+    document.querySelectorAll('#c-controls [data-k="ns"] button').forEach(function (b) { b.disabled = !R.ns; });
+
+    var base = res === 'pods/log' ? 'pods --subresource=log' : (R.g ? res + '.' + R.g : res);
+    var cmd = 'kubectl auth can-i ' + cCfg.verb + ' ' + base + (R.ns ? ' -n ' + cCfg.ns : '') + ' --as=' + S.as;
+    var win = null, cards = [], podsOnly = false, viewSecret = false;
+    binds.forEach(function (b) {
+      var scopeOk = true, why = '';
+      if (b.k === 'RoleBinding') {
+        if (!R.ns) { scopeOk = false; why = 'RoleBinding nie obejmuje zasobów klastrowych'; }
+        else if (b.ns !== cCfg.ns) { scopeOk = false; why = 'działa tylko w namespace ' + b.ns; }
+      }
+      var hit = null, partial = false;
+      if (scopeOk) ROLES[b.role].forEach(function (rule) {
+        var m = ruleMatch(rule, res, cCfg.verb);
+        if (m.ok && !hit) hit = rule;
+        if (m.rOk) partial = true;
+        if (res === 'pods/log' && rule.r.indexOf('pods') >= 0 && rule.r.indexOf('pods/log') < 0 && rule.r.indexOf('*') < 0) podsOnly = true;
+      });
+      if (scopeOk && !hit && res === 'secrets' && b.role === 'ClusterRole/view') viewSecret = true;
+      if (hit && !win) win = b;
+      var cls = hit ? (win === b ? 'win' : '') : (scopeOk ? 'miss' : 'out');
+      var v = hit ? '<span class="ok">pasuje</span>' : !scopeOk ? '<span class="na">nie tutaj</span>: ' + why
+        : partial ? '<span class="bad">zasób jest, czasownika brak</span>' : '<span class="bad">brak reguły na ten zasób</span>';
+      cards.push('<div class="bcard ' + cls + '"><div class="bh">' + b.k + ' ' + b.n + (b.ns ? ' <span class="bk">(ns ' + b.ns + ')</span>' : '') + '</div>' +
+        '<div class="bk">' + esc(b.s) + ' → ' + b.role + (b.oops ? ' · <strong style="color:var(--bad)">antywzorzec</strong>' : '') + '</div>' +
+        '<div class="bv">' + v + '</div>' + (hit ? '<pre>' + esc(ruleYaml(hit)) + '</pre>' : '') + '</div>');
+    });
+    if (!binds.length) cards.push('<div class="bcard out"><div class="bh">brak bindingów</div><div class="bk">Nikt nic nie zbindował do tego podmiotu. Zostają tylko wbudowane prawa każdego zalogowanego (discovery API, can-i o samego siebie).</div></div>');
+    $('c-binds').innerHTML = cards.join('');
+    $('c-cmd').innerHTML = '<span class="cmd">$ ' + esc(cmd) + '</span>\n' + (win ? '<span class="okl">yes</span>' : '<span class="er">no</span>');
+    $('c-verdict').innerHTML = '<span class="big ' + (win ? 'yes' : 'no') + '">' + (win ? 'yes' : 'no') + '</span>' +
+      '<span>' + (win ? 'zdecydował <code>' + win.k + ' ' + win.n + '</code> → <code>' + win.role + '</code>' : 'żadna reguła nie pozwala, a RBAC nie zna „deny”: brak zgody = odmowa') + '</span>';
+    var msg = $('c-msg'), m;
+    if (win) {
+      msg.className = 'msg done';
+      m = 'Wystarczy jedna pasująca reguła. Pozostałe bindingi nie mają znaczenia, bo RBAC nie umie niczego odebrać.';
+      if (win.role === 'ClusterRole/cluster-admin') { msg.className = 'msg stuck'; m = '<code>cluster-admin</code> pasuje do wszystkiego: każdy czasownik, każdy zasób, każdy namespace. Przejęcie tego poda = przejęcie klastra.'; }
+      if (win.oops) { msg.className = 'msg stuck'; m = 'Uprawnienie przyszło z bindingu dla <code>default</code>. Ma je każdy pod w <code>anna</code>, który nie ma własnego ServiceAccount.'; }
+    } else {
+      msg.className = 'msg stuck';
+      m = 'Prawdziwe żądanie dostałoby <code>403 Forbidden</code>: <code>User "' + esc(S.as.split(' ')[0]) + '" cannot ' + cCfg.verb + ' resource "' + (res === 'pods/log' ? 'pods/log' : res) + '" in API group "' + R.g + '"' + (R.ns ? ' in the namespace "' + cCfg.ns + '"' : ' at the cluster scope') + '</code>.';
+    }
+    msg.innerHTML = '<p>' + m + '</p>';
+    var note = '';
+    if (!win && viewSecret) note = '<code>view</code> celowo nie obejmuje Secretów: odczyt Secretu to często odczyt hasła albo tokenu innego SA, czyli furtka do większych uprawnień.';
+    else if (!win && podsOnly) note = 'Rola ma <code>pods</code>, ale nie <code>pods/log</code>. Subresource to osobna pozycja w <code>resources</code>.';
+    else if (res === 'deployments') note = 'Deployment jest w grupie <code>apps</code>. Reguła <code>apiGroups: [""]</code> z <code>deployments</code> nigdy nie zadziała.';
+    else if (res === 'roles' && cCfg.sub === 'anna' && win) note = '<code>edit</code> nie daje Role i RoleBinding. Na szkoleniu dostajesz je osobną Role <code>kursant-lab</code>, żeby móc ćwiczyć RBAC.';
+    else if (res === 'nodes' && !win) note = 'Węzły są zasobem klastrowym. Daje je tylko ClusterRoleBinding; RoleBinding, nawet do ClusterRole, działa tylko w jednym namespace.';
+    $('c-note').innerHTML = note; $('c-note').hidden = !note;
+  }
+  document.querySelectorAll('#c-controls .seg').forEach(function (b) { segInit(b, function (k, v) { cCfg[k] = v; cRender(); }); });
+  $('c-oops').addEventListener('change', cRender);
+  cRender();
+
+  /* ================= 4. mini-symulator SA ================= */
+  var sCfg = { sa: 'default', am_sa: 'unset', am_pod: 'unset' };
+  function sRender() {
+    var mounted = sCfg.am_pod !== 'unset' ? sCfg.am_pod === 'true' : sCfg.am_sa !== 'false';
+    var oops = $('s-oops').checked, saName = sCfg.sa === 'reader' ? 'pod-reader' : sCfg.sa;
+    var t = '<span class="cmd">$ ls /var/run/secrets/kubernetes.io/serviceaccount/</span>\n';
+    t += mounted ? 'ca.crt  namespace  token' : '<span class="er">ls: /var/run/secrets/kubernetes.io/serviceaccount/: No such file or directory</span>';
+    var rights = 'brak ról: 403 na wszystko poza discovery';
+    if (saName === 'pod-reader') rights = 'get/list/watch pods i pods/log w anna';
+    if (saName === 'default' && oops) rights = 'edit w anna: Secrety, Deploymenty, pody, exec…';
+    if (mounted) {
+      t += '\n<span class="cmd">$ kubectl auth whoami</span>\nUsername   system:serviceaccount:anna:' + saName;
+      t += '\n<span class="cmd">$ kubectl get secrets</span>\n' + (rights.indexOf('edit') === 0 ? '<span class="wa">NAME             TYPE     DATA   AGE\nmongodb-secret   Opaque   2      3d</span>'
+        : '<span class="er">Error from server (Forbidden): secrets is forbidden: User "system:serviceaccount:anna:' + saName + '" cannot list resource "secrets" …</span>');
+    }
+    t += '\n<span class="cmd">$ env | grep AWS_CONTAINER</span>\n' + (saName === 'api' ? 'AWS_CONTAINER_CREDENTIALS_FULL_URI=http://169.254.170.23/v1/credentials\nAWS_CONTAINER_AUTHORIZATION_TOKEN_FILE=/var/run/secrets/pods.eks.amazonaws.com/serviceaccount/eks-pod-identity-token' : '<span class="c">(nic)</span>');
+    $('s-term').innerHTML = t;
+    var p = [];
+    if (!mounted) p.push('Tokenu Kubernetes <strong>nie ma</strong>. ' + (sCfg.am_pod === 'false' ? 'Wyłączył go pod.' : 'Wyłączył go ServiceAccount.') + (oops && saName === 'default' ? ' Nawet zły binding dla <code>default</code> nic tu nie daje: bez tokenu nie da się go użyć.' : ''));
+    else {
+      p.push('Token jest, włamywacz działa jako <code>system:serviceaccount:anna:' + saName + '</code>: ' + rights + '.');
+      if (sCfg.am_pod === 'true' && sCfg.am_sa === 'false') p.push('Ustawienie w podzie (<code>true</code>) wygrywa z ustawieniem w SA.');
+      if (saName === 'default' && !oops) p.push('Dziś <code>default</code> nie ma praw, ale wystarczy jeden binding (zaznacz pole wyżej).');
+    }
+    if (saName === 'api') p.push('Do AWS ma rolę IAM aplikacji <code>api</code> (np. tylko jej bucket S3), niezależnie od tokenu Kubernetes. Pod <code>web</code> z własnym SA bez powiązania nie dostałby nic.');
+    var good = !mounted && saName !== 'default';
+    $('s-msg').className = 'msg ' + (mounted && rights.indexOf('edit') === 0 ? 'stuck' : good ? 'done' : '');
+    $('s-msg').innerHTML = p.map(function (x) { return '<p>' + x + '</p>'; }).join('') + (good ? '<p>Tak ustawisz <code>api</code> i <code>web</code> w ToDos: własny SA, bez tokenu.</p>' : '');
+  }
+  document.querySelectorAll('#s-controls .seg').forEach(function (b) { segInit(b, function (k, v) { sCfg[k] = v; sRender(); }); });
+  $('s-oops').addEventListener('change', sRender);
+  sRender();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+# Krok 1: uzupełnij miejsca oznaczone ___ (grupa API, zasoby, czasowniki).
+# Namespace nie wpisujemy: obiekt trafi do Twojego domyślnego namespace.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-reader
+rules:
+- apiGroups: [___]        # grupa core (pods, services, configmaps) to pusty napis
+  resources: [___]        # pody i ich logi (podzasób piszemy z ukośnikiem)
+  verbs: [___]            # tylko odczyt: trzy czasowniki

@@ -1,0 +1,87 @@
+# ToDos · dzień 4 (*): kopia zapasowa bazy z dnia 3. Zmiany od wczoraj: ServiceAccount mongo-backup bez tokenu
+# i securityContext pod PSA restricted (UID 999 jak baza, fsGroup 999 dla PVC todos-backup).
+# Test bez czekania: kubectl create job --from=cronjob/mongo-backup backup-test && kubectl logs -f job/backup-test
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: todos-backup
+  labels:
+    app.kubernetes.io/part-of: todos
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: mongo-backup
+  labels:
+    app.kubernetes.io/part-of: todos
+spec:
+  schedule: "0 2 * * *"            # 2:00 czasu UTC (strefę zmienisz polem timeZone, np. Europe/Warsaw)
+  concurrencyPolicy: Forbid        # nigdy dwa backupy naraz
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: todos
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 600
+      template:
+        metadata:
+          labels:
+            app: todos-backup
+            app.kubernetes.io/part-of: todos
+        spec:
+          restartPolicy: Never
+          serviceAccountName: mongo-backup
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 999               # mongodb z obrazu mongo:7.0
+            runAsGroup: 999
+            fsGroup: 999                 # wczorajsze archiwa zapisał root: grupa 999 dostaje prawo zapisu do katalogu
+            fsGroupChangePolicy: OnRootMismatch
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: backup
+              image: mongo:7.0         # ma mongodump; ta sama wersja co baza
+              env:
+                - name: MONGODB_URI
+                  valueFrom:
+                    secretKeyRef:
+                      name: todos-mongo
+                      key: uri
+              command:
+                - sh
+                - -c
+                - |
+                  set -e
+                  plik=/backup/todos-$(date +%Y%m%d-%H%M).archive.gz
+                  mongodump --uri="$MONGODB_URI" --archive="$plik" --gzip
+                  ls -t /backup/todos-*.archive.gz | tail -n +8 | xargs -r rm -f --   # zostaw 7 ostatnich
+                  ls -lh /backup
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  cpu: 500m
+                  memory: 256Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true   # mongodump pisze tylko do /backup
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: backup
+                  mountPath: /backup
+          volumes:
+            - name: backup
+              persistentVolumeClaim:
+                claimName: todos-backup

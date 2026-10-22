@@ -1,0 +1,8 @@
+# Pierwszy obiekt nowego typu Backup. Bez kontrolera to tylko rekord w etcd: nic się nie wykona.
+apiVersion: szkolenie.example.com/v1
+kind: Backup
+metadata:
+  name: nightly
+spec:
+  schedule: "0 2 * * *"
+  retention: 7

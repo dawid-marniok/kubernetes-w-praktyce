@@ -1,0 +1,72 @@
+# ToDos · dzień 4 (*): ruch wychodzący z podów ToDos też tylko po strzałkach. Bez reguły DNS nic nie działa:
+# web i api szukają Service po nazwie (api, mongo), a pytanie do kube-dns to też ruch wychodzący.
+#
+# 1. Każdy pod ToDos może pytać kube-dns (UDP i TCP 53). namespaceSelector i podSelector w JEDNYM elemencie = AND.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: todos-egress-dns
+  labels:
+    app.kubernetes.io/part-of: todos
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: todos
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+---
+# 2. web wychodzi tylko do api (3001)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: web-egress-api
+  labels:
+    app.kubernetes.io/part-of: todos
+spec:
+  podSelector:
+    matchLabels:
+      app: todos-web
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: todos-api
+      ports:
+        - port: 3001
+          protocol: TCP
+---
+# 3. api i (*) Job backupu wychodzą tylko do mongo (27017)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: to-mongo-egress
+  labels:
+    app.kubernetes.io/part-of: todos
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values: [todos-api, todos-backup]
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: todos-mongo
+      ports:
+        - port: 27017
+          protocol: TCP

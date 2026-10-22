@@ -1,0 +1,41 @@
+# lab16, kroki 1–3. Uzupełnij miejsca ___ (fieldPath / resource). Namespace nie wpisujemy.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-info
+  labels:
+    app: pod-info
+    wersja: "1"
+  annotations:
+    zespol: "platforma"
+spec:
+  containers:
+  - name: app
+    image: busybox:1.37
+    command: ["sh", "-c", "env | grep -E 'POD_|MEMORY_' | sort; sleep 3600"]
+    env:
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: ___            # nazwa poda
+    - name: POD_NAMESPACE
+      valueFrom:
+        fieldRef:
+          fieldPath: ___            # namespace poda
+    - name: POD_IP
+      valueFrom:
+        fieldRef:
+          fieldPath: ___            # IP poda (pole ze status)
+    - name: POD_VERSION
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.labels['wersja']
+    - name: MEMORY_LIMIT
+      valueFrom:
+        resourceFieldRef:
+          resource: ___             # limit pamięci tego kontenera
+    resources:
+      requests: {cpu: 10m, memory: 16Mi}
+      limits: {cpu: 100m, memory: 32Mi}
+    # krok 3: tu dopisz volumeMounts (montowanie w /etc/podinfo)
+  # krok 3: tu dopisz volumes z wolumenem downwardAPI (pliki labels i annotations)

@@ -1,0 +1,42 @@
+# ServiceAccount tylko do odczytu podów + pod z kubectl, który używa tego konta.
+# Obraz registry.k8s.io/kubectl nie ma powłoki: komenda w args, wynik w kubectl logs test-readonly-sa.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pod-reader
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-reader-role
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pod-reader-binding
+subjects:
+- kind: ServiceAccount
+  name: pod-reader
+roleRef:
+  kind: Role
+  name: pod-reader-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-readonly-sa
+spec:
+  serviceAccountName: pod-reader   # pod dostaje token tego SA (bez pola: SA default)
+  restartPolicy: Never
+  containers:
+  - name: kubectl
+    image: registry.k8s.io/kubectl:v1.35.0
+    args: ["get", "pods"]          # zmień na ["delete", "pod", "test-readonly-sa"] → Forbidden
+    resources:
+      requests: {cpu: 10m, memory: 32Mi}
+      limits: {cpu: 200m, memory: 128Mi}

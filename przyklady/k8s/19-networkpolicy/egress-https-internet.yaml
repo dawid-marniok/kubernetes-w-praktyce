@@ -1,0 +1,19 @@
+# Egress do internetu po HTTPS: ipBlock, NIE namespaceSelector: {} (ten wybiera tylko pody w klastrze).
+# except wycina sieci prywatne, żeby reguła nie otworzyła przy okazji całego klastra i VPC.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: egress-https-internet
+spec:
+  podSelector:
+    matchLabels:
+      app: restricted
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0                                  # cały internet…
+        except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]   # …poza sieciami prywatnymi (VPC, pody, Service)
+    ports:
+    - {protocol: TCP, port: 443}                         # protocol: TCP (domyślnie), UDP, SCTP

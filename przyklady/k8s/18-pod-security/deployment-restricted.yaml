@@ -1,0 +1,48 @@
+# Deployment, który przechodzi Pod Security „restricted”.
+# securityContext minimalny dla poziomu restricted + dwie rzeczy, o których łatwo zapomnieć:
+#   - emptyDir na /tmp: przy readOnlyRootFilesystem nginx musi gdzieś pisać pid i pliki tymczasowe,
+#   - port 8080: obraz nginx-unprivileged nie słucha na 80 (port < 1024 wymaga capability).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  labels:
+    app: web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      securityContext:
+        runAsNonRoot: true             # kubelet odmówi startu, jeśli proces miałby działać jako root (UID 0)
+        runAsUser: 101                 # UID procesu (101 = użytkownik nginx w obrazie)
+        seccompProfile:
+          type: RuntimeDefault         # RuntimeDefault: domyślny filtr syscalli containerd; Localhost: własny profil; Unconfined: bez filtra
+      containers:
+      - name: nginx            # ta sama nazwa co w „kubectl create deployment web”: apply podmienia kontener zamiast dodać drugi
+        image: nginxinc/nginx-unprivileged:1.29
+        ports:
+        - containerPort: 8080
+        securityContext:
+          allowPrivilegeEscalation: false   # proces nie zdobędzie więcej uprawnień niż rodzic (setuid, sudo)
+          readOnlyRootFilesystem: true      # system plików obrazu tylko do odczytu; zapis tylko do wolumenów
+          capabilities:
+            drop: ["ALL"]                 # zabierz wszystkie capabilities; restricted pozwala dodać tylko NET_BIND_SERVICE
+        resources:
+          requests:
+            cpu: 50m
+            memory: 32Mi
+          limits:
+            cpu: 200m
+            memory: 64Mi
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: tmp
+        emptyDir: {}

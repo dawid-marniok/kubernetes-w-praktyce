@@ -1,0 +1,17 @@
+# Krok 4: pod, który rozmawia z API jako ServiceAccount pod-reader-sa.
+# Obraz registry.k8s.io/kubectl ma tylko kubectl (bez powłoki), dlatego komendę podajemy w args.
+# Wynik czytasz w logach: kubectl logs kubectl-test
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kubectl-test
+spec:
+  serviceAccountName: pod-reader-sa
+  restartPolicy: Never
+  containers:
+  - name: kubectl
+    image: registry.k8s.io/kubectl:v1.35.0
+    args: ["get", "pods"]
+    resources:
+      requests: {cpu: 10m, memory: 32Mi}
+      limits: {cpu: 200m, memory: 128Mi}

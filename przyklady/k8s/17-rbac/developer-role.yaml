@@ -1,0 +1,33 @@
+# Rola „developer”: odczyt podów + odczyt JEDNEGO Secretu po nazwie (resourceNames).
+# Namespace bierze się z kontekstu (kubectl apply -f … w swoim namespace).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: developer
+rules:
+- apiGroups: [""]                      # "" = grupa core (pods, secrets, services); apps = deployments itd.
+  resources: ["pods", "pods/log"]       # podzasoby osobno: pods/log, pods/exec
+  verbs: ["get", "list", "watch"]       # get, list, watch, create, update, patch, delete, deletecollection
+- apiGroups: [""]
+  resources: ["secrets"]
+  resourceNames: ["mongodb-secret"]     # tylko ten obiekt (nie działa z list/watch ani create)
+  verbs: ["get"]
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: contoso
+---
+# W subjects namespace SA jest wymagany: wpisz swój namespace.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: contoso-binding
+subjects:
+- kind: ServiceAccount
+  name: contoso
+  namespace: <NAMESPACE>
+roleRef:                               # niezmienne po utworzeniu
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: developer
