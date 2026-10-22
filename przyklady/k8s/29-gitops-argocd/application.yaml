@@ -1,0 +1,26 @@
+# Argo CD Application: „pilnuj, żeby w klastrze było to, co w gicie pod tą ścieżką”.
+# Na swoim klastrze: zmień repoURL na swój fork i: kubectl apply -f application.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: podinfo-prod
+  namespace: argocd                 # Application mieszka tam, gdzie Argo CD
+  finalizers:
+    # usunięcie Application usuwa też wdrożone zasoby (bez tego zostałyby w klastrze);
+    # /background: Application znika od razu, zasoby są usuwane w tle
+    - resources-finalizer.argocd.argoproj.io/background
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/dawid-marniok/kubernetes-w-praktyce.git
+    targetRevision: main            # gałąź, tag albo commit
+    path: przyklady/k8s/29-gitops-argocd/app/overlays/prod   # kustomization.yaml → Argo CD sam robi kustomize build
+  destination:
+    server: https://kubernetes.default.svc   # ten sam klaster, w którym działa Argo CD
+    namespace: gitops-demo
+  syncPolicy:
+    automated:
+      prune: true                   # zniknęło z gita → znika z klastra
+      selfHeal: true                # ręczna zmiana w klastrze (drift) → przywrócony stan z gita
+    syncOptions:
+      - CreateNamespace=true        # Argo CD utworzy namespace gitops-demo, jeśli go nie ma

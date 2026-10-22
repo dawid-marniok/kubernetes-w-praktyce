@@ -1,0 +1,38 @@
+# Baza: zwykły, poprawny YAML. Działa bez Kustomize: kubectl apply -k app/base
+# Nakładki (overlays/dev, overlays/prod) zmieniają tylko to, co inne w danym środowisku.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: podinfo
+  labels: {app: podinfo}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: podinfo}
+  template:
+    metadata:
+      labels: {app: podinfo}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: podinfo
+          image: ghcr.io/stefanprodan/podinfo:6.14.1   # tag podmienia nakładka (images:)
+          ports:
+            - {name: http, containerPort: 9898}
+          envFrom:
+            # PODINFO_UI_MESSAGE i PODINFO_UI_COLOR: napis i kolor strony podinfo.
+            # Nazwa bez hasha: Kustomize sam dopisze hash z configMapGenerator.
+            - configMapRef: {name: podinfo-config}
+          readinessProbe:
+            httpGet: {path: /readyz, port: http}
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {memory: 64Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}

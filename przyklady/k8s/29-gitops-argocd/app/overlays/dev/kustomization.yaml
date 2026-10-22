@@ -1,0 +1,18 @@
+# Dev: 1 replika, nowsza wersja podinfo, zielony. Podgląd: kubectl kustomize app/overlays/dev
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+nameSuffix: -dev
+labels:
+  - pairs: {env: dev}
+    includeSelectors: true   # selektor Service i Deploymentu też dostaje env, więc dev i prod się nie mieszają
+images:
+  - name: ghcr.io/stefanprodan/podinfo
+    newTag: "6.15.0"
+configMapGenerator:
+  - name: podinfo-config
+    behavior: merge          # dopisz/nadpisz klucze z bazy
+    literals:
+      - PODINFO_UI_MESSAGE=dev
+      - PODINFO_UI_COLOR=#2e7d32
