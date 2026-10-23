@@ -4,6 +4,8 @@ Teoria do tematów ze slajdów, do czytania w trakcie labów i po szkoleniu. Pli
 
 Katalogi dochodzą razem z labami danego dnia (`git pull`).
 
+Gdzie śledzić DevOps, AI w DevOps i Kubernetesa po szkoleniu: [zrodla.md](zrodla.md).
+
 | Katalog | Dzień | Co jest w środku |
 |---|---|---|
 | [`docker/`](docker/) | 1 | [podstawy Dockera i komendy](docker/podstawy.md), [tmpfs](docker/tmpfs.md) |
