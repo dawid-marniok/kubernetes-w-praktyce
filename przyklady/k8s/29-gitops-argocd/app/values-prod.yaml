@@ -4,5 +4,5 @@ replicaCount: 2
 image:
   tag: "6.14.1"
 ui:
-  message: prod v2 z gita
-  color: "#b45309"
+  message: prod v1
+  color: "#1e3a5f"
