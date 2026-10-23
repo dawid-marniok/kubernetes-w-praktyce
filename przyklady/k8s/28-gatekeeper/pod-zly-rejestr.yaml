@@ -1,0 +1,13 @@
+# Tag wersji jest (1.29), ale rejestr nie: łamie tylko K8sAllowedRepos.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: zly-rejestr
+  labels: {app: gk-test}
+spec:
+  containers:
+  - name: app
+    image: nginx:1.29
+    resources:
+      requests: {cpu: 10m, memory: 32Mi}
+      limits: {memory: 64Mi}

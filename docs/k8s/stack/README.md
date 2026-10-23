@@ -12,6 +12,6 @@ Platformę przygotował trener przed szkoleniem: konto AWS z użytkownikami IAM 
 | 2 · na klaster | Secret z hasłem do bazy, ConfigMap `todos-config`, Deploymenty i Service `web`, `api`, `mongo` (Mongo bez dysku), Ingress `todos` z TLS pod `todos-<login>.k8s.marniok.dev` | VPC, EKS, węzły, Traefik + NLB, DNS, cert-manager, namespace z quotą i RBAC |
 | 3 · dane i zasoby | Mongo jako StatefulSet z headless Service i PVC `data-mongo-0` (gp3 → wolumen EBS), sensowne `requests`/`limits`, HPA dla api (2–5 replik, CPU 70%) | StorageClass `gp3`, EBS CSI, metrics-server |
 | 4 · bezpieczeństwo | skan obrazów, ServiceAccount bez tokenu dla każdego składnika, `securityContext` na poziomie `restricted` (bez roota, UID z obrazu, `fsGroup` dla dysku Mongo) sprawdzony etykietami Pod Security na namespace, NetworkPolicy: default-deny dla podów ToDos i łańcuch traefik → web:8080 → api:3001 → mongo:27017 (ToDos · dzień 4; w projekcie default-deny na cały namespace plus reguła dla solvera cert-managera, 8089) | vpc-cni egzekwuje NetworkPolicy |
-| 5 · Helm i monitoring | chart Helm `todos` (`values-dev.yaml`, `values-prod.yaml`), release `todos`, metryki i logi Twoich podów w Grafanie; projekt lab20 | Prometheus, Loki, Tempo, Alloy i Grafana w ns `monitoring` |
+| 5 · Helm i monitoring | chart Helm `todos` (`values-dev.yaml`, `values-prod.yaml`), release `todos`, metryki i logi Twoich podów w Grafanie | Prometheus, Loki, Tempo, Alloy i Grafana w ns `monitoring` |
 
-Czego nie zdążysz w bloku ToDos danego dnia, dokładasz w projekcie końcowym (lab20): jego etapy obejmują wszystkie punkty z tabeli.
+Czego nie zdążysz w bloku ToDos danego dnia, dokładasz następnego dnia rano: każdy blok zaczyna się od rozwiązania z poprzedniego dnia.

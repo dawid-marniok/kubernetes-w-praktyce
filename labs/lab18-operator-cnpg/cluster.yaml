@@ -1,0 +1,26 @@
+# Klaster PostgreSQL zarządzany przez operator CloudNativePG (operator w klastrze instaluje prowadzący).
+# Namespace: Twój (z kontekstu), więc w pliku go nie ma.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: pg
+spec:
+  instances: 1                      # krok 4: zmienisz na 3
+  imageName: ghcr.io/cloudnative-pg/postgresql:17.11
+  storage:
+    size: 1Gi                       # bez storageClass: domyślna klasa klastra
+  resources:                        # ResourceQuota w namespace liczy requests i limits każdej instancji
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {cpu: 500m, memory: 512Mi}
+  postgresql:
+    parameters:
+      max_connections: "50"
+      shared_buffers: "64MB"
+  bootstrap:
+    initdb:
+      database: app
+      owner: app
+      # Bez secret: operator sam generuje hasło i tworzy Secret pg-app (username, password, host, uri).
+      # Dla chętnych: własne hasło z app-credentials.yaml (wtedy Secretu pg-app nie będzie):
+      # secret:
+      #   name: pg-app-credentials

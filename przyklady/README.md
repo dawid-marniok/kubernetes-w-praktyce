@@ -7,7 +7,7 @@ Jak z nich korzystać:
 - **W labie:** gdy nie wiesz, jak zacząć YAML, otwórz przykład z tego samego tematu, skopiuj i przerób. Lab każe zwykle napisać coś trochę innego niż przykład.
 - **Po szkoleniu:** wzorce do własnych projektów.
 
-Manifesty Kubernetesa nie mają `namespace:` (trafiają do Twojego domyślnego) i mają `resources` (w namespace jest quota). Katalogi `k8s/` są ponumerowane w kolejności zajęć (`01-pod` … `22-helm`). Komendy z README wydajesz w katalogu przykładu (`cd przyklady/k8s/<katalog>`). Nietrywialne pola w YAML-ach mają krótki komentarz: co robią i jakie wartości przyjmują. Katalogi dochodzą razem z labami danego dnia (`git pull`).
+Manifesty Kubernetesa nie mają `namespace:` (trafiają do Twojego domyślnego) i mają `resources` (w namespace jest quota). Katalogi `k8s/` są ponumerowane w kolejności zajęć (`01-pod` … `30-prometheus`). Komendy z README wydajesz w katalogu przykładu (`cd przyklady/k8s/<katalog>`). Nietrywialne pola w YAML-ach mają krótki komentarz: co robią i jakie wartości przyjmują. Katalogi dochodzą razem z labami danego dnia (`git pull`).
 
 | Katalog | Dzień | Temat | Lab | Co jest w środku |
 |---|---|---|---|---|
@@ -23,7 +23,7 @@ Manifesty Kubernetesa nie mają `namespace:` (trafiają do Twojego domyślnego) 
 | [`k8s/08-storage/`](k8s/08-storage/) | 3 | Storage i StatefulSet | lab09 | PVC, pod z PVC, PostgreSQL na PVC, StorageClass EKS (gp3), PV statyczny EBS/EFS (admin) i kind |
 | [`k8s/09-statefulset/`](k8s/09-statefulset/) | 3 | Storage i StatefulSet | lab09 | StatefulSet z headless Service i PVC na pod |
 | [`k8s/10-daemonset/`](k8s/10-daemonset/) | 3 | DaemonSet, Job, CronJob | lab10 | agent na każdym węźle, zbieranie logów (kind) |
-| [`k8s/11-job-cronjob/`](k8s/11-job-cronjob/) | 3 | DaemonSet, Job, CronJob | lab10 | Job, Job Indexed, CronJob |
+| [`k8s/11-job-cronjob/`](k8s/11-job-cronjob/) | 3 | DaemonSet, Job, CronJob | lab10 | Job, Job Indexed, CronJob, `Forbid` przy długim przebiegu |
 | [`k8s/12-zasoby-qos/`](k8s/12-zasoby-qos/) | 3 | Zasoby, QoS, HPA | lab11 | Guaranteed, Burstable, OOMKilled, PriorityClass |
 | [`k8s/13-quota-limitrange/`](k8s/13-quota-limitrange/) | 3 | Zasoby, QoS, HPA | lab11 | ResourceQuota, quota z zakresem, LimitRange |
 | [`k8s/14-hpa/`](k8s/14-hpa/) | 3 | Zasoby, QoS, HPA | lab11 | HPA `autoscaling/v2`, zachowanie przy skalowaniu, generator ruchu |
@@ -34,3 +34,12 @@ Manifesty Kubernetesa nie mają `namespace:` (trafiają do Twojego domyślnego) 
 | [`k8s/19-networkpolicy/`](k8s/19-networkpolicy/) | 4 | Sieć | lab15 | deny, DNS, ruch z kontrolera Ingress, izolacja namespace, egress HTTPS |
 | [`k8s/20-crd/`](k8s/20-crd/) | 4 | Rozszerzanie API | lab16 | CRD `Backup` i obiekt tego typu |
 | [`k8s/21-downward-api/`](k8s/21-downward-api/) | 4 | Rozszerzanie API | lab16 | pod, który zna swoją nazwę, węzeł i limity |
+| [`k8s/22-helm/`](k8s/22-helm/) | 5 | Helm | lab17 | przykładowy chart z wartościami i szablonami, od `helm create` do rollbacku |
+| [`k8s/23-kind/`](k8s/23-kind/) | 5 | Kubernetes na laptopie | — | kind: klaster w 40 s, dwa konteksty, `kind load` bez rejestru |
+| [`k8s/24-operator-cnpg/`](k8s/24-operator-cnpg/) | 5 | Operatory | lab18 | CloudNativePG: klaster PostgreSQL z 3 instancji, failover na żywo |
+| [`k8s/25-external-secrets/`](k8s/25-external-secrets/) | 5 | Operatory | — | External Secrets: sejf (AWS Secrets Manager, Azure Key Vault) → Secret, rotacja |
+| [`k8s/26-observability/`](k8s/26-observability/) | 5 | Observability | lab19 | metryka → trace → log w Grafanie: PromQL, TraceQL, LogQL na aplikacji Kantyna |
+| [`k8s/27-keda/`](k8s/27-keda/) | 5 | Observability | — | KEDA: skalowanie po metryce z Prometheusa, trigger cron |
+| [`k8s/28-gatekeeper/`](k8s/28-gatekeeper/) | 5 | Polityki | — | OPA Gatekeeper: ConstraintTemplate (Rego i CEL) + Constraint, dozwolone rejestry, tag wersji bez `latest`, dryrun → warn → deny, audit, testy `gator` |
+| [`k8s/29-gitops-argocd/`](k8s/29-gitops-argocd/) | 5 | GitOps | — | Argo CD + chart Helm (values dev/prod): Application, drift i self-heal, zmiana przez git push, rollback przez git revert |
+| [`k8s/30-prometheus/`](k8s/30-prometheus/) | 5 | Observability | lab19 | Prometheus bez Grafany: podinfo z Helma z ServiceMonitorem, Target health i konfiguracja przez port-forward, PromQL, Alertmanager; ServiceMonitor a PodMonitor |

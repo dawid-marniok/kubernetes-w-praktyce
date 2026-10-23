@@ -1,0 +1,21 @@
+# Tylko jeśli masz politykę egress z ToDos dnia 4 (networkpolicy-egress.yaml): api wychodzi wtedy tylko do mongo
+# i DNS, więc spany nie dotrą do Tempo. Ta reguła dopuszcza OTLP/HTTP do namespace monitoring.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-egress-otlp
+  labels:
+    app.kubernetes.io/part-of: todos
+spec:
+  podSelector:
+    matchLabels:
+      app: todos-api
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: 4318
+          protocol: TCP

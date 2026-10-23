@@ -1,0 +1,21 @@
+# Deployment, który co kilkanaście sekund się wywraca: materiał dla alertu PodCzestoRestartuje.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crashloop
+  labels: {app: crashloop}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: crashloop}
+  template:
+    metadata:
+      labels: {app: crashloop}
+    spec:
+      containers:
+        - name: app
+          image: busybox:1.37
+          command: ["sh", "-c", "echo '{\"level\":\"error\",\"message\":\"nie mogę połączyć się z bazą\"}'; sleep 10; exit 1"]
+          resources:
+            requests: {cpu: 5m, memory: 8Mi}
+            limits: {cpu: 50m, memory: 32Mi}

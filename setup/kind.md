@@ -47,8 +47,11 @@ kubectl config set-context --current --namespace=user07
 
 ## 3. metrics-server (dzień 3: `kubectl top`, HPA)
 
+⚠ Tylko na kind: na klastrze szkoleniowym ten plik psuje dodatek EKS (`kubectl top` i HPA przestają działać wszystkim). Najpierw sprawdź kontekst.
+
 ```bash
-kubectl apply -k setup/kind/metrics-server
+kubectl config current-context        # musi być kind-szkolenie
+kubectl apply -f setup/kind/metrics-server/metrics-server.yaml
 kubectl -n kube-system rollout status deploy/metrics-server
 kubectl top nodes        # po ok. minucie liczby zamiast „metrics not available yet”
 ```

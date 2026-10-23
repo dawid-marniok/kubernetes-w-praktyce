@@ -1,0 +1,31 @@
+# ConstraintTemplate w CEL (silnik K8sNativeValidation), bez Rego.
+# Reguła z kryteriów projektu ToDos: obraz z tagiem wersji, bez :latest i bez braku tagu (digest @sha256 przechodzi).
+# Z szablonu w CEL Gatekeeper (od v3.20 domyślnie) generuje też wbudowaną ValidatingAdmissionPolicy:
+# regułę sprawdza wtedy sam API server, bez pytania webhooka.
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8simagetag
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sImageTag
+  targets:
+  - target: admission.k8s.gatekeeper.sh
+    code:
+    - engine: K8sNativeValidation
+      source:
+        variables:
+        - name: kontenery
+          expression: >-
+            variables.anyObject.spec.containers +
+            (has(variables.anyObject.spec.initContainers) ? variables.anyObject.spec.initContainers : [])
+        - name: zle
+          # bez "@" (digest) i: kończy się na :latest albo ostatni człon ścieżki nie ma ":" (brak tagu)
+          expression: >-
+            variables.kontenery.filter(c, !c.image.contains("@") &&
+              (c.image.endsWith(":latest") || !c.image.split("/")[size(c.image.split("/")) - 1].contains(":")))
+        validations:
+        - expression: size(variables.zle) == 0
+          messageExpression: '"obraz bez tagu wersji albo z :latest: " + variables.zle.map(c, c.name + "=" + c.image).join(", ")'

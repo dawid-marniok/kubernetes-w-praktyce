@@ -1,0 +1,16 @@
+# Klaster PostgreSQL zarządzany przez CloudNativePG: 3 instancje (1 primary + 2 repliki). Ten sam YAML jest na slajdzie „Jeden obiekt Cluster”.
+# Bez namespace (trafia do Twojego), bez storageClass (domyślna klasa klastra), z resources (quota liczy każdą instancję).
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: pg
+spec:
+  instances: 3                      # operator sam wybiera primary; przy awarii promuje replikę
+  imageName: ghcr.io/cloudnative-pg/postgresql:17.11
+  storage:
+    size: 1Gi
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {cpu: 500m, memory: 512Mi}
+  bootstrap:
+    initdb: {database: app, owner: app}   # hasło generuje operator: Secret pg-app (username, password, uri)

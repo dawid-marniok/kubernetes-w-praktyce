@@ -1,0 +1,9 @@
+ToDos {{ .Chart.AppVersion }} w namespace {{ .Release.Namespace }}, rewizja {{ .Release.Revision }}.
+
+  https://{{ .Values.host }}
+
+  kubectl get pods -l app.kubernetes.io/part-of=todos
+  helm history {{ .Release.Name }}
+{{- if .Values.alerts.enabled }}
+  Alerty: Grafana → Alerting → Alert rules → grupa todos-{{ .Release.Namespace }}
+{{- end }}

@@ -1,0 +1,24 @@
+# Wartości dla chartu podinfo 6.15.0 (oci://ghcr.io/stefanprodan/charts/podinfo): aplikacja z metrykami
+# i ServiceMonitorem, który chart tworzy sam. Prometheus znajdzie ją bez edycji jego konfiguracji.
+# helm upgrade --install pi oci://ghcr.io/stefanprodan/charts/podinfo --version 6.15.0 -f values-podinfo.yaml --wait
+replicaCount: 1
+
+ui:
+  message: "podinfo z ServiceMonitorem"
+
+serviceMonitor:
+  enabled: true             # chart dokłada ServiceMonitor: port "http" Service'u, ścieżka /metrics
+  interval: 15s             # co ile Prometheus pobiera /metrics (domyślnie w klastrze 30s)
+
+resources:                  # w namespace jest quota: bez requests/limits wchodzą wartości z LimitRange
+  requests: {cpu: 10m, memory: 32Mi}
+  limits: {cpu: 100m, memory: 64Mi}
+
+podSecurityContext:         # zgodnie z Pod Security „restricted” (dzień 4)
+  runAsNonRoot: true
+  runAsUser: 100            # użytkownik app z obrazu (uid 100)
+  seccompProfile: {type: RuntimeDefault}
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities: {drop: ["ALL"]}

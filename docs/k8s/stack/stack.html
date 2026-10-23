@@ -702,7 +702,7 @@ footer { margin-top: 56px; color: var(--muted); font-size: 14px; border-top: 1px
     4: { h: 'Po dniu 4: bezpieczeństwo', p: 'Pody nie działają jako root, nie mają tokenu do API, a ruch w namespace płynie tylko łańcuchem traefik → web → api → mongo.',
       ty: [['build', 'skan obrazów ToDos (Trivy na laptopie, skan ECR przy push)'], ['depweb', 'securityContext na poziomie restricted we wszystkich podach'], ['sa', 'ServiceAccount bez automatycznego tokenu'], ['np', 'NetworkPolicy: default-deny, łańcuch 8080 → 3001 → 27017 i reguła dla solvera cert-managera (8089)']],
       pl: [['vpccni', 'z platformy: vpc-cni z enableNetworkPolicy egzekwuje polityki']] },
-    5: { h: 'Po dniu 5: Helm i monitoring', p: 'Cały ToDos to jeden release Helm, a jego metryki i logi widzisz w Grafanie. Projekt lab20 to dopięcie i prezentacja.',
+    5: { h: 'Po dniu 5: Helm i monitoring', p: 'Cały ToDos to jeden release Helm, a jego metryki i logi widzisz w Grafanie. Na koniec: kto mógłby robić helm upgrade za Ciebie (GitOps) i jak klaster pilnuje reguł (Gatekeeper).',
       ty: [['helm', 'chart todos z values-dev.yaml i values-prod.yaml, release todos, helm rollback'], ['tls', 'ten sam host i Secret todos-tls, bez nowego certyfikatu'], ['grafana', 'w Grafanie: CPU, restarty i logi Twoich podów (lab19)']],
       pl: [['prom', 'trener: Prometheus, Loki, Tempo, Alloy i Grafana w ns monitoring']] }
   };

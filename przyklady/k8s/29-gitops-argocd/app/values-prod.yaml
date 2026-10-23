@@ -1,0 +1,8 @@
+# Prod: 2 repliki, sprawdzona wersja podinfo, granatowy. Te wartości wdraża Argo CD (application.yaml).
+# Zmiana tutaj + git push = zmiana w klastrze.
+replicaCount: 2
+image:
+  tag: "6.14.1"
+ui:
+  message: prod v1
+  color: "#1e3a5f"

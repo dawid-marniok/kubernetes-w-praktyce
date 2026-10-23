@@ -1,0 +1,966 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Observability w k8s-sages</title>
+<meta name="description" content="Dzień 5 — ściąga: mapa observability w klastrze k8s-sages (metryki, logi, trace'y), droga jednego żądania ToDos, cztery sposoby instrumentacji, zapytania PromQL/LogQL/TraceQL i ćwiczenie z OpenTelemetry Operatorem.">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@500;700;800&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Układ: jedna kolumna czytelna (~1120px), mapa klastra jako centralny, sterowany przyciskami diagram; sygnały mają stałe kolory w całej stronie */
+:root {
+  --bg: #eef1f5;
+  --surface: #ffffff;
+  --surface-2: #f6f8fb;
+  --ink: #15233b;
+  --muted: #5b6b82;
+  --line: #d3dbe6;
+  --region: #e3e9f1;
+  --m: #1d6fb8;      /* metryki */
+  --l: #b5701a;      /* logi */
+  --t: #a8326e;      /* trace'y */
+  --req: #2f7d5b;    /* ruch aplikacji */
+  --ctl: #6a5acd;    /* sterowanie: operatory */
+  --m-soft: #dceaf7;
+  --l-soft: #f5e7d2;
+  --t-soft: #f4dbe8;
+  --req-soft: #d9efe4;
+  --code-bg: #142033;
+  --code-fg: #dbe4f0;
+  --font-display: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1724; --surface: #162133; --surface-2: #1b283d; --ink: #e6edf6; --muted: #9aabc2;
+    --line: #2c3c55; --region: #1a2638;
+    --m: #5aa7ec; --l: #e0a24a; --t: #e27ab0; --req: #5cc497; --ctl: #a99cf0;
+    --m-soft: #1b3350; --l-soft: #3a2c17; --t-soft: #3d1f31; --req-soft: #183a2c;
+    --code-bg: #0b111b; --code-fg: #dbe4f0;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1724; --surface: #162133; --surface-2: #1b283d; --ink: #e6edf6; --muted: #9aabc2;
+  --line: #2c3c55; --region: #1a2638;
+  --m: #5aa7ec; --l: #e0a24a; --t: #e27ab0; --req: #5cc497; --ctl: #a99cf0;
+  --m-soft: #1b3350; --l-soft: #3a2c17; --t-soft: #3d1f31; --req-soft: #183a2c;
+  --code-bg: #0b111b; --code-fg: #dbe4f0;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 16px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+.wrap { max-width: 1120px; margin: 0 auto; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.15; margin: 0; }
+h1 { font-size: clamp(2rem, 5vw, 3.2rem); font-weight: 800; letter-spacing: -0.02em; }
+h2 { font-size: clamp(1.5rem, 3.2vw, 2.1rem); font-weight: 800; letter-spacing: -0.01em; }
+h3 { font-size: 1.15rem; font-weight: 700; }
+p { margin: 0; }
+code, pre, .mono { font-family: var(--font-mono); font-size: 0.86em; }
+:not(pre) > code { background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; padding: 0.05em 0.35em; overflow-wrap: anywhere; }
+a { color: var(--m); }
+.eyebrow { font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--m); outline-offset: 2px; }
+
+/* nagłówek */
+header.hero { padding-block: 48px 28px; display: grid; gap: 18px; }
+.hero .lead { max-width: 64ch; font-size: 1.12rem; color: var(--muted); }
+.signals { display: flex; flex-wrap: wrap; gap: 10px; }
+.sig { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 10px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); font-size: 0.92rem; }
+.sig i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.toc { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 0.92rem; }
+.toc a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--line); }
+.toc a:hover { border-color: var(--ink); }
+
+section { padding-block: 40px 8px; display: grid; gap: 18px; }
+section > .intro { max-width: 70ch; color: var(--muted); }
+
+/* diagram architektury (SVG): ramki = klaster, namespace'y, węzeł; przyciski włączają przepływ, po strzałkach płyną pakiety */
+.archbox { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; display: grid; min-width: 0; }
+.modes { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px; border-bottom: 1px solid var(--line); }
+.mode { border: 1px solid var(--line); background: var(--surface-2); padding: 6px 12px; border-radius: 6px; font-size: 0.9rem; display: inline-flex; gap: 8px; align-items: center; }
+.mode i { width: 9px; height: 9px; border-radius: 50%; }
+.mode[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.svgscroll { overflow-x: auto; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+svg.arch { display: block; width: 100%; min-width: 900px; height: auto; }
+.zone rect { fill: var(--region); stroke: var(--line); stroke-dasharray: 5 4; }
+.zone.cluster rect { fill: none; stroke: var(--muted); stroke-dasharray: none; stroke-width: 1.4; }
+.zone.aws rect { fill: none; stroke: var(--l); stroke-dasharray: 6 4; }
+.zone text { fill: var(--muted); font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.03em; }
+.zone.cluster text { fill: var(--ink); font-weight: 600; }
+.n { cursor: pointer; }
+.n:focus { outline: none; }
+.n rect { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; transition: stroke 0.2s, fill 0.2s; }
+.n.ext rect { fill: var(--surface-2); stroke-dasharray: 4 3; }
+.n.ctl rect { stroke: var(--ctl); stroke-dasharray: 5 3; }
+.n text.t { fill: var(--ink); font-family: var(--font-body); font-weight: 600; font-size: 14px; }
+.n text.s { fill: var(--muted); font-family: var(--font-mono); font-size: 11px; }
+.n text.b { font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; }
+.b-m { fill: var(--m); } .b-l { fill: var(--l); } .b-t { fill: var(--t); }
+.n:hover rect, .n:focus-visible rect { stroke: var(--ink); }
+.n.sel rect { stroke: var(--ink); stroke-width: 2.6; }
+.n.hot.req rect { stroke: var(--req); fill: var(--req-soft); }
+.n.hot.m rect { stroke: var(--m); fill: var(--m-soft); }
+.n.hot.l rect { stroke: var(--l); fill: var(--l-soft); }
+.n.hot.t rect { stroke: var(--t); fill: var(--t-soft); }
+.n.hot.ctl rect { stroke: var(--ctl); }
+.n, .e, .lbl { transition: opacity 0.2s; }
+svg.dimmed .n:not(.hot) { opacity: 0.28; }
+.e path { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.e.req path { stroke: var(--req); } .e.m path { stroke: var(--m); } .e.l path { stroke: var(--l); } .e.t path { stroke: var(--t); } .e.all path { stroke: var(--muted); }
+.e.ctl path { stroke: var(--ctl); stroke-dasharray: 4 4; }
+svg.dimmed .e:not(.on) { opacity: 0.1; }
+.e.on path { stroke-width: 2.8; }
+.mk-req path { fill: var(--req); } .mk-m path { fill: var(--m); } .mk-l path { fill: var(--l); } .mk-t path { fill: var(--t); } .mk-ctl path { fill: var(--ctl); } .mk-all path { fill: var(--muted); }
+.lbl rect { fill: var(--surface); stroke: var(--line); }
+.lbl text { fill: var(--ink); font-family: var(--font-mono); font-size: 11px; }
+svg.dimmed .lbl:not(.on) { opacity: 0.12; }
+.pk { pointer-events: none; }
+.pk.req { fill: var(--req); } .pk.m { fill: var(--m); } .pk.l { fill: var(--l); } .pk.t { fill: var(--t); } .pk.ctl { fill: var(--ctl); } .pk.all { fill: var(--muted); }
+.archfoot { display: grid; grid-template-columns: minmax(0, 1fr); }
+.panel { padding: 18px; display: grid; gap: 12px; align-content: start; min-width: 0; max-width: 90ch; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 10px 16px; font-size: 0.82rem; color: var(--muted); border-bottom: 1px solid var(--line); }
+.legend span { display: inline-flex; gap: 6px; align-items: center; }
+.legend i { width: 18px; height: 0; border-top: 2.5px solid currentColor; display: inline-block; }
+.legend i.dash { border-top-style: dashed; }
+
+/* instalacja i połączenia */
+.isteps { counter-reset: s; display: grid; gap: 12px; }
+.istep { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 6px 14px; }
+.istep::before { counter-increment: s; content: counter(s); grid-row: span 4; width: 30px; height: 30px; border-radius: 50%; background: var(--ink); color: var(--surface); font-family: var(--font-display); font-weight: 800; display: grid; place-items: center; }
+.istep > * { grid-column: 2; min-width: 0; }
+.istep p { font-size: 0.95rem; }
+.istep .why { font-size: 0.9rem; color: var(--muted); }
+.callout.warn { border-left-color: var(--l); }
+.links { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 860px) { .links { grid-template-columns: minmax(0, 1fr); } }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.link { padding: 12px 14px; display: grid; gap: 4px; font-size: 0.9rem; }
+.link .arrow { font-family: var(--font-mono); font-size: 0.8rem; color: var(--muted); }
+
+.panel .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 0.9rem; }
+.panel .kv dt { color: var(--muted); }
+.panel .kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.panel p { font-size: 0.95rem; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-family: var(--font-mono); font-size: 0.74rem; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface-2); }
+.chip.m { border-color: var(--m); color: var(--m); } .chip.l { border-color: var(--l); color: var(--l); } .chip.t { border-color: var(--t); color: var(--t); } .chip.ctl { border-color: var(--ctl); color: var(--ctl); } .chip.req { border-color: var(--req); color: var(--req); }
+
+.stepper { display: grid; gap: 12px; padding: 14px 16px; border-top: 1px solid var(--line); background: var(--surface-2); border-radius: 0 0 10px 10px; grid-column: 1 / -1; }
+.stepper[hidden] { display: none !important; }
+.step-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.step-head .count { font-family: var(--font-mono); font-size: 0.85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.step-btn { border: 1px solid var(--line); background: var(--surface); padding: 6px 14px; border-radius: 6px; }
+.step-btn:disabled { opacity: 0.4; cursor: default; }
+.dots { display: flex; gap: 5px; }
+.dots button { width: 22px; height: 6px; border-radius: 3px; border: 0; background: var(--line); padding: 0; }
+.dots button[aria-current="true"] { background: var(--ink); }
+.step-body { max-width: 80ch; }
+.step-body h3 { margin-bottom: 4px; }
+
+/* pipeline sygnałów */
+.pipes { display: grid; gap: 12px; }
+.pipe { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 14px; align-items: center; }
+@media (max-width: 640px) { .pipe { grid-template-columns: minmax(0, 1fr); } }
+.pipe .name { font-family: var(--font-display); font-weight: 800; font-size: 1.15rem; }
+.pipe .name small { display: block; font-family: var(--font-mono); font-weight: 400; font-size: 0.72rem; color: var(--muted); }
+.pipe.m .name { color: var(--m); } .pipe.l .name { color: var(--l); } .pipe.t .name { color: var(--t); }
+.chain { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 0.9rem; min-width: 0; }
+.chain span.box { border: 1px solid var(--line); background: var(--surface-2); border-radius: 6px; padding: 4px 10px; }
+.chain span.arr { color: var(--muted); font-family: var(--font-mono); }
+.pipe .note { grid-column: 1 / -1; font-size: 0.92rem; color: var(--muted); }
+@media (min-width: 641px) { .pipe .note { grid-column: 2; } }
+
+/* instrumentacja */
+.inst { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; display: grid; grid-template-columns: 260px minmax(0, 1fr); }
+@media (max-width: 820px) { .inst { grid-template-columns: minmax(0, 1fr); } }
+.inst-tabs { display: grid; align-content: start; border-right: 1px solid var(--line); }
+@media (max-width: 820px) { .inst-tabs { border-right: 0; border-bottom: 1px solid var(--line); grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.inst-tab { text-align: left; border: 0; border-bottom: 1px solid var(--line); background: transparent; padding: 14px 16px; display: grid; gap: 2px; }
+.inst-tab b { font-family: var(--font-display); font-size: 1rem; }
+.inst-tab span { font-size: 0.82rem; color: var(--muted); }
+.inst-tab[aria-selected="true"] { background: var(--surface-2); box-shadow: inset 3px 0 0 var(--t); }
+.inst-tab .ours { font-family: var(--font-mono); font-size: 0.7rem; color: var(--t); text-transform: uppercase; letter-spacing: 0.06em; }
+.inst-body { padding: 18px; display: grid; gap: 16px; min-width: 0; }
+.layers { display: grid; gap: 6px; }
+.layer { display: grid; grid-template-columns: 130px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); font-size: 0.9rem; transition: background 0.2s, border-color 0.2s; }
+@media (max-width: 520px) { .layer { grid-template-columns: minmax(0, 1fr); gap: 2px; } }
+.layer b { font-family: var(--font-display); }
+.layer .who { font-family: var(--font-mono); font-size: 0.75rem; color: var(--muted); }
+.layer.hit { background: var(--t-soft); border-color: var(--t); }
+.layer.hit .who { color: var(--t); }
+.procon { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 640px) { .procon { grid-template-columns: minmax(0, 1fr); } }
+.procon ul { margin: 6px 0 0; padding-left: 18px; font-size: 0.93rem; }
+.procon h3 { font-size: 0.95rem; }
+.callout { border-left: 3px solid var(--t); background: var(--surface-2); padding: 10px 14px; font-size: 0.93rem; border-radius: 0 6px 6px 0; }
+.callout.info { border-color: var(--m); }
+
+pre { background: var(--code-bg); color: var(--code-fg); border-radius: 8px; padding: 14px 16px; margin: 0; overflow-x: auto; line-height: 1.5; font-size: 0.82rem; }
+.codewrap { position: relative; min-width: 0; }
+.copy { position: absolute; top: 8px; right: 8px; font-size: 0.72rem; font-family: var(--font-mono); border: 1px solid #3a4a63; background: #1e2c42; color: #dbe4f0; border-radius: 4px; padding: 3px 8px; }
+.copy.ok { background: var(--req); border-color: var(--req); color: #fff; }
+
+/* waterfall */
+.wf { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; display: grid; grid-template-columns: minmax(0, 1fr) 300px; }
+@media (max-width: 900px) { .wf { grid-template-columns: minmax(0, 1fr); } }
+.wf-rows { padding: 14px; display: grid; gap: 2px; min-width: 0; border-right: 1px solid var(--line); }
+@media (max-width: 900px) { .wf-rows { border-right: 0; border-bottom: 1px solid var(--line); } }
+.wf-axis { display: grid; grid-template-columns: minmax(150px, 38%) minmax(0, 1fr); font-family: var(--font-mono); font-size: 0.7rem; color: var(--muted); padding-bottom: 6px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+.wf-axis .ticks { display: flex; justify-content: space-between; font-variant-numeric: tabular-nums; }
+.span-row { display: grid; grid-template-columns: minmax(150px, 38%) minmax(0, 1fr); align-items: center; border: 0; background: transparent; text-align: left; padding: 4px 0; border-radius: 4px; }
+.span-row:hover, .span-row[aria-pressed="true"] { background: var(--surface-2); }
+.span-name { font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.span-name .svc { font-family: var(--font-mono); font-size: 0.68rem; color: var(--muted); display: block; }
+.span-track { position: relative; height: 18px; }
+.span-bar { position: absolute; top: 3px; height: 12px; border-radius: 3px; }
+.span-bar.traefik { background: var(--req); } .span-bar.api { background: var(--t); } .span-bar.db { background: var(--ctl); }
+.span-dur { position: absolute; top: 0; font-family: var(--font-mono); font-size: 0.68rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.wf-side { padding: 16px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.attrs { display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); gap: 3px 10px; font-family: var(--font-mono); font-size: 0.75rem; }
+.attrs dt { color: var(--muted); overflow-wrap: anywhere; }
+.attrs dd { margin: 0; overflow-wrap: anywhere; }
+
+/* zapytania */
+.login-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; }
+.login-row label { font-weight: 600; }
+.login-row input { font: inherit; font-family: var(--font-mono); padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); width: 14ch; }
+.login-row small { color: var(--muted); }
+.qgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 980px) { .qgrid { grid-template-columns: minmax(0, 1fr); } }
+.qcol { display: grid; gap: 10px; align-content: start; min-width: 0; }
+.qcol h3 { display: flex; align-items: baseline; gap: 8px; }
+.qcol h3 small { font-family: var(--font-mono); font-weight: 400; font-size: 0.72rem; color: var(--muted); }
+.qcol.m h3 { color: var(--m); } .qcol.l h3 { color: var(--l); } .qcol.t h3 { color: var(--t); }
+.q { display: grid; gap: 4px; min-width: 0; }
+.q p { font-size: 0.86rem; color: var(--muted); }
+.q pre { font-size: 0.76rem; white-space: pre-wrap; word-break: break-word; padding-right: 64px; }
+
+/* lab */
+.steps { counter-reset: s; display: grid; gap: 14px; }
+.lstep { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 4px 14px; }
+.lstep::before { counter-increment: s; content: counter(s); grid-row: span 3; width: 30px; height: 30px; border-radius: 50%; background: var(--t); color: #fff; font-family: var(--font-display); font-weight: 800; display: grid; place-items: center; }
+.lstep > * { grid-column: 2; min-width: 0; }
+.lstep p { font-size: 0.95rem; margin-bottom: 6px; }
+table.trouble { width: 100%; border-collapse: collapse; font-size: 0.92rem; background: var(--surface); }
+table.trouble th, table.trouble td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.trouble th { font-family: var(--font-mono); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+
+dl.gloss { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin: 0; }
+dl.gloss div { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+dl.gloss dt { font-family: var(--font-mono); font-weight: 600; font-size: 0.88rem; }
+dl.gloss dd { margin: 4px 0 0; font-size: 0.9rem; color: var(--muted); }
+footer { padding-top: 40px; color: var(--muted); font-size: 0.85rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="hero">
+  <div class="eyebrow">Kubernetes w praktyce · dzień 5 · temat 3</div>
+  <h1>Observability w&nbsp;k8s-sages</h1>
+  <p class="lead">Skąd Grafana wie, co dzieje się w Twoim ToDos. Mapa klastra, droga jednego żądania i trzy sygnały: metryki mówią, że coś jest nie tak, logi mówią co, a trace'y mówią gdzie.</p>
+  <div class="signals" aria-label="Kolory sygnałów">
+    <span class="sig"><i style="background:var(--m)"></i>Metryki · Prometheus</span>
+    <span class="sig"><i style="background:var(--l)"></i>Logi · Loki</span>
+    <span class="sig"><i style="background:var(--t)"></i>Trace'y · Tempo</span>
+    <span class="sig"><i style="background:var(--req)"></i>Ruch aplikacji</span>
+    <span class="sig"><i style="background:var(--ctl)"></i>Operatory (sterowanie)</span>
+  </div>
+  <nav class="toc" aria-label="Spis treści">
+    <a href="#mapa">Architektura</a>
+    <a href="#sygnaly">Trzy sygnały</a>
+    <a href="#instrumentacja">Skąd biorą się spany</a>
+    <a href="#trace">Jak wygląda trace</a>
+    <a href="#zapytania">Zapytania</a>
+    <a href="#lab">Włącz trace'y w ToDos</a>
+    <a href="#instalacja">Jak postawiliśmy stos</a>
+    <a href="#slowniczek">Słowniczek</a>
+  </nav>
+</header>
+
+<section id="mapa">
+  <div class="eyebrow">1 · Architektura</div>
+  <h2>Co gdzie stoi i kto komu wysyła dane</h2>
+  <p class="intro">Stos observability działa w jednym namespace <code>monitoring</code>, wspólnym dla całej grupy; agenci zbierający logi i metryki węzłów działają na każdym węźle. Ty dokładasz obiekty tylko u siebie. Wybierz przepływ, żeby zobaczyć, którędy płyną dane, albo kliknij komponent. „Jedno żądanie” prowadzi krok po kroku przez dodanie zadania w ToDos.</p>
+  <div class="archbox">
+    <div class="modes" role="group" aria-label="Który przepływ pokazać">
+      <button class="mode" data-mode="all" aria-pressed="true">Wszystko</button>
+      <button class="mode" data-mode="req" aria-pressed="false"><i style="background:var(--req)"></i>Ruch aplikacji</button>
+      <button class="mode" data-mode="m" aria-pressed="false"><i style="background:var(--m)"></i>Metryki</button>
+      <button class="mode" data-mode="l" aria-pressed="false"><i style="background:var(--l)"></i>Logi</button>
+      <button class="mode" data-mode="t" aria-pressed="false"><i style="background:var(--t)"></i>Trace'y</button>
+      <button class="mode" data-mode="ctl" aria-pressed="false"><i style="background:var(--ctl)"></i>Operatory</button>
+      <button class="mode" data-mode="walk" aria-pressed="false"><i style="background:var(--ink)"></i>Jedno żądanie krok po kroku</button>
+    </div>
+    <div class="legend">
+      <span style="color:var(--req)"><i></i>ruch aplikacji</span>
+      <span style="color:var(--m)"><i></i>metryki</span>
+      <span style="color:var(--l)"><i></i>logi</span>
+      <span style="color:var(--t)"><i></i>trace'y</span>
+      <span style="color:var(--ctl)"><i class="dash"></i>operator konfiguruje</span>
+      <span>strzałka = kierunek, w którym płyną dane</span>
+    </div>
+    <div class="svgscroll">
+      <svg class="arch" id="map" viewBox="0 0 1250 600" role="img" aria-label="Architektura: przeglądarka, Traefik, Twój namespace z web, api i mongo, agenci na węźle oraz namespace monitoring z Tempo, Loki, Prometheusem, Alertmanagerem, Grafaną i operatorami"></svg>
+    </div>
+    <div class="archfoot">
+      <aside class="panel" id="panel" aria-live="polite"></aside>
+      <div class="stepper" id="stepper" hidden>
+        <div class="step-head">
+          <button class="step-btn" id="prev">← Wstecz</button>
+          <button class="step-btn" id="next">Dalej →</button>
+          <span class="count" id="count"></span>
+          <div class="dots" id="dots"></div>
+        </div>
+        <div class="step-body" id="stepbody"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="sygnaly">
+  <div class="eyebrow">2 · Sygnały</div>
+  <h2>Trzy sygnały, trzy różne drogi</h2>
+  <p class="intro">Każdy sygnał ma własnego agenta, własny magazyn i własny język zapytań. Łączą je wspólne etykiety (<code>namespace</code>, <code>pod</code>) i identyfikator <code>trace_id</code>.</p>
+  <div class="pipes">
+    <div class="pipe m">
+      <div class="name">Metryki<small>model pull</small></div>
+      <div class="chain"><span class="box">kubelet / cAdvisor, kube-state-metrics, <code>/metrics</code> aplikacji</span><span class="arr">←</span><span class="box">Prometheus pobiera co 30 s</span><span class="arr">→</span><span class="box">PromQL w Grafanie</span></div>
+      <p class="note">Prometheus sam odpytuje cele. Listę celów buduje Prometheus Operator z obiektów <code>ServiceMonitor</code> i <code>PodMonitor</code>. ToDos nie ma endpointu <code>/metrics</code>, więc dla niego masz metryki kontenera (CPU, pamięć, restarty), a po włączeniu trace'ów także span-metrics wyliczane przez Tempo.</p>
+    </div>
+    <div class="pipe l">
+      <div class="name">Logi<small>stdout → agent na węźle</small></div>
+      <div class="chain"><span class="box">stdout / stderr kontenera</span><span class="arr">→</span><span class="box">/var/log/pods na węźle</span><span class="arr">→</span><span class="box">Alloy (DaemonSet)</span><span class="arr">→</span><span class="box">Loki</span><span class="arr">→</span><span class="box">LogQL</span></div>
+      <p class="note">Aplikacja nie wie o Loki. Pisze na standardowe wyjście, a Alloy na każdym węźle czyta pliki logów i dokleja etykiety <code>namespace</code>, <code>pod</code>, <code>container</code>, <code>app</code>, <code>node</code>. Dlatego widzisz logi poda, którego już nie ma.</p>
+    </div>
+    <div class="pipe t">
+      <div class="name">Trace'y<small>model push, OTLP</small></div>
+      <div class="chain"><span class="box">SDK OpenTelemetry w procesie</span><span class="arr">→</span><span class="box">OTLP/HTTP :4318</span><span class="arr">→</span><span class="box">Tempo</span><span class="arr">→</span><span class="box">TraceQL</span></div>
+      <p class="note">Spany powstają wewnątrz procesu aplikacji, więc ktoś musi tam wstawić SDK. Kolejne serwisy łączą się w jeden trace dzięki nagłówkowi HTTP <code>traceparent</code>. Jak wstawić SDK, pokazuje następna sekcja.</p>
+    </div>
+  </div>
+</section>
+
+<section id="instrumentacja">
+  <div class="eyebrow">3 · Instrumentacja</div>
+  <h2>Skąd biorą się spany: cztery sposoby</h2>
+  <p class="intro">Każdy sposób kończy się tak samo: span w formacie OTLP trafia do Tempo. Różnią się tym, gdzie span powstaje i kto musi coś zmienić. Wybierz sposób, a schemat pokaże, którą warstwę ruszasz.</p>
+  <div class="inst">
+    <div class="inst-tabs" role="tablist" aria-label="Sposoby instrumentacji" id="instTabs"></div>
+    <div class="inst-body" id="instBody" role="tabpanel"></div>
+  </div>
+  <p class="callout info">W praktyce sposoby się łączy. Auto-instrumentacja (2 albo 3) daje szkielet: HTTP, bazy, kolejki. W kilku ważnych miejscach programista dopisuje ręczne spany biznesowe (1). Ręczny span z <code>@opentelemetry/api</code> podpina się pod SDK wstrzyknięte przez operatora.</p>
+</section>
+
+<section id="trace">
+  <div class="eyebrow">4 · Trace</div>
+  <h2>Tak wygląda jedno dodanie zadania w Tempo</h2>
+  <p class="intro">Przykład po włączeniu operatora i tracingu w Traefiku. Nazwy spanów i czasy u Ciebie będą trochę inne. Kliknij span, żeby zobaczyć jego atrybuty.</p>
+  <div class="wf">
+    <div class="wf-rows" id="wfRows"></div>
+    <aside class="wf-side" id="wfSide"></aside>
+  </div>
+</section>
+
+<section id="zapytania">
+  <div class="eyebrow">5 · Zapytania</div>
+  <h2>Ściąga do Explore w Grafanie</h2>
+  <p class="intro">Wpisz swój login (to nazwa Twojego namespace). Wszystkie zapytania podstawią go same. Adres Grafany i hasło dostajesz od prowadzącego.</p>
+  <div class="login-row">
+    <label for="login">Twój login</label>
+    <input id="login" type="text" autocomplete="off" spellcheck="false" placeholder="np. adamd">
+    <small>zapamiętany tylko w tej przeglądarce</small>
+  </div>
+  <div class="qgrid" id="queries"></div>
+</section>
+
+<section id="lab">
+  <div class="eyebrow">6 · Ćwiczenie</div>
+  <h2>Włącz trace'y w swoim ToDos</h2>
+  <p class="intro">Prowadzący zainstalował OpenTelemetry Operator i obiekt <code>Instrumentation</code> o nazwie <code>otel</code> w <code>monitoring</code>. Ty dopisujesz jedną adnotację do Deploymentu <code>api</code>. Kodu i obrazu nie zmieniasz. To krok 6 w lab19, gotowy patch jest w <code>labs/lab19-observability/otel-patch.yaml</code>.</p>
+  <div class="steps" id="labSteps"></div>
+  <h3>Gdy nie ma trace'ów</h3>
+  <div class="tablewrap">
+    <table class="trouble">
+      <thead><tr><th>Objaw</th><th>Przyczyna</th><th>Co zrobić</th></tr></thead>
+      <tbody>
+        <tr><td>Pod nie ma init containera <code>opentelemetry-auto-instrumentation-nodejs</code></td><td>Adnotacja trafiła do <code>metadata</code> Deploymentu, a musi być w <code>spec.template.metadata</code>. Albo pod powstał przed adnotacją.</td><td>Popraw miejsce adnotacji. Zmiana szablonu sama robi rollout; w razie wątpliwości <code>kubectl rollout restart deployment api</code>.</td></tr>
+        <tr><td>Pod <code>api</code> restartuje się z <code>OOMKilled</code></td><td>SDK zajmuje dodatkowe 50–100 Mi, a limit wynosi 256Mi.</td><td>Podnieś <code>limits.memory</code> do 384Mi.</td></tr>
+        <tr><td>W Tempo setki trace'ów <code>GET /api/health</code></td><td>Sonda readiness odpytuje API co 5 s, a każde żądanie to trace.</td><td>Filtruj w TraceQL po <code>name</code> albo patrz na <code>POST</code>, <code>PATCH</code>, <code>DELETE</code>.</td></tr>
+        <tr><td>Trace zaczyna się dopiero w <code>api</code></td><td>Traefik nie ma włączonego tracingu, a przeglądarka nie wysyła nagłówka <code>traceparent</code>.</td><td>To normalne. Z tracingiem w Traefiku trace zaczyna się na wejściu do klastra.</td></tr>
+        <tr><td>Przycisk „Logs for this span” nic nie znajduje</td><td>ToDos loguje przez <code>console.log</code>, więc w liniach logu nie ma <code>trace_id</code>.</td><td>Zobacz zadanie dla chętnych w kroku 5.</td></tr>
+        <tr><td>Brak spanów, w logach <code>api</code> błędy eksportu</td><td>Ruch z Twojego namespace do <code>tempo.monitoring:4318</code> jest zablokowany.</td><td>Masz politykę egress z ToDos dnia 4? <code>kubectl apply -f otel-egress.yaml</code> z lab19 dopuszcza ruch do namespace <code>monitoring</code>, port 4318.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="instalacja">
+  <div class="eyebrow">7 · Instalacja</div>
+  <h2>Jak postawiliśmy ten stos</h2>
+  <p class="intro">Pięć chartów Helm, każdy z własnym plikiem wartości, w tej kolejności. U siebie (kind, własny klaster) zrobisz to samo; zmieniasz tylko klasę dysku i sposób wystawienia Grafany.</p>
+  <div class="isteps">
+    <div class="istep">
+      <h3>Repozytoria chartów</h3>
+      <div class="codewrap"><pre>helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo add grafana             https://grafana.github.io/helm-charts
+helm repo add grafana-community   https://grafana-community.github.io/helm-charts
+helm repo add open-telemetry      https://open-telemetry.github.io/opentelemetry-helm-charts
+helm repo update</pre><button class="copy">kopiuj</button></div>
+      <p class="why">Loki i Tempo są teraz w repo <code>grafana-community</code>; stare charty z <code>grafana/</code> nie są rozwijane.</p>
+    </div>
+    <div class="istep">
+      <h3>kube-prometheus-stack: Prometheus, Alertmanager, Grafana, operator</h3>
+      <div class="codewrap"><pre>helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+  --version 92.10.1 -n monitoring --create-namespace -f kube-prometheus-stack.yaml --wait</pre><button class="copy">kopiuj</button></div>
+      <p>W wartościach: retencja 7 dni, PVC na Prometheusa, hasło admina z Secretu, źródła danych Loki i Tempo dopisane do Grafany i połączone ze sobą (sekcja 3).</p>
+      <p class="why">Selektory ServiceMonitorów są puste, więc Prometheus bierze obiekty ze wszystkich namespace'ów, nie tylko z etykietą <code>release</code>. Dzięki temu Twój ServiceMonitor zadziała bez dodatkowych etykiet.</p>
+    </div>
+    <div class="istep">
+      <h3>Loki, Tempo, Alloy</h3>
+      <div class="codewrap"><pre>helm upgrade --install loki  grafana-community/loki  --version 18.17.1 -n monitoring -f loki.yaml  --wait
+helm upgrade --install tempo grafana-community/tempo --version 3.2.0   -n monitoring -f tempo.yaml --wait
+helm upgrade --install alloy grafana/alloy           --version 1.13.1  -n monitoring -f alloy.yaml --wait</pre><button class="copy">kopiuj</button></div>
+      <p>Loki w trybie single binary (jedna replika, dysk lokalny), Tempo z metrics generatorem (<code>service-graphs</code>, <code>span-metrics</code>, remote write do Prometheusa), Alloy jako DaemonSet z pipeline'em: format CRI → <code>| json</code> → etykieta <code>level</code> + <code>trace_id</code>.</p>
+      <p class="why">Tryb single binary wystarcza do kilkudziesięciu GB logów dziennie. Produkcyjnie Loki w trybie rozproszonym z S3 jako magazynem.</p>
+    </div>
+    <div class="istep">
+      <h3>OpenTelemetry Operator i obiekt Instrumentation</h3>
+      <div class="codewrap"><pre>helm upgrade --install opentelemetry-operator open-telemetry/opentelemetry-operator \
+  --version 0.124.1 -n monitoring -f opentelemetry-operator.yaml --wait
+kubectl apply -f instrumentation.yaml        # Instrumentation "otel" → http://tempo.monitoring.svc:4318</pre><button class="copy">kopiuj</button></div>
+      <p>Wymaga cert-managera: webhook operatora potrzebuje certyfikatu TLS.</p>
+      <p class="why">Webhook dla podów ma <code>failurePolicy: Ignore</code>. Gdy operator nie działa, pody i tak wstają, tylko bez SDK. Przy <code>Fail</code> awaria operatora zablokowałaby tworzenie każdego poda w klastrze.</p>
+    </div>
+    <div class="istep">
+      <h3>Grafana dla grupy: Ingress z TLS i konta</h3>
+      <div class="codewrap"><pre>kubectl apply -f grafana-ingress.yaml        # host grafana.k8s.marniok.dev, ingressClass traefik, cert-manager
+./grafana-kursanci.sh --edycja 2026-10-20 --loginy adamd,adamg,…   # konta z rolą Editor przez API Grafany</pre><button class="copy">kopiuj</button></div>
+      <p class="why">Rola Editor: Explore, własne dashboardy i alerty, bez zmian w źródłach danych i użytkownikach. Widzisz dane całego klastra, więc filtruj po swoim namespace.</p>
+    </div>
+  </div>
+  <div class="callout warn"><b>Instalacja w trakcie zajęć.</b> Stos stawialiśmy, gdy grupa robiła laby. Dwa ryzyka: limit pobrań z Docker Hub (wszystkie węzły wychodzą przez jeden NAT, a Grafana, Loki, Tempo i Alloy to obrazy z docker.io) oraz webhook OTel Operatora na wszystkie pody. W trakcie obserwowaliśmy <code>kubectl get events -A -w | grep -iE 'pull|429'</code>; błędów 429 nie było.</div>
+</section>
+
+<section id="polaczenia">
+  <div class="eyebrow">8 · Połączenia</div>
+  <h2>Jak sygnały są ze sobą połączone</h2>
+  <p class="intro">Sam zestaw trzech baz to jeszcze nie observability. Wartość jest w przejściach: z metryki do trace'a, z trace'a do logu i z logu do trace'a. Każde przejście to jedno ustawienie w źródłach danych Grafany.</p>
+  <div class="links">
+    <div class="card link"><b>Log → trace</b><span class="arrow">Loki · derivedFields</span><p>Pole <code>trace_id</code> w linii logu (structured metadata z Alloy) staje się linkiem do Tempo. Warunek: aplikacja loguje <code>trace_id</code>.</p></div>
+    <div class="card link"><b>Trace → logi</b><span class="arrow">Tempo · tracesToLogsV2</span><p>Przycisk „Logs for this span” szuka w Loki logów z etykietą <code>app</code> = <code>service.name</code> spana i z tym <code>trace_id</code>, ±5 min.</p></div>
+    <div class="card link"><b>Metryka → trace</b><span class="arrow">Prometheus · exemplary</span><p>Kropki na wykresie latencji z <code>trace_id</code> przykładowego żądania. Wymaga aplikacji, która wystawia exemplary.</p></div>
+  </div>
+  <div class="callout">Mapa usług (Service Graph) i span-metrics nie wymagają nic w aplikacji: liczy je Tempo z samych spanów i wysyła do Prometheusa jako <code>traces_service_graph_*</code> i <code>traces_spanmetrics_*</code>.</div>
+</section>
+
+<section id="slowniczek">
+  <div class="eyebrow">9 · Słowniczek</div>
+  <h2>Pojęcia, które padną w Grafanie</h2>
+  <dl class="gloss">
+    <div><dt>trace</dt><dd>Historia jednego żądania przez wszystkie serwisy: drzewo spanów z jednym <code>trace_id</code>.</dd></div>
+    <div><dt>span</dt><dd>Jeden krok w trace: wywołanie HTTP, zapytanie do bazy, funkcja. Ma początek, czas trwania, atrybuty i rodzica.</dd></div>
+    <div><dt>traceparent</dt><dd>Nagłówek HTTP (W3C Trace Context) z <code>trace_id</code> i id spana rodzica. Serwis, który go nie przekaże, przerywa trace.</dd></div>
+    <div><dt>OTLP</dt><dd>Protokół OpenTelemetry dla metryk, logów i trace'ów. Port 4317 to gRPC, 4318 to HTTP.</dd></div>
+    <div><dt>scrape</dt><dd>Pobranie metryk przez Prometheusa z adresu <code>/metrics</code> celu. Domyślnie co 30 s.</dd></div>
+    <div><dt>ServiceMonitor</dt><dd>Obiekt CRD Prometheus Operatora: „zbieraj metryki z Service'ów o tych etykietach, z tego portu”.</dd></div>
+    <div><dt>kardynalność</dt><dd>Liczba różnych kombinacji etykiet. <code>user_id</code> albo <code>trace_id</code> jako etykieta tworzy miliony serii i zabija Prometheusa i Loki.</dd></div>
+    <div><dt>span-metrics</dt><dd>Metryki wyliczane przez Tempo z napływających spanów: liczba żądań, czasy, błędy. Metryki RED bez <code>/metrics</code> w aplikacji.</dd></div>
+    <div><dt>mutating webhook</dt><dd>Mechanizm API Kubernetesa, którym operator zmienia obiekt przed zapisem. Tak OpenTelemetry Operator dokłada init container i zmienne do Twojego poda.</dd></div>
+  </dl>
+</section>
+
+<footer>Klaster szkoleniowy k8s-sages (EKS, eu-central-1). Stos: kube-prometheus-stack, Loki, Tempo, Grafana Alloy, OpenTelemetry Operator, wszystko w namespace <code>monitoring</code>.</footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var LOGIN_PH = "<login>";
+  var login = "";
+  try { login = localStorage.getItem("obs-login") || ""; } catch (e) {}
+
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+  function L(s) { return s.split(LOGIN_PH).join(login || LOGIN_PH); }
+  function codeBlock(code) {
+    return '<div class="codewrap"><button class="copy" type="button">kopiuj</button><pre>' + esc(code) + '</pre></div>';
+  }
+  document.addEventListener("click", function (ev) {
+    var b = ev.target.closest(".copy");
+    if (!b) return;
+    var pre = b.parentNode.querySelector("pre");
+    var txt = pre.textContent;
+    function done() { b.textContent = "skopiowane"; b.classList.add("ok"); setTimeout(function () { b.textContent = "kopiuj"; b.classList.remove("ok"); }, 1400); }
+    function fallback() { var r = document.createRange(); r.selectNodeContents(pre); var s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+    try { navigator.clipboard.writeText(txt).then(done, fallback); } catch (e) { fallback(); }
+  });
+
+  /* ---------- silnik diagramu: ramki, węzły, krawędzie z podpisami, pakiety ---------- */
+  function Diagram(svg, D, onPick) {
+    var NSV = "http://www.w3.org/2000/svg";
+    function sv(tag, a, p) { var e = document.createElementNS(NSV, tag); for (var k in a) e.setAttribute(k, a[k]); if (p) p.appendChild(e); return e; }
+    var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var defs = sv("defs", {}, svg);
+    ["req", "m", "l", "t", "ctl", "all"].forEach(function (c) {
+      var mk = sv("marker", { id: D.idp + "mk-" + c, viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse", "class": "mk-" + c }, defs);
+      sv("path", { d: "M0,0 L10,5 L0,10 z" }, mk);
+    });
+    var gZ = sv("g", {}, svg), gE = sv("g", {}, svg), gP = sv("g", {}, svg), gN = sv("g", {}, svg), gL = sv("g", {}, svg);
+    D.zones.forEach(function (z) {
+      var g = sv("g", { "class": "zone " + (z.c || "") }, gZ);
+      sv("rect", { x: z.x, y: z.y, width: z.w, height: z.h, rx: 12 }, g);
+      var t = sv("text", { x: z.x + 12, y: z.ly ? z.ly : z.y + 17 }, g); t.textContent = z.label;
+    });
+    var E = {}, LB = {}, N = {};
+    D.edges.forEach(function (e) {
+      var c0 = e.c.split(" ")[0];
+      var d = "M" + e.p.map(function (p) { return p[0] + "," + p[1]; }).join(" L");
+      var g = sv("g", { "class": "e " + e.c }, gE);
+      var path = sv("path", { d: d, "marker-end": "url(#" + D.idp + "mk-" + c0 + ")" }, g);
+      var tt = sv("title", {}, g); tt.textContent = e.title || e.lb || "";
+      E[e.id] = { g: g, d: d, c0: c0, path: path };
+      if (e.lb) {
+        var lg = sv("g", { "class": "lbl" }, gL), w = e.lb.length * 6.7 + 14;
+        sv("rect", { x: e.lx - w / 2, y: e.ly - 9, width: w, height: 18, rx: 9 }, lg);
+        var tx = sv("text", { x: e.lx, y: e.ly + 4, "text-anchor": "middle" }, lg); tx.textContent = e.lb;
+        LB[e.id] = lg;
+      }
+    });
+    Object.keys(D.geo).forEach(function (id) {
+      var o = D.geo[id], info = D.info(id);
+      var g = sv("g", { "class": "n " + (o.c || ""), tabindex: "0", role: "button", "aria-label": info.t }, gN);
+      sv("rect", { x: o.x, y: o.y, width: o.w, height: o.h, rx: 8 }, g);
+      var cx = o.x + o.w / 2, cy = o.y + o.h / 2 - (o.b ? 5 : 0);
+      var t1 = sv("text", { x: cx, y: cy - 2, "text-anchor": "middle", "class": "t" }, g); t1.textContent = o.t || info.t;
+      var t2 = sv("text", { x: cx, y: cy + 14, "text-anchor": "middle", "class": "s" }, g); t2.textContent = o.s || info.s;
+      if (o.b) {
+        var tb = sv("text", { x: cx, y: o.y + o.h - 8, "text-anchor": "middle", "class": "b" }, g);
+        o.b.forEach(function (k, i) { var ts = sv("tspan", { "class": "b-" + k, dx: i ? 6 : 0 }, tb); ts.textContent = k.toUpperCase(); });
+      }
+      g.addEventListener("click", function () { onPick(id); });
+      g.addEventListener("keydown", function (ev) { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); onPick(id); } });
+      N[id] = g;
+    });
+    function set(hotNodes, hotEdges) {
+      svg.classList.toggle("dimmed", hotNodes !== null);
+      Object.keys(N).forEach(function (id) {
+        var g = N[id];
+        g.classList.remove("hot", "req", "m", "l", "t", "ctl");
+        if (hotNodes && hotNodes[id]) { g.classList.add("hot"); hotNodes[id].split(" ").forEach(function (c) { if (c) g.classList.add(c); }); }
+      });
+      Object.keys(E).forEach(function (id) {
+        var on = !!(hotEdges && hotEdges[id]);
+        E[id].g.classList.toggle("on", on);
+        if (LB[id]) LB[id].classList.toggle("on", on || hotNodes === null);
+      });
+    }
+    function flow(ids) {
+      while (gP.firstChild) gP.removeChild(gP.firstChild);
+      if (reduce || !ids) return;
+      ids.forEach(function (id, i) {
+        var e = E[id]; if (!e) return;
+        var len = e.path.getTotalLength ? e.path.getTotalLength() : 200;
+        var dur = Math.max(1.1, len / 150), n = len > 260 ? 2 : 1;
+        for (var k = 0; k < n; k++) {
+          var c = sv("circle", { r: 4.5, "class": "pk " + e.c0 }, gP);
+          sv("animateMotion", { dur: dur.toFixed(2) + "s", repeatCount: "indefinite", path: e.d, begin: (k * dur / n + i * 0.12).toFixed(2) + "s" }, c);
+        }
+      });
+    }
+    function select(id) { Object.keys(N).forEach(function (k) { N[k].classList.toggle("sel", k === id); }); }
+    return { set: set, flow: flow, select: select };
+  }
+  /* ---------- ARCHITEKTURA ---------- */
+  var nodes = {
+    browser: { x: 30, y: 58, w: 140, h: 52, t: "Przeglądarka", s: "użytkownik ToDos", sig: "req",
+      what: "Ty albo ktoś z grupy otwiera todos-<login>.k8s.marniok.dev. Frontend React wysyła żądania /api/... do tego samego hosta.",
+      ns: "poza klastrem", objs: [], who: "-" },
+    traefik: { x: 211, y: 58, w: 120, h: 52, t: "Traefik", s: "Ingress", sig: "req",
+      what: "Kontroler Ingress. Kończy TLS i kieruje ruch do Service web. Z włączonym tracingiem tworzy pierwszy span i dopisuje nagłówek traceparent.",
+      ns: "traefik", objs: ["Deployment traefik", "Ingress todos (u Ciebie)"], who: "prowadzący (instalacja), Ty (Ingress)" },
+    web: { x: 388, y: 58, w: 110, h: 52, t: "web", s: "nginx + React", sig: "req",
+      what: "Serwuje pliki frontendu, a /api/ przekazuje do api:3001. Nie tworzy spanów, ale nginx przekazuje dalej wszystkie nagłówki żądania, w tym traceparent, więc trace się nie urywa.",
+      ns: "<login>", objs: ["Deployment web", "Service web"], who: "Ty", q: { lang: "LogQL", code: '{namespace="<login>", container="web"}' } },
+    api: { x: 524, y: 58, w: 110, h: 52, t: "api", s: "Express + mongoose", sig: "t",
+      what: "Backend ToDos (Node.js). Po dopisaniu adnotacji operator wstrzykuje do poda SDK OpenTelemetry. Wtedy każde żądanie HTTP i każde zapytanie do Mongo staje się spanem.",
+      ns: "<login>", objs: ["Deployment api (app=todos-api)", "Service api", "adnotacja instrumentation.opentelemetry.io/inject-nodejs"], who: "Ty",
+      q: { lang: "TraceQL", code: '{resource.service.name="todos-api-<login>"}' } },
+    mongo: { x: 652, y: 58, w: 106, h: 52, t: "mongo", s: "StatefulSet", sig: "req",
+      what: "Baza ToDos. Sama nie wysyła spanów; span zapytania tworzy sterownik MongoDB po stronie api. Loguje w formacie JSON, więc w Loki działa parser | json.",
+      ns: "<login>", objs: ["StatefulSet mongo", "PVC na gp3", "Secret mongodb-secret"], who: "Ty",
+      q: { lang: "LogQL", code: '{namespace="<login>", container="mongo"} | json' } },
+    kubelet: { x: 30, y: 216, w: 160, h: 52, t: "kubelet / cAdvisor", s: "na każdym węźle", sig: "m",
+      what: "Agent Kubernetesa na węźle. Wbudowany cAdvisor mierzy CPU, pamięć i sieć każdego kontenera. To z niego masz wykres CPU swoich podów, choć ToDos nie ma /metrics.",
+      ns: "węzeł (nie pod)", objs: [], who: "EKS",
+      q: { lang: "PromQL", code: 'sum by (pod) (rate(container_cpu_usage_seconds_total{namespace="<login>", container!=""}[5m]))' } },
+    nodeexp: { x: 206, y: 216, w: 140, h: 52, t: "node-exporter", s: "DaemonSet", sig: "m",
+      what: "Metryki całego węzła: CPU, pamięć, dysk, sieć. Przydatne do pytania „czy węzeł się dusi”, nie do pojedynczej aplikacji.",
+      ns: "monitoring (pody na każdym węźle)", objs: ["DaemonSet"], who: "prowadzący" },
+    varlog: { x: 364, y: 216, w: 160, h: 52, t: "/var/log/pods", s: "pliki na dysku węzła", sig: "l",
+      what: "containerd zapisuje tu stdout i stderr każdego kontenera, plik na kontener. To samo czyta kubectl logs. Po usunięciu poda pliki znikają, ale Alloy zdążył je już wysłać.",
+      ns: "węzeł", objs: [], who: "containerd" },
+    alloy: { x: 542, y: 216, w: 130, h: 52, t: "Grafana Alloy", s: "DaemonSet", sig: "l",
+      what: "Agent logów na każdym węźle (następca Promtaila). Czyta pliki z /var/log/pods, dokleja etykiety namespace, pod, container, app, node. Z logów w JSON wyciąga level jako etykietę, a trace_id jako structured metadata.",
+      ns: "monitoring", objs: ["DaemonSet alloy", "ConfigMap z konfiguracją"], who: "prowadzący" },
+    promop: { x: 32, y: 372, w: 170, h: 52, t: "Prometheus Operator", s: "operator", sig: "ctl",
+      what: "Czyta obiekty ServiceMonitor, PodMonitor i PrometheusRule ze wszystkich namespace'ów i generuje z nich konfigurację Prometheusa. Twoja reguła alertu z lab19 trafia do Prometheusa tą drogą, bez restartu.",
+      ns: "monitoring", objs: ["CRD: ServiceMonitor, PodMonitor, PrometheusRule"], who: "prowadzący (operator), Ty (obiekty w swoim ns)" },
+    prom: { x: 236, y: 372, w: 140, h: 52, t: "Prometheus", s: "metryki, alerty", sig: "m",
+      what: "Baza szeregów czasowych. Co 30 s pobiera metryki z celów (model pull), liczy reguły alertów i przyjmuje span-metrics od Tempo przez remote write.",
+      ns: "monitoring", objs: ["StatefulSet prometheus", "PVC na gp3"], who: "prowadzący",
+      q: { lang: "PromQL", code: 'increase(kube_pod_container_status_restarts_total{namespace="<login>"}[1h]) > 0' } },
+    am: { x: 410, y: 372, w: 140, h: 52, t: "Alertmanager", s: "powiadomienia", sig: "m",
+      what: "Dostaje od Prometheusa alerty w stanie Firing, grupuje je, wycisza i wysyła dalej (mail, Slack, PagerDuty). Na szkoleniu bez odbiorców: alerty oglądasz w Grafanie.",
+      ns: "monitoring", objs: ["StatefulSet alertmanager"], who: "prowadzący" },
+    ksm: { x: 584, y: 372, w: 170, h: 52, t: "kube-state-metrics", s: "stan obiektów K8s", sig: "m",
+      what: "Zamienia stan obiektów API na metryki: liczba replik, restarty kontenerów, fazy podów, stan Jobów. Stąd alert o podzie w CrashLoopBackOff.",
+      ns: "monitoring", objs: ["Deployment"], who: "prowadzący",
+      q: { lang: "PromQL", code: 'kube_deployment_status_replicas_available{namespace="<login>"}' } },
+    otelop: { x: 32, y: 500, w: 170, h: 52, t: "OpenTelemetry Operator", s: "operator, webhook", sig: "ctl",
+      what: "Pilnuje obiektów Instrumentation. Gdy tworzony jest pod z adnotacją inject-nodejs, mutating webhook dokłada init container z SDK, wolumen emptyDir i zmienne NODE_OPTIONS i OTEL_*.",
+      ns: "monitoring", objs: ["CRD Instrumentation (otel w monitoring)", "MutatingWebhookConfiguration"], who: "prowadzący" },
+    tempo: { x: 236, y: 500, w: 140, h: 52, t: "Tempo", s: "trace'y", sig: "t",
+      what: "Magazyn trace'ów. Przyjmuje OTLP na porcie 4317 (gRPC) i 4318 (HTTP). Metrics generator liczy ze spanów service graph i span-metrics i wysyła je do Prometheusa.",
+      ns: "monitoring", objs: ["StatefulSet tempo", "Service tempo :4317 :4318", "PVC na gp3"], who: "prowadzący",
+      q: { lang: "TraceQL", code: '{resource.service.name="todos-api-<login>" && status=error}' } },
+    loki: { x: 410, y: 500, w: 140, h: 52, t: "Loki", s: "logi", sig: "l",
+      what: "Magazyn logów. Indeksuje tylko etykiety, nie treść, dlatego jest tani. Treść przeszukujesz filtrem |= albo parserem | json.",
+      ns: "monitoring", objs: ["StatefulSet loki", "loki-gateway"], who: "prowadzący",
+      q: { lang: "LogQL", code: '{namespace="<login>"} |= "error"' } },
+    grafana: { x: 816, y: 440, w: 150, h: 70, t: "Grafana", s: "UI, Explore, alerty", sig: "all",
+      what: "Jeden interfejs do trzech źródeł danych: Prometheus, Loki, Tempo. Źródła są ze sobą połączone: z trace'a przejdziesz do logów, a z linii logu z trace_id do trace'a.",
+      ns: "monitoring", objs: ["Deployment grafana", "Ingress (Traefik + TLS)"], who: "prowadzący; Ty masz konto z rolą Editor" },
+    you: { x: 816, y: 230, w: 150, h: 52, t: "Ty w Grafanie", s: "przeglądarka", sig: "all",
+      what: "Logujesz się na adres od prowadzącego. Rola Editor pozwala używać Explore, tworzyć dashboardy i oglądać alerty. Widzisz dane całego klastra, więc filtruj po swoim namespace.",
+      ns: "poza klastrem", objs: [], who: "Ty" }
+  };
+  var walk = [
+    { h: "Dodajesz zadanie w przeglądarce", n: { browser: "req", traefik: "req" }, e: ["e-br-tr"],
+      p: "Klikasz „Dodaj” na todos-<login>.k8s.marniok.dev. React wysyła POST /api/todos. Traefik kończy TLS i dopasowuje regułę z Twojego Ingressu. Jeśli prowadzący włączył tracing w Traefiku, tu powstaje pierwszy span: Traefik nadaje trace_id i dopisuje nagłówek traceparent." },
+    { h: "nginx w web przekazuje żądanie do api", n: { traefik: "req", web: "req", api: "req" }, e: ["e-tr-web", "e-web-api"],
+      p: "Pod web dostaje żądanie, a reguła location /api/ przekazuje je do Service api na port 3001. nginx nie tworzy spana, ale przepuszcza nagłówki, więc traceparent dociera do api i trace się nie urywa." },
+    { h: "SDK w api tworzy span serwera", n: { api: "t", otelop: "ctl" }, e: ["e-oo-api"],
+      p: "W podzie api działa SDK OpenTelemetry, wstrzyknięte przy starcie poda przez operator (NODE_OPTIONS=--require …). SDK czyta traceparent i tworzy span „POST /api/todos” jako dziecko spana Traefika. Bez nagłówka zaczyna nowy trace." },
+    { h: "Zapis do Mongo to osobny span", n: { api: "t", mongo: "req" }, e: ["e-api-mongo"],
+      p: "mongoose wywołuje sterownik MongoDB. Auto-instrumentacja zamienia to wywołanie w span-dziecko z atrybutami db.system=mongodb, nazwą kolekcji i operacją. W Tempo zobaczysz, ile z całego czasu zajęła baza." },
+    { h: "Spany lecą do Tempo", n: { api: "t", tempo: "t", traefik: "t" }, e: ["e-api-tempo", "e-tr-tempo"],
+      p: "SDK nie wysyła każdego spana osobno. Zbiera je w kolejce i co kilka sekund wysyła paczką przez OTLP/HTTP na tempo.monitoring.svc:4318. Traefik wysyła swoje spany niezależnie. Tempo skleja je w jeden trace po trace_id." },
+    { h: "Ten sam request zostawia logi", n: { api: "l", web: "l", varlog: "l", alloy: "l", loki: "l" }, e: ["e-api-log", "e-web-log", "e-log-alloy", "e-alloy-loki"],
+      p: "nginx zapisuje linię access logu, api ewentualnie console.log. Oba trafiają na stdout, containerd zapisuje je w /var/log/pods, a Alloy na tym węźle wysyła je do Loki z etykietami namespace=<login>, pod, app. ToDos loguje przez console.log, więc w tych liniach nie ma trace_id." },
+    { h: "Metryki zbierają się niezależnie od żądania", n: { kubelet: "m", ksm: "m", prom: "m", tempo: "m", promop: "ctl" }, e: ["e-kub-prom", "e-ksm-prom2", "e-tempo-prom", "e-po-prom"],
+      p: "Prometheus co 30 s pobiera z kubeleta CPU i pamięć kontenera api, a z kube-state-metrics liczbę restartów i replik. Tempo z każdego spana dolicza span-metrics (liczba żądań, czas, błędy) i wysyła je do Prometheusa. Tak dostajesz wykres żądań na sekundę, choć api nie ma /metrics." },
+    { h: "Wszystko spotyka się w Grafanie", n: { you: "req", grafana: "req", prom: "m", loki: "l", tempo: "t" }, e: ["e-you-gr", "e-prom-gr", "e-loki-gr", "e-tempo-gr"],
+      p: "W Explore wybierasz źródło: Tempo pokaże trace z kroków 1–5, Loki logi z kroku 6, Prometheus wykresy z kroku 7. Łączą je wspólne etykiety (namespace, pod) i trace_id. Z trace'a przejdziesz do metryk i logów tego samego poda." }
+  ];
+  var VERS = {
+    traefik: "Traefik v3.7.14 (chart 41.7.1)", tempo: "Tempo 3.1.0 · chart tempo 3.2.0 · retencja 48 h · PVC 5 Gi",
+    loki: "Loki 3.7.8 · chart loki 18.17.1 · retencja 7 dni · PVC 10 Gi", prom: "Prometheus v3.15.0 · retencja 7 dni / 8 GB · PVC 10 Gi",
+    am: "Alertmanager v0.34.1", ksm: "kube-state-metrics v2.20.0", nodeexp: "node-exporter v1.12.1",
+    alloy: "Alloy v1.20.1 · chart alloy 1.13.1", grafana: "Grafana 13.2.4 · grafana.k8s.marniok.dev",
+    promop: "Prometheus Operator v0.94.1 · chart kube-prometheus-stack 92.10.1", otelop: "OpenTelemetry Operator 0.160.0 · chart 0.124.1"
+  };
+  var DOBS = {
+    idp: "obs-",
+    info: function (id) { return nodes[id]; },
+    zones: [
+      { x: 155, y: 8, w: 950, h: 584, c: "cluster", label: "Klaster EKS k8s-sages", ly: 584 },
+      { x: 170, y: 42, w: 130, h: 118, label: "ns traefik" },
+      { x: 315, y: 42, w: 420, h: 118, label: "ns <login> (Twój)" },
+      { x: 170, y: 214, w: 565, h: 118, label: "każdy węzeł (×3): kubelet i DaemonSety" },
+      { x: 755, y: 42, w: 335, h: 534, label: "ns monitoring · wspólny dla grupy", ly: 568 }
+    ],
+    geo: {
+      browser: { x: 15, y: 75, w: 125, h: 56, c: "ext", s: "todos-<login>" },
+      traefik: { x: 185, y: 75, w: 100, h: 56 },
+      web: { x: 330, y: 75, w: 105, h: 56 },
+      api: { x: 465, y: 75, w: 125, h: 56 },
+      mongo: { x: 620, y: 75, w: 105, h: 56 },
+      kubelet: { x: 185, y: 248, w: 140, h: 56 },
+      nodeexp: { x: 340, y: 248, w: 115, h: 56 },
+      varlog: { x: 470, y: 248, w: 125, h: 56 },
+      alloy: { x: 620, y: 248, w: 105, h: 56, t: "Alloy" },
+      tempo: { x: 775, y: 75, w: 130, h: 56 },
+      otelop: { x: 940, y: 75, w: 140, h: 56, t: "OTel Operator" },
+      loki: { x: 775, y: 248, w: 130, h: 56 },
+      grafana: { x: 940, y: 235, w: 140, h: 82 },
+      prom: { x: 775, y: 400, w: 130, h: 56 },
+      ksm: { x: 940, y: 400, w: 140, h: 56 },
+      am: { x: 775, y: 500, w: 130, h: 56 },
+      promop: { x: 940, y: 500, w: 140, h: 56, t: "Prom. Operator" },
+      you: { x: 1115, y: 248, w: 125, h: 56, c: "ext" }
+    },
+    edges: [
+      { id: "e-br-tr", c: "req", p: [[140, 103], [185, 103]], title: "HTTPS" },
+      { id: "e-tr-web", c: "req", p: [[285, 103], [330, 103]], title: "Ingress → Service web" },
+      { id: "e-web-api", c: "req", p: [[435, 103], [465, 103]], title: "/api → api:3001" },
+      { id: "e-api-mongo", c: "req", p: [[590, 103], [620, 103]], title: "mongodb:27017" },
+      { id: "e-web-log", c: "l", p: [[382, 131], [382, 192], [500, 192], [500, 248]], lb: "stdout", lx: 432, ly: 192 },
+      { id: "e-api-log", c: "l", p: [[527, 131], [527, 248]], title: "stdout" },
+      { id: "e-mongo-log", c: "l", p: [[672, 131], [672, 192], [560, 192], [560, 248]], title: "stdout" },
+      { id: "e-log-alloy", c: "l", p: [[595, 276], [620, 276]], title: "Alloy czyta pliki" },
+      { id: "e-alloy-loki", c: "l", p: [[725, 276], [775, 276]], lb: "push", lx: 744, ly: 262 },
+      { id: "e-api-tempo", c: "t", p: [[560, 75], [560, 30], [840, 30], [840, 75]], lb: "OTLP :4318", lx: 700, ly: 30 },
+      { id: "e-tr-tempo", c: "t", p: [[270, 75], [270, 30], [840, 30], [840, 75]], lb: "opcja", lx: 315, ly: 30 },
+      { id: "e-oo-api", c: "ctl", p: [[1010, 75], [1010, 18], [505, 18], [505, 75]], lb: "wstrzykuje SDK", lx: 935, ly: 18 },
+      { id: "e-tempo-gr", c: "t", p: [[870, 131], [870, 200], [925, 200], [925, 255], [940, 255]], lb: "TraceQL", lx: 897, ly: 200 },
+      { id: "e-loki-gr", c: "l", p: [[905, 290], [940, 290]], title: "LogQL" },
+      { id: "e-tempo-prom", c: "t", p: [[775, 115], [765, 115], [765, 380], [800, 380], [800, 400]], lb: "span-metrics", lx: 765, ly: 345 },
+      { id: "e-kub-prom", c: "m", p: [[255, 304], [255, 440], [775, 440]], lb: "scrape co 30 s", lx: 520, ly: 440 },
+      { id: "e-ne-prom", c: "m", p: [[397, 304], [397, 440], [775, 440]], title: "scrape" },
+      { id: "e-ksm-prom2", c: "m", p: [[940, 428], [905, 428]], title: "scrape" },
+      { id: "e-prom-gr", c: "m", p: [[905, 412], [922, 412], [922, 336], [1010, 336], [1010, 317]], lb: "PromQL", lx: 966, ly: 336 },
+      { id: "e-prom-am", c: "m", p: [[840, 456], [840, 500]], lb: "alerty", lx: 840, ly: 478 },
+      { id: "e-po-prom", c: "ctl", p: [[940, 528], [925, 528], [925, 450], [905, 450]], lb: "konfiguruje", lx: 925, ly: 489 },
+      { id: "e-you-gr", c: "all", p: [[1115, 276], [1080, 276]], title: "HTTPS (Ingress)" }
+    ]
+  };
+  var MODES = {
+    req: { h: "Ruch aplikacji", p: "Zwykłe żądanie ToDos: przeglądarka → Traefik (Ingress, TLS) → web (nginx) → api → mongo. Na tej drodze powstają wszystkie sygnały: api i Traefik tworzą spany, kontenery piszą logi na stdout, a kubelet mierzy CPU i pamięć podów.",
+      n: { browser: "req", traefik: "req", web: "req", api: "req", mongo: "req" }, e: ["e-br-tr", "e-tr-web", "e-web-api", "e-api-mongo"] },
+    m: { h: "Metryki: Prometheus pobiera", p: "Prometheus co 30 s sam odpytuje cele: kubelet (CPU i pamięć kontenerów), node-exporter (węzły), kube-state-metrics (stan obiektów). Listę celów składa Prometheus Operator z obiektów ServiceMonitor. Tempo dosyła span-metrics. Alerty liczy Prometheus, rozsyła Alertmanager, a wykresy rysuje Grafana.",
+      n: { kubelet: "m", nodeexp: "m", ksm: "m", prom: "m", am: "m", tempo: "m", grafana: "m", you: "m", promop: "ctl" }, e: ["e-kub-prom", "e-ne-prom", "e-ksm-prom2", "e-tempo-prom", "e-prom-am", "e-prom-gr", "e-po-prom", "e-you-gr"] },
+    l: { h: "Logi: stdout → węzeł → Loki", p: "Kontenery piszą na stdout. containerd zapisuje to w /var/log/pods na węźle, Alloy (jeden pod na węzeł) czyta pliki i wysyła je do Loki z etykietami namespace, pod, app. Aplikacja nie musi nic wiedzieć o Loki.",
+      n: { web: "l", api: "l", mongo: "l", varlog: "l", alloy: "l", loki: "l", grafana: "l", you: "l" }, e: ["e-web-log", "e-api-log", "e-mongo-log", "e-log-alloy", "e-alloy-loki", "e-loki-gr", "e-you-gr"] },
+    t: { h: "Trace'y: aplikacja wysyła sama", p: "Spany powstają w procesie api dzięki SDK, które wstrzyknął OpenTelemetry Operator. SDK wysyła je przez OTLP prosto do Tempo, bez agenta pośrodku. Opcjonalnie Traefik też wysyła swój span. Tempo liczy ze spanów service graph i span-metrics.",
+      n: { traefik: "t", api: "t", tempo: "t", grafana: "t", you: "t", otelop: "ctl", prom: "m" }, e: ["e-api-tempo", "e-tr-tempo", "e-oo-api", "e-tempo-gr", "e-tempo-prom", "e-you-gr"] },
+    ctl: { h: "Operatory: konfigurują, nie przesyłają danych", p: "Prometheus Operator czyta ServiceMonitor, PodMonitor i PrometheusRule z każdego namespace'u i generuje konfigurację Prometheusa. OpenTelemetry Operator przez mutating webhook dokłada SDK do poda api przy jego tworzeniu. Dane przez nie nie płyną.",
+      n: { promop: "ctl", otelop: "ctl", prom: "m", api: "t" }, e: ["e-po-prom", "e-oo-api"] }
+  };
+  var allIntro = { h: "Cały stos naraz", p: "Ramki to miejsca: klaster, namespace'y i węzeł. Kolor strzałki to sygnał, a strzałka pokazuje, w którą stronę płyną dane. Przerywana fioletowa linia to operator, który coś konfiguruje albo wstrzykuje. Wybierz przepływ u góry, żeby zobaczyć tylko jego drogę z płynącymi pakietami." };
+
+  var panel = document.getElementById("panel");
+  var mode = "all";
+  var DG = Diagram(document.getElementById("map"), DOBS, function (id) { selectNode(id); });
+  function renderPanelIntro() {
+    var m = mode === "all" ? allIntro : MODES[mode];
+    panel.innerHTML = '<div class="eyebrow">' + (mode === "all" ? "legenda" : "przepływ") + '</div><h3>' + esc(m.h) + '</h3><p>' + esc(L(m.p)) + '</p><p style="color:var(--muted);font-size:.88rem">Kliknij komponent na diagramie, żeby zobaczyć szczegóły.</p>';
+  }
+  function renderPanelNode(id) {
+    var o = nodes[id];
+    var objs = o.objs.length ? '<div class="chips">' + o.objs.map(function (x) { return '<span class="chip">' + esc(L(x)) + '</span>'; }).join("") + '</div>' : '<span style="color:var(--muted)">-</span>';
+    var q = o.q ? '<div class="eyebrow">' + esc(o.q.lang) + '</div>' + codeBlock(L(o.q.code)) : "";
+    panel.innerHTML = '<div class="eyebrow">' + esc(L(o.ns)) + '</div><h3>' + esc(o.t) + '</h3><p>' + esc(L(o.what)) + '</p>' +
+      '<dl class="kv"><dt>Obiekty</dt><dd>' + objs + '</dd><dt>Kto stawia</dt><dd>' + esc(o.who) + '</dd>' +
+      (VERS[id] ? '<dt>Wersja</dt><dd class="mono">' + esc(VERS[id]) + '</dd>' : '') + '</dl>' + q;
+  }
+  function showMode() {
+    if (mode === "all") { DG.set(null, null); DG.flow(null); return; }
+    var m = MODES[mode], he = {};
+    m.e.forEach(function (id) { he[id] = 1; });
+    DG.set(m.n, he); DG.flow(m.e);
+  }
+  function selectNode(id) {
+    if (mode === "walk") setMode("all");
+    DG.select(id);
+    renderPanelNode(id);
+  }
+
+  var wi = 0;
+  var stepper = document.getElementById("stepper"), body = document.getElementById("stepbody"), dots = document.getElementById("dots");
+  walk.forEach(function (_, i) {
+    var b = document.createElement("button"); b.type = "button"; b.setAttribute("aria-label", "Krok " + (i + 1));
+    b.addEventListener("click", function () { wi = i; renderWalk(); }); dots.appendChild(b);
+  });
+  function renderWalk() {
+    var s = walk[wi], he = {};
+    s.e.forEach(function (id) { he[id] = 1; });
+    DG.set(s.n, he); DG.flow(s.e);
+    body.innerHTML = '<h3>' + esc(s.h) + '</h3><p>' + esc(L(s.p)) + '</p>';
+    document.getElementById("count").textContent = (wi + 1) + " / " + walk.length;
+    document.getElementById("prev").disabled = wi === 0;
+    document.getElementById("next").disabled = wi === walk.length - 1;
+    Array.prototype.forEach.call(dots.children, function (d, i) { d.setAttribute("aria-current", i === wi ? "true" : "false"); });
+    panel.innerHTML = '<div class="eyebrow">krok ' + (wi + 1) + ' z ' + walk.length + '</div><p>Podświetlone komponenty biorą udział w tym kroku, a pakiety płyną po strzałkach, którymi idą dane.</p>';
+  }
+  document.getElementById("prev").addEventListener("click", function () { if (wi > 0) { wi--; renderWalk(); } });
+  document.getElementById("next").addEventListener("click", function () { if (wi < walk.length - 1) { wi++; renderWalk(); } });
+
+  function setMode(m) {
+    mode = m;
+    document.querySelectorAll(".mode").forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.mode === m ? "true" : "false"); });
+    DG.select(null);
+    stepper.hidden = m !== "walk";
+    if (m === "walk") { wi = 0; renderWalk(); return; }
+    showMode(); renderPanelIntro();
+  }
+  document.querySelectorAll(".mode").forEach(function (b) { b.addEventListener("click", function () { setMode(b.dataset.mode); }); });
+  setMode("all");
+
+
+
+  /* ---------- INSTRUMENTACJA ---------- */
+  var layersDef = [["kod", "Kod aplikacji", "programista"], ["obraz", "Obraz kontenera", "build / CI"], ["pod", "Specyfikacja poda", "admin klastra + zespół"], ["wezel", "Węzeł (jądro Linuksa)", "admin klastra"]];
+  var inst = [
+    { id: "reczna", t: "1. Ręcznie w kodzie", s: "SDK + własne spany", hit: ["kod", "obraz"], ours: "demo i example-app",
+      d: "Dodajesz bibliotekę OpenTelemetry do projektu i sam tworzysz spany tam, gdzie chcesz mierzyć. Tak zrobiona jest Kantyna z dema prowadzącego i example-app z lab19.",
+      plus: ["Pełna kontrola: nazwy biznesowe (todo.create, a nie GET /api/x)", "Własne atrybuty, np. długość tytułu, id klienta", "trace_id w logach, bo sam go tam wpisujesz"],
+      minus: ["Zmiana kodu w każdym serwisie i każdym języku", "Potrzebny programista i nowe wydanie", "Łatwo coś pominąć"],
+      code: 'const { trace } = require("@opentelemetry/api");\nconst tracer = trace.getTracer("todos-api");\n\nrouter.post("/", async (req, res) => {\n  await tracer.startActiveSpan("todo.create", async (span) => {\n    span.setAttribute("todo.title_length", req.body.title?.length ?? 0);\n    const todo = await new Todo(req.body).save();\n    span.end();\n    res.status(201).send(todo);\n  });\n});' },
+    { id: "obraz", t: "2. Auto-instrumentacja w obrazie", s: "zero-code, przy buildzie", hit: ["obraz"], ours: "",
+      d: "Kodu nie ruszasz. Do obrazu dochodzi paczka z agentem, a aplikacja startuje przez opakowanie. Agent w locie podmienia popularne biblioteki (http, express, mongodb, pg, redis) i każde ich wywołanie staje się spanem. Python: opentelemetry-instrument python app.py, Java: -javaagent:opentelemetry-javaagent.jar.",
+      plus: ["Szybko i bez zmian w kodzie", "Od razu dużo spanów: HTTP, bazy, kolejki", "Wersję SDK kontroluje zespół aplikacji"],
+      minus: ["Trzeba przebudować i wydać obraz", "Tylko nazwy techniczne", "Widać tylko to, co przechodzi przez znane biblioteki"],
+      code: '# Dockerfile todos-api\nRUN npm install @opentelemetry/auto-instrumentations-node @opentelemetry/api\nENV NODE_OPTIONS="--require @opentelemetry/auto-instrumentations-node/register"\nENV OTEL_SERVICE_NAME=todos-api\nENV OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo.monitoring.svc:4318' },
+    { id: "operator", t: "3. OpenTelemetry Operator", s: "wstrzyknięcie w klastrze", hit: ["pod"], ours: "ToDos na szkoleniu",
+      d: "Ten sam agent co w sposobie 2, tylko wstawia go Kubernetes. Prowadzący tworzy obiekt Instrumentation (endpoint Tempo, sampler, propagatory). Ty dopisujesz adnotację do szablonu poda. Przy tworzeniu poda mutating webhook operatora dokłada init container, który kopiuje SDK do wolumenu emptyDir, montuje go w Twoim kontenerze i ustawia NODE_OPTIONS oraz zmienne OTEL_*. Obsługuje Javę, Node.js, Pythona, .NET i Go (Go przez eBPF).",
+      plus: ["Bez zmian w kodzie i bez przebudowy obrazu", "Konfiguracja w jednym miejscu dla całego klastra", "Włączasz i wyłączasz jedną adnotacją"],
+      minus: ["Nazwy techniczne, jak w sposobie 2", "Webhook to dodatkowa zależność przy starcie poda", "Wersję SDK wybiera operator", "Pod potrzebuje ok. 50–100 Mi więcej pamięci", "Działa dopiero po utworzeniu nowego poda"],
+      code: '# prowadzący, raz dla klastra\napiVersion: opentelemetry.io/v1alpha1\nkind: Instrumentation\nmetadata: {name: otel, namespace: monitoring}\nspec:\n  exporter:\n    endpoint: http://tempo.monitoring.svc:4318\n  propagators: [tracecontext, baggage]\n  sampler: {type: parentbased_traceidratio, argument: "1"}\n  nodejs:\n    env:\n      - {name: OTEL_EXPORTER_OTLP_PROTOCOL, value: http/protobuf}\n---\n# Ty, w Deploymencie api\nspec:\n  template:\n    metadata:\n      annotations:\n        instrumentation.opentelemetry.io/inject-nodejs: "monitoring/otel"' },
+    { id: "ebpf", t: "4. eBPF", s: "bez dotykania aplikacji", hit: ["wezel"], ours: "",
+      d: "DaemonSet (Grafana Beyla, OpenTelemetry eBPF Instrumentation) podgląda ruch sieciowy procesów na poziomie jądra Linuksa: HTTP, gRPC, SQL. Aplikacja, obraz i pod zostają bez zmian.",
+      plus: ["Zero zmian w aplikacji, obrazie i podzie", "Działa dla każdego języka, także Rust i C++", "Szybki przegląd całego klastra"],
+      minus: ["Spany płytkie: wejście i wyjście z procesu", "Słabsza propagacja kontekstu między serwisami", "Wymaga uprawnień uprzywilejowanych na węźle"],
+      code: '# fragment DaemonSetu agenta eBPF\nspec:\n  template:\n    spec:\n      hostPID: true\n      containers:\n        - name: beyla\n          securityContext: {privileged: true}\n          env:\n            - {name: OTEL_EXPORTER_OTLP_ENDPOINT, value: http://tempo.monitoring.svc:4318}' }
+  ];
+  var tabs = document.getElementById("instTabs"), ibody = document.getElementById("instBody");
+  function renderInst(i) {
+    var x = inst[i];
+    Array.prototype.forEach.call(tabs.children, function (b, k) { b.setAttribute("aria-selected", k === i ? "true" : "false"); b.tabIndex = k === i ? 0 : -1; });
+    var layers = layersDef.map(function (l) {
+      var hit = x.hit.indexOf(l[0]) >= 0;
+      return '<div class="layer' + (hit ? " hit" : "") + '"><b>' + esc(l[1]) + '</b><span>' + (hit ? "tu powstaje zmiana" : "bez zmian") + '</span><span class="who">' + esc(l[2]) + '</span></div>';
+    }).join("");
+    ibody.innerHTML = '<h3>' + esc(x.t) + '</h3><p>' + esc(x.d) + '</p><div class="layers" aria-label="Warstwy">' + layers + '</div>' +
+      '<div class="procon"><div><h3>Plusy</h3><ul>' + x.plus.map(function (s) { return "<li>" + esc(s) + "</li>"; }).join("") + '</ul></div><div><h3>Minusy</h3><ul>' + x.minus.map(function (s) { return "<li>" + esc(s) + "</li>"; }).join("") + '</ul></div></div>' +
+      codeBlock(x.code) + (x.ours ? '<p class="callout">Na szkoleniu: ' + esc(x.ours) + '.</p>' : "");
+  }
+  inst.forEach(function (x, i) {
+    var b = document.createElement("button"); b.type = "button"; b.className = "inst-tab"; b.setAttribute("role", "tab");
+    b.innerHTML = (x.ours ? '<span class="ours">' + esc(x.ours) + '</span>' : "") + '<b>' + esc(x.t) + '</b><span>' + esc(x.s) + '</span>';
+    b.addEventListener("click", function () { renderInst(i); });
+    b.addEventListener("keydown", function (ev) {
+      if (ev.key === "ArrowDown" || ev.key === "ArrowRight") { ev.preventDefault(); var n = (i + 1) % inst.length; renderInst(n); tabs.children[n].focus(); }
+      if (ev.key === "ArrowUp" || ev.key === "ArrowLeft") { ev.preventDefault(); var p = (i - 1 + inst.length) % inst.length; renderInst(p); tabs.children[p].focus(); }
+    });
+    tabs.appendChild(b);
+  });
+  renderInst(2);
+
+  /* ---------- WATERFALL ---------- */
+  var TOTAL = 32;
+  var spans = [
+    { n: "EntryPoint websecure", svc: "traefik", c: "traefik", s: 0, d: 31.4, depth: 0,
+      a: { "span.kind": "server", "http.request.method": "POST", "url.path": "/api/todos", "server.address": "todos-<login>.k8s.marniok.dev", "http.response.status_code": "201" } },
+    { n: "Router <login>-todos", svc: "traefik", c: "traefik", s: 0.6, d: 30.5, depth: 1,
+      a: { "span.kind": "internal", "traefik.router.name": "<login>-todos-…@kubernetes" } },
+    { n: "Service web", svc: "traefik", c: "traefik", s: 1.0, d: 29.8, depth: 2,
+      a: { "span.kind": "client", "server.address": "web.<login>.svc", "uwaga": "nginx nie tworzy spana, tylko przekazuje traceparent" } },
+    { n: "POST /api/todos", svc: "todos-api-<login>", c: "api", s: 3.2, d: 26.1, depth: 3,
+      a: { "span.kind": "server", "http.route": "/api/todos", "http.response.status_code": "201", "k8s.namespace.name": "<login>", "k8s.pod.name": "api-7c9f…-x2kqp", "k8s.deployment.name": "api", "telemetry.auto.version": "(z operatora)" } },
+    { n: "middleware - jsonParser", svc: "todos-api-<login>", c: "api", s: 3.6, d: 0.9, depth: 4,
+      a: { "span.kind": "internal", "express.type": "middleware", "express.name": "jsonParser" } },
+    { n: "request handler - /api/todos", svc: "todos-api-<login>", c: "api", s: 4.7, d: 24.1, depth: 4,
+      a: { "span.kind": "internal", "express.type": "request_handler", "http.route": "/api/todos" } },
+    { n: "mongoose.Todo.save", svc: "todos-api-<login>", c: "db", s: 5.4, d: 21.8, depth: 5,
+      a: { "span.kind": "client", "db.system": "mongoose", "db.mongodb.collection": "todos", "db.operation": "save" } },
+    { n: "mongodb.insert", svc: "todos-api-<login>", c: "db", s: 6.1, d: 19.9, depth: 6,
+      a: { "span.kind": "client", "db.system": "mongodb", "db.name": "todos", "db.mongodb.collection": "todos", "server.address": "mongo", "server.port": "27017" } }
+  ];
+  var wfRows = document.getElementById("wfRows"), wfSide = document.getElementById("wfSide");
+  function renderWf() {
+    var axis = '<div class="wf-axis"><span>span · serwis</span><span class="ticks"><span>0 ms</span><span>8</span><span>16</span><span>24</span><span>32 ms</span></span></div>';
+    wfRows.innerHTML = axis + spans.map(function (sp, i) {
+      var left = sp.s / TOTAL * 100, w = Math.max(sp.d / TOTAL * 100, 0.6);
+      var durLeft = left + w > 82 ? 'right:' + (100 - left + 1) + '%' : 'left:' + (left + w + 1) + '%';
+      return '<button type="button" class="span-row" data-i="' + i + '" aria-pressed="false">' +
+        '<span class="span-name" style="padding-left:' + (sp.depth * 10) + 'px">' + esc(L(sp.n)) + '<span class="svc">' + esc(L(sp.svc)) + '</span></span>' +
+        '<span class="span-track"><span class="span-bar ' + sp.c + '" style="left:' + left + '%;width:' + w + '%"></span><span class="span-dur" style="' + durLeft + '">' + sp.d.toFixed(1) + ' ms</span></span></button>';
+    }).join("");
+    wfRows.querySelectorAll(".span-row").forEach(function (b) { b.addEventListener("click", function () { selSpan(+b.dataset.i); }); });
+  }
+  function selSpan(i) {
+    var sp = spans[i];
+    wfRows.querySelectorAll(".span-row").forEach(function (b) { b.setAttribute("aria-pressed", +b.dataset.i === i ? "true" : "false"); });
+    var share = Math.round(sp.d / spans[0].d * 100);
+    wfSide.innerHTML = '<div class="eyebrow">' + esc(L(sp.svc)) + '</div><h3>' + esc(L(sp.n)) + '</h3>' +
+      '<p style="font-size:.9rem">' + sp.d.toFixed(1) + ' ms, czyli ' + share + '% całego żądania.</p>' +
+      '<dl class="attrs">' + Object.keys(sp.a).map(function (k) { return '<dt>' + esc(k) + '</dt><dd>' + esc(L(sp.a[k])) + '</dd>'; }).join("") + '</dl>' +
+      (sp.c === "db" ? '<p class="callout" style="font-size:.86rem">Ponad połowa czasu to baza. To typowe pytanie, na które odpowiada trace: który krok zjada czas.</p>' : "");
+  }
+  renderWf(); selSpan(7);
+
+  /* ---------- ZAPYTANIA ---------- */
+  var Q = [
+    { cls: "m", h: "PromQL", src: "Prometheus", items: [
+      ["CPU Twoich podów (rdzenie)", 'sum by (pod) (rate(container_cpu_usage_seconds_total{namespace="<login>", container!=""}[5m]))'],
+      ["Pamięć Twoich podów", 'sum by (pod) (container_memory_working_set_bytes{namespace="<login>", container!=""})'],
+      ["Restarty w ostatniej godzinie", 'increase(kube_pod_container_status_restarts_total{namespace="<login>"}[1h]) > 0'],
+      ["Żądania na sekundę do api (z trace'ów)", 'sum by (span_name) (rate(traces_spanmetrics_calls_total{service="todos-api-<login>", span_kind="SPAN_KIND_SERVER"}[5m]))'],
+      ["Czas odpowiedzi api, 95. percentyl", 'histogram_quantile(0.95, sum by (le) (rate(traces_spanmetrics_latency_bucket{service="todos-api-<login>", span_kind="SPAN_KIND_SERVER"}[5m])))']
+    ] },
+    { cls: "l", h: "LogQL", src: "Loki", items: [
+      ["Wszystkie logi api", '{namespace="<login>", container="api"}'],
+      ["Linie z błędem w całym namespace", '{namespace="<login>"} |= "error"'],
+      ["Logi Mongo (JSON) tylko z treścią komunikatu", '{namespace="<login>", container="mongo"} | json | line_format "{{.msg}}"'],
+      ["Access log nginx: tylko żądania do API", '{namespace="<login>", container="web"} |= "/api/"'],
+      ["Ile linii z błędem na minutę, per pod", 'sum by (pod) (count_over_time({namespace="<login>"} |= "error" [1m]))']
+    ] },
+    { cls: "t", h: "TraceQL", src: "Tempo", items: [
+      ["Wszystkie trace'y Twojego api", '{resource.service.name="todos-api-<login>"}'],
+      ["Bez szumu sond readiness", '{resource.service.name="todos-api-<login>" && kind=server && name!="GET /api/health"}'],
+      ["Wolne żądania (ponad 50 ms)", '{resource.service.name="todos-api-<login>" && kind=server && duration > 50ms}'],
+      ["Żądania zakończone błędem", '{resource.service.name="todos-api-<login>" && status=error}'],
+      ["Żądania, które dotknęły bazy", '{resource.service.name="todos-api-<login>" && kind=server} >> {span.db.system="mongodb"}']
+    ] }
+  ];
+  var qEl = document.getElementById("queries");
+  function renderQ() {
+    qEl.innerHTML = Q.map(function (c) {
+      return '<div class="qcol ' + c.cls + '"><h3>' + c.h + ' <small>źródło: ' + c.src + '</small></h3>' +
+        c.items.map(function (it) { return '<div class="q"><p>' + esc(it[0]) + '</p>' + codeBlock(L(it[1])) + '</div>'; }).join("") + '</div>';
+    }).join("");
+  }
+
+  /* ---------- LAB ---------- */
+  var labEl = document.getElementById("labSteps");
+  function renderLab() {
+    var steps = [
+      ["Dopisz adnotację i nazwę serwisu", "W lab19 robisz to plikiem otel-patch.yaml i kubectl patch. Te same pola przenieś potem do swojego api.yaml: adnotację w szablonie poda i zmienną OTEL_SERVICE_NAME. Wszyscy mają Deployment o nazwie api, więc bez własnej nazwy Twoje trace'y zmieszałyby się z cudzymi. Przy okazji podnieś limit pamięci.",
+        'spec:\n  template:\n    metadata:\n      annotations:\n        instrumentation.opentelemetry.io/inject-nodejs: "monitoring/otel"\n    spec:\n      containers:\n        - name: api\n          env:\n            - name: OTEL_SERVICE_NAME\n              value: todos-api-<login>\n          resources:\n            limits: {cpu: 300m, memory: 384Mi}'],
+      ["Wdróż i poczekaj na nowe pody", "Zmiana szablonu sama uruchamia rollout. Stare pody nie dostaną SDK, nowe tak.",
+        'kubectl patch deployment api --patch-file my-otel-patch.yaml   # albo: kubectl apply -f api.yaml\nkubectl rollout status deployment api'],
+      ["Sprawdź, co operator zmienił w podzie", "Webhook dołożył init container, wolumen i zmienne. Tego nie ma w Twoim YAML-u.",
+        "kubectl get pod -l app=todos-api -o jsonpath='{.items[0].spec.initContainers[*].name}{\"\\n\"}'\n# opentelemetry-auto-instrumentation-nodejs\n\nkubectl get pod -l app=todos-api -o yaml | grep -A1 -E 'NODE_OPTIONS|OTEL_EXPORTER_OTLP_ENDPOINT|OTEL_SERVICE_NAME'"],
+      ["Wygeneruj ruch i znajdź trace", "Dodaj, odhacz i usuń kilka zadań w ToDos. Po kilkunastu sekundach: Grafana → Explore → Tempo → TraceQL. Otwórz trace POST /api/todos i znajdź span mongodb.",
+        '{resource.service.name="todos-api-<login>" && kind=server && name!="GET /api/health"}'],
+      ["Dla chętnych: połącz logi z trace'ami", "Dlaczego „Logs for this span” nic nie znajduje? Auto-instrumentacja dopisuje trace_id i span_id do logów, ale tylko gdy aplikacja loguje przez pino albo winston w formacie JSON. Alloy wyciąga wtedy trace_id, a Grafana zrobi z niego link do trace'a. Co musiałbyś zmienić w kodzie api? Porównaj z example-app z lab19.",
+        '{namespace="<login>", app="example-app"} | json | trace_id != ""']
+    ];
+    labEl.innerHTML = steps.map(function (s) { return '<div class="lstep"><h3>' + esc(s[0]) + '</h3><p>' + esc(L(s[1])) + '</p>' + codeBlock(L(s[2])) + '</div>'; }).join("");
+  }
+
+  /* ---------- LOGIN ---------- */
+  var inp = document.getElementById("login");
+  inp.value = login;
+  function rerender() {
+    var pressed = wfRows.querySelector('[aria-pressed="true"]');
+    var si = pressed ? +pressed.dataset.i : 7;
+    renderQ(); renderLab(); renderWf();
+    selSpan(si);
+    if (mode === "walk") renderWalk(); else if (selected) renderPanelNode(selected);
+  }
+  inp.addEventListener("input", function () {
+    login = inp.value.trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
+    try { localStorage.setItem("obs-login", login); } catch (e) {}
+    rerender();
+  });
+  rerender();
+  selSpan(7);
+})();
+</script>
+
+</body>
+</html>

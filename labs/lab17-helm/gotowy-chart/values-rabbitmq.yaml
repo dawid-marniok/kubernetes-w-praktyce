@@ -1,0 +1,23 @@
+# RabbitMQ z chartu CloudPirates (oci://registry-1.docker.io/cloudpirates/rabbitmq, wersja 0.21.32, RabbitMQ 4.4.0).
+# Nadpisujesz tylko to, co inne niż w `helm show values`. Przed instalacją podmień <REJESTR-TRENERA> (sed z README).
+image:
+  registry: <REJESTR-TRENERA>        # obraz skopiowany do ECR prowadzącego: bez limitu Docker Hub
+  repository: rabbitmq
+  tag: "4.4.0-management"            # wariant z panelem www (port 15672)
+  imagePullPolicy: IfNotPresent
+initContainer:
+  image:
+    registry: <REJESTR-TRENERA>
+    repository: busybox
+    tag: "1.37.0"
+  resources:
+    requests: {cpu: 10m, memory: 16Mi}
+    limits: {cpu: 50m, memory: 32Mi}
+auth:
+  username: admin
+  password: "szkolenie-rabbit"       # tylko na labie; na produkcji auth.existingSecret
+persistence:
+  size: 1Gi                          # domyślnie 8Gi; StorageClass domyślna (gp3)
+resources:
+  requests: {cpu: 100m, memory: 256Mi}
+  limits: {cpu: 500m, memory: 512Mi}

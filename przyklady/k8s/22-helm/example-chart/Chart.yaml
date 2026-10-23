@@ -1,0 +1,13 @@
+apiVersion: v2
+name: example-app
+description: Przykładowy chart Helm (struktura do omówienia na dniu 5)
+type: application
+version: 0.2.0          # wersja chartu: podbijasz przy każdej zmianie szablonów
+appVersion: "1.29"     # wersja aplikacji: domyślny tag obrazu
+
+# Zależności (subcharty) dopisujesz tak, potem: helm dependency update .
+# dependencies:
+#   - name: cluster                     # klaster PostgreSQL przez operator CloudNativePG
+#     version: "0.9.0"
+#     repository: https://cloudnative-pg.github.io/charts
+#     condition: postgres.enabled

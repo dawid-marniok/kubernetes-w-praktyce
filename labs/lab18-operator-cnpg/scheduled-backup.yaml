@@ -1,0 +1,16 @@
+# Do przeczytania: backup co noc. Działa dopiero z object storage (S3 / GCS / Azure Blob) i pluginem
+# Barman Cloud (CNPG 1.26+), których w środowisku szkolenia nie ma. kubectl apply bez tego = Backup w stanie failed.
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: pg-nightly
+spec:
+  schedule: "0 0 2 * * *"         # 6 pól, pierwsze to sekundy: codziennie 02:00:00
+  backupOwnerReference: self
+  cluster:
+    name: pg
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
+# Do tego w Cluster: spec.plugins z ObjectStore (adres kontenera, poświadczenia) i retencja
+# w ObjectStore spec.retentionPolicy: "30d". Dokumentacja: cloudnative-pg.io/plugin-barman-cloud

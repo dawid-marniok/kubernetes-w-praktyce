@@ -1,0 +1,11 @@
+# Wartości wspólne. Środowiska nadpisują je plikami values-dev.yaml i values-prod.yaml.
+replicaCount: 1
+image:
+  repository: ghcr.io/stefanprodan/podinfo
+  tag: ""                      # puste = appVersion z Chart.yaml
+ui:
+  message: baza                # PODINFO_UI_MESSAGE: napis na stronie
+  color: "#6b7280"             # PODINFO_UI_COLOR: kolor tła
+resources:
+  requests: {cpu: 10m, memory: 32Mi}
+  limits: {memory: 64Mi}

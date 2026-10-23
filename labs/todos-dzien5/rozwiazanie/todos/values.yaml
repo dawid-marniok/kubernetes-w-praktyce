@@ -1,0 +1,56 @@
+# ToDos · dzień 5: wartości domyślne. Nadpisujesz je plikiem (-f values-prod.yaml) albo --set.
+# Nazwy obiektów (api, web, mongo, todos-config…) są stałe, a nie z nazwy release'u: chart przejmuje
+# działające obiekty z dnia 4 (--take-ownership), a nginx w web szuka backendu pod nazwą Service „api”.
+# Skutek: jeden release ToDos na namespace.
+
+registry: ""                 # WYMAGANE: <REJESTR> z karty, np. 123456789012.dkr.ecr.eu-central-1.amazonaws.com/jkowalski
+host: ""                     # WYMAGANE: todos-<login>.k8s.marniok.dev
+clusterIssuer: letsencrypt-prod
+
+existingSecret: todos-mongo  # Secret z dnia 2 (username, password, uri). Chart go nie tworzy: hasło nie trafia do values
+
+api:
+  image:
+    repository: todos-api
+    tag: ""                  # puste = appVersion z Chart.yaml
+  hpa:
+    minReplicas: 2
+    maxReplicas: 4
+    cpu: 60                  # procent od requests.cpu
+  resources:
+    requests: {cpu: 50m, memory: 96Mi}
+    limits: {cpu: 300m, memory: 256Mi}
+
+web:
+  image:
+    repository: todos-web
+    tag: ""
+  replicas: 2
+  resources:
+    requests: {cpu: 25m, memory: 32Mi}
+    limits: {cpu: 100m, memory: 64Mi}
+
+mongo:
+  image: mongo:7.0
+  storage: 1Gi               # nie zmieniaj po instalacji: volumeClaimTemplates w StatefulSecie są niezmienne
+  resources:
+    requests: {cpu: 300m, memory: 512Mi}
+    limits: {cpu: 300m, memory: 512Mi}
+
+networkPolicy:
+  enabled: true              # default-deny dla podów ToDos + strzałki Traefik → web → api → mongo
+  egress: false              # (*) ruch wychodzący z dnia 4 (DNS, web → api, api → mongo)
+  ingressNamespace: traefik
+
+backup:
+  enabled: false             # (*) CronJob mongo-backup z dnia 3
+  schedule: "0 2 * * *"
+  storage: 1Gi
+
+otel:
+  enabled: false             # lab19 krok 6: trace'y api w Tempo (OpenTelemetry Operator w namespace monitoring)
+  instrumentation: monitoring/otel
+  memoryLimit: 384Mi         # SDK zajmuje dodatkowe 50–100 Mi
+
+alerts:
+  enabled: false             # PrometheusRule dla ToDos (kube-prometheus-stack w klastrze)

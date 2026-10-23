@@ -1,0 +1,31 @@
+# Pod, który czyta Secret todos-sejf na dwa sposoby: zmienna (envFrom) i plik (wolumen).
+# Po rotacji w sejfie plik zmieni się sam (ok. minuty), zmienna dopiero po restarcie poda.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sejf-app
+  labels: {app: sejf-app}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: sejf-app}
+  template:
+    metadata:
+      labels: {app: sejf-app}
+    spec:
+      securityContext: {runAsNonRoot: true, runAsUser: 1000}
+      containers:
+        - name: app
+          image: busybox:1.37
+          command: ["sh", "-c", "while true; do echo \"env=$API_KEY plik=$(cat /sejf/API_KEY)\"; sleep 10; done"]
+          envFrom:
+            - secretRef: {name: todos-sejf}
+          volumeMounts:
+            - {name: sejf, mountPath: /sejf, readOnly: true}
+          resources:
+            requests: {cpu: 5m, memory: 8Mi}
+            limits: {cpu: 50m, memory: 32Mi}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+      volumes:
+        - name: sejf
+          secret: {secretName: todos-sejf}

@@ -1,0 +1,19 @@
+# Valkey (otwarty fork Redisa) z chartu CloudPirates (oci://registry-1.docker.io/cloudpirates/valkey, wersja 0.25.16, Valkey 9.1.0).
+# Nadpisujesz tylko to, co inne niż w `helm show values`. Przed instalacją podmień <REJESTR-TRENERA> (sed z README).
+image:
+  registry: <REJESTR-TRENERA>        # obraz skopiowany do ECR prowadzącego: bez limitu Docker Hub
+  repository: valkey/valkey
+  tag: "9.1.0-alpine3.23"
+  imagePullPolicy: IfNotPresent
+architecture: standalone             # jeden pod; replication = master + repliki (replicaCount)
+auth:
+  enabled: true
+  password: "szkolenie-valkey"       # tylko na labie; na produkcji auth.existingSecret
+podSecurityContext:
+  fsGroup: 1000
+  seccompProfile: {type: RuntimeDefault}   # wymaganie PSA restricted; chart domyślnie go nie ustawia
+persistence:
+  size: 1Gi                          # domyślnie 8Gi; StorageClass domyślna (gp3)
+resources:
+  requests: {cpu: 50m, memory: 64Mi}
+  limits: {cpu: 250m, memory: 256Mi}

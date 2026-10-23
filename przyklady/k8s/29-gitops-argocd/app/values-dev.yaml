@@ -1,0 +1,6 @@
+# Dev: 1 replika, nowsza wersja podinfo, zielony. Podgląd: helm template podinfo-dev app -f app/values-dev.yaml
+image:
+  tag: "6.15.0"
+ui:
+  message: dev
+  color: "#2e7d32"

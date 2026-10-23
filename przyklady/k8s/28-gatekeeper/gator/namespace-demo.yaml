@@ -1,0 +1,7 @@
+# Namespace z etykietą: bez niego gator nie wie, że namespaceSelector pasuje, i reguła nic nie sprawdza.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: demo
+  labels:
+    polityki: gatekeeper

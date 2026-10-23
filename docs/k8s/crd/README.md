@@ -42,6 +42,36 @@ kubectl get bk -A                                         # wszystkie namespace'
 kubectl auth can-i create backups
 ```
 
+## Wersje API: alpha, beta, v1
+
+Słowo `alpha` w `apiVersion` znaczy co innego w API wbudowanym i w CRD projektu.
+
+**API wbudowane w Kubernetesa** (np. `batch/v1`, `networking.k8s.io/v1`) przechodzi ustalone etapy:
+
+| Etap | Domyślnie | Gwarancje | Na produkcji |
+|---|---|---|---|
+| `v1alpha1` | wyłączone (feature gate) | mogą się zmienić albo zniknąć bez migracji | nie; na EKS i AKS i tak nie włączysz feature gate'ów control plane |
+| `v1beta1` | od 1.24 nowe bety też wyłączone | pola mogą się zmienić, jest okres deprecjacji | ostrożnie, z planem przejścia |
+| `v1` (GA) | włączone | stabilne, usuwane tylko po długiej deprecjacji | tak |
+
+Stare bety znikają: `extensions/v1beta1` Ingress usunięto w 1.22, `policy/v1beta1` PodSecurityPolicy w 1.25. Przed upgrade klastra sprawdź manifesty i charty narzędziem `pluto` albo `kubent`. Jakie wersje serwuje Twój klaster: `kubectl api-versions`.
+
+**CRD projektu**: wersję nazywa projekt i znaczy ona tyle, ile mówi jego polityka. Przykłady z naszego klastra:
+
+| apiVersion | Co to | Stan |
+|---|---|---|
+| `traefik.io/v1alpha1` | Middleware, IngressRoute (Traefik) | jedyne i produkcyjne API Traefika od wersji 2 |
+| `keda.sh/v1alpha1` | ScaledObject (KEDA) | KEDA jest projektem graduated w CNCF; API stabilne mimo nazwy |
+| `external-secrets.io/v1beta1` | ExternalSecret (External Secrets) | w ESO 2.x już nieserwowane; działa tylko `v1` |
+| `postgresql.cnpg.io/v1` | Cluster (CloudNativePG) | stabilne |
+
+Zanim oprzesz produkcję na CRD w wersji alpha albo beta, sprawdź:
+- czy dokumentacja projektu nazywa API stabilnym, czy experimental;
+- politykę wersjonowania i deprecjacji: ile wersji wstecz, czy jest conversion webhook (`kubectl get crd <nazwa> -o jsonpath='{.spec.versions[*].name}'`, kolumny `served` i `storage`);
+- jak długo API się nie zmienia, kto go używa, czy projekt jest w CNCF i na jakim poziomie;
+- czy jest standardowa alternatywa (np. Gateway API zamiast adnotacji kontrolera);
+- CHANGELOG przed każdym upgrade'em operatora: szukaj „removed”, „no longer served”, „deprecated”.
+
 ## Pułapki
 
 - **CRD bez kontrolera nic nie robi.** To typ, walidacja i endpoint REST. Nic się nie uruchamia.

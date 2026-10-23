@@ -1,0 +1,19 @@
+# Przechodzi obie reguły: rejestr registry.k8s.io (na liście) i konkretny tag wersji.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: dobry
+  labels: {app: gk-test}
+spec:
+  containers:
+  - name: app
+    image: registry.k8s.io/pause:3.10
+    resources:
+      requests: {cpu: 10m, memory: 16Mi}
+      limits: {memory: 32Mi}
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 65535
+      allowPrivilegeEscalation: false
+      capabilities: {drop: [ALL]}
+      seccompProfile: {type: RuntimeDefault}

@@ -1,0 +1,37 @@
+# ConstraintTemplate: nowy typ reguły "dozwolone rejestry" (Rego).
+# Po apply Gatekeeper tworzy CRD k8sallowedrepos.constraints.gatekeeper.sh, czyli nowy kind K8sAllowedRepos.
+# Sam szablon niczego nie blokuje: blokuje dopiero Constraint (constraint-allowed-repos.yaml).
+# Wersja uproszczona szablonu k8sallowedrepos z gatekeeper-library.
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8sallowedrepos
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sAllowedRepos
+      validation:
+        openAPIV3Schema:          # schemat pola spec.parameters w Constraincie
+          type: object
+          properties:
+            repos:
+              type: array
+              items: {type: string}
+  targets:
+  - target: admission.k8s.gatekeeper.sh
+    rego: |
+      package k8sallowedrepos
+
+      # pod dostaje odpowiedź "nie", jeśli istnieje choć jedno naruszenie (violation)
+      violation[{"msg": msg}] {
+        c := input.review.object.spec.containers[_]
+        not strings.any_prefix_match(c.image, input.parameters.repos)
+        msg := sprintf("kontener <%v>: obraz <%v> spoza dozwolonych rejestrów %v", [c.name, c.image, input.parameters.repos])
+      }
+
+      violation[{"msg": msg}] {
+        c := input.review.object.spec.initContainers[_]
+        not strings.any_prefix_match(c.image, input.parameters.repos)
+        msg := sprintf("initContainer <%v>: obraz <%v> spoza dozwolonych rejestrów %v", [c.name, c.image, input.parameters.repos])
+      }

@@ -1,0 +1,19 @@
+# Alert na restarty podów w Twoim namespace. Przed apply zamień <login> na swój login (dwa miejsca).
+# Prometheus Operator wczytuje PrometheusRule z każdego namespace'u (bez restartu Prometheusa).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: lab19-alerts
+spec:
+  groups:
+    - name: lab19-<login>
+      rules:
+        - alert: PodCzestoRestartuje
+          expr: increase(kube_pod_container_status_restarts_total{namespace="<login>"}[15m]) > 3
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Pod {{ $labels.pod }} restartuje się ({{ $value | printf \"%.0f\" }} razy w 15 min)"
+            runbook: "kubectl logs {{ $labels.pod }} --previous; kubectl describe pod {{ $labels.pod }}"
+        # TODO (dla chętnych): alert ExampleAppBledy, gdy > 10% żądań do example-app kończy się 5xx przez 2 min

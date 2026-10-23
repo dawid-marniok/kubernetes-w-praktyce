@@ -1,0 +1,31 @@
+# ConfigMap i ServiceAccounty z dnia 4 (bez tokenu, bez ról).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: todos-config
+  labels:
+    {{- include "todos.labels" . | nindent 4 }}
+data:
+  API_HOST: api
+  API_PORT: "3001"
+  PORT: "3001"
+{{- range $sa := list "api" "web" "mongo" }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $sa }}
+  labels:
+    {{- include "todos.labels" $ | nindent 4 }}
+automountServiceAccountToken: false
+{{- end }}
+{{- if .Values.backup.enabled }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mongo-backup
+  labels:
+    {{- include "todos.labels" . | nindent 4 }}
+automountServiceAccountToken: false
+{{- end }}

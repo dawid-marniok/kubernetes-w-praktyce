@@ -1,0 +1,19 @@
+# Constraint: reguła K8sAllowedRepos z konkretnymi parametrami i zakresem.
+# <konto> = numer konta AWS z adresu ECR (ten sam, z którego pobierasz obrazy ToDos).
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sAllowedRepos
+metadata:
+  name: tylko-nasze-rejestry
+spec:
+  enforcementAction: dryrun        # dryrun → warn → deny: najpierw tylko audit
+  match:
+    kinds:
+    - apiGroups: [""]
+      kinds: ["Pod"]
+    namespaceSelector:             # tylko namespace'y, które włączyły polityki etykietą
+      matchLabels:
+        polityki: gatekeeper
+  parameters:
+    repos:                         # prefiksy; "/" na końcu, żeby "registry.k8s.io.evil.com" nie przeszło
+    - "<konto>.dkr.ecr.eu-central-1.amazonaws.com/"
+    - "registry.k8s.io/"

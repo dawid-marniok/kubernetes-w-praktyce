@@ -1,0 +1,29 @@
+# CronJob co minutę, zadanie trwa 90 s, Forbid: kolejny przebieg jest pomijany, dopóki poprzedni trwa.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: long-running
+spec:
+  schedule: "* * * * *"
+  timeZone: Europe/Warsaw
+  concurrencyPolicy: Forbid        # przebieg z 12:01 trwa do 12:02:30, więc ten z 12:02 jest pomijany
+  startingDeadlineSeconds: 60
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 600
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: sleeper
+            image: busybox:1.37
+            command: ["sh", "-c", "echo \"start $(date +%T)\"; sleep 90; echo \"koniec $(date +%T)\""]
+            resources:
+              requests:
+                cpu: 10m
+                memory: 16Mi
+              limits:
+                cpu: 100m
+                memory: 32Mi

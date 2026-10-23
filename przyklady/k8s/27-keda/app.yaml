@@ -1,0 +1,69 @@
+# example-app (metryki http_requests_total) + ServiceMonitor + generator ruchu z 0 replik.
+# <REJESTR>: rejestr z obrazem example-app (jak w lab19). Ruch włączasz: kubectl scale deploy keda-load --replicas=4 (każda replika ok. 4 żądania/s).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keda-app
+  labels: {app: keda-app}
+spec:
+  replicas: 1                       # dalej decyduje KEDA (przez HPA keda-hpa-keda-app)
+  selector:
+    matchLabels: {app: keda-app}
+  template:
+    metadata:
+      labels: {app: keda-app}
+    spec:
+      containers:
+        - name: app
+          image: <REJESTR>/example-app:1.0.0
+          ports:
+            - {name: http, containerPort: 8080}
+          # bez OTEL_EXPORTER_OTLP_ENDPOINT: trace'y wyłączone, w demie liczą się tylko metryki
+          readinessProbe:
+            httpGet: {path: /health, port: http}
+          resources:
+            requests: {cpu: 20m, memory: 64Mi}
+            limits: {cpu: 200m, memory: 192Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keda-app
+  labels: {app: keda-app}
+spec:
+  selector: {app: keda-app}
+  ports:
+    - {name: http, port: 8080, targetPort: http}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: keda-app
+spec:
+  selector:
+    matchLabels: {app: keda-app}
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keda-load
+  labels: {app: keda-load}
+spec:
+  replicas: 0
+  selector:
+    matchLabels: {app: keda-load}
+  template:
+    metadata:
+      labels: {app: keda-load}
+    spec:
+      containers:
+        - name: load
+          image: busybox:1.37
+          command: ["sh", "-c", "while true; do wget -q -O /dev/null http://keda-app:8080/api/hello; sleep 0.25; done"]
+          resources:
+            requests: {cpu: 5m, memory: 8Mi}
+            limits: {cpu: 50m, memory: 32Mi}

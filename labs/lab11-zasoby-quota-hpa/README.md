@@ -137,7 +137,7 @@ Na kind nie ma quoty ani LimitRange, możesz je założyć sam (namespace np. `l
 | Objaw | Co zrobić |
 |---|---|
 | `TARGETS <unknown>/50%` | pierwsza minuta po starcie to normalne; dłużej: `kubectl describe hpa` (brak `requests.cpu`?) i `kubectl top pods` (działa metrics-server?) |
-| `kubectl top`: `Metrics API not available` | na kind metrics-server trzeba doinstalować: `setup/kind.md`, punkt 3 (`kubectl apply -k setup/kind/metrics-server`) |
+| `kubectl top`: `Metrics API not available` | na klastrze szkoleniowym: zgłoś prowadzącemu, nic nie instaluj. Na kind metrics-server trzeba doinstalować: `setup/kind.md`, punkt 3 (tylko w kontekście `kind-szkolenie`) |
 | HPA nie rośnie | w podach jest request 20m; jeden generator może nie wystarczyć: `kubectl scale deploy load --replicas=2` |
 | `failed quota: must specify …` | w namespace brak LimitRange albo w podzie część resources; dopisz requests i limits |
 | `exceeded quota` już przy pierwszym podzie | coś z poprzednich labów zajmuje quotę: `kubectl describe resourcequota`, posprzątaj |

@@ -13,7 +13,7 @@ Nie musisz instalować wszystkiego od razu. Przed szkoleniem wystarczy Docker i 
 | dzień 3, lab11 na kind, opcjonalnie | metrics-server na kind | `kubectl top` i HPA lokalnie | [`kind.md`](kind.md), punkt 3 |
 | **dzień 4, przed lab14** | Trivy i Kubescape, potem `trivy image --download-db-only` (kilkaset MB) | skanowanie obrazów i manifestów | lab14, sekcja „Zanim zaczniesz” |
 | dzień 4, zadania „na kind” | ten sam klaster kind z dnia 3 | RBAC klastrowy, NetworkPolicy między namespace'ami, CRD | [`kind.md`](kind.md) |
-| **dzień 5, przed lab17** | Helm (v3 lub v4) | lab17, projekt końcowy (poziom ambitny) | punkt 7 |
+| **dzień 5, przed lab17** | Helm (v3 lub v4) | lab17, ToDos · dzień 5 | punkt 7 |
 | dzień 5, lab19 | tylko przeglądarka: adres Grafany i hasło od prowadzącego | metryki, logi, alerty | — |
 | dzień 5, lab18, opcjonalnie | krew + plugin `kubectl cnpg` | switchover bazy jedną komendą | lab18, zadanie D |
 

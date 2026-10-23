@@ -1,0 +1,6 @@
+apiVersion: v2
+name: todos
+description: ToDos (web + api + MongoDB) z dnia 4 jako chart — rozwiązanie ToDos · dzień 5
+type: application
+version: 0.1.0
+appVersion: "1.0.0"     # domyślny tag obrazów todos-api i todos-web

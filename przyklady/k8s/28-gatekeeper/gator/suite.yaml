@@ -1,0 +1,46 @@
+# Testy reguł bez klastra (np. w CI): gator verify gator/
+# gator: https://open-policy-agent.github.io/gatekeeper/website/docs/gator
+kind: Suite
+apiVersion: test.gatekeeper.sh/v1alpha1
+metadata:
+  name: obrazy
+tests:
+- name: tag-wersji-bez-latest
+  template: ../template-image-tag.yaml
+  constraint: ../constraint-image-tag.yaml
+  cases:
+  - name: tag-wersji-przechodzi
+    object: pod-dobry.yaml
+    inventory: [namespace-demo.yaml]
+    assertions:
+    - violations: no
+  - name: latest-odrzucony
+    object: pod-latest.yaml
+    inventory: [namespace-demo.yaml]
+    assertions:
+    - violations: 1
+      message: latest
+  - name: brak-tagu-odrzucony
+    object: pod-bez-tagu.yaml
+    inventory: [namespace-demo.yaml]
+    assertions:
+    - violations: yes
+  - name: digest-przechodzi
+    object: pod-digest.yaml
+    inventory: [namespace-demo.yaml]
+    assertions:
+    - violations: no
+- name: tylko-nasze-rejestry
+  template: ../template-allowed-repos.yaml
+  constraint: ../constraint-allowed-repos.yaml
+  cases:
+  - name: registry-k8s-io-przechodzi
+    object: pod-dobry.yaml
+    inventory: [namespace-demo.yaml]
+    assertions:
+    - violations: no
+  - name: docker-hub-odrzucony
+    object: pod-latest.yaml
+    inventory: [namespace-demo.yaml]
+    assertions:
+    - violations: 1

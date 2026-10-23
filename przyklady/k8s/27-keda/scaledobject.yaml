@@ -1,0 +1,23 @@
+# KEDA skaluje keda-app po liczbie żądań na sekundę z Prometheusa: cel 3 req/s na pod.
+# <login> w zapytaniu = Twój namespace: sed "s/<login>/$LOGIN/" scaledobject.yaml | kubectl apply -f -
+# Pod spodem KEDA tworzy HPA keda-hpa-keda-app (kubectl get hpa) i karmi go tą metryką.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: keda-app
+spec:
+  scaleTargetRef:
+    name: keda-app                  # Deployment
+  minReplicaCount: 1
+  maxReplicaCount: 6
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: 30   # tylko na pokaz; domyślnie 300 s
+  triggers:
+    - type: prometheus
+      metadata:
+        serverAddress: http://kube-prometheus-stack-prometheus.monitoring.svc:9090
+        query: sum(rate(http_requests_total{namespace="<login>", service="keda-app", route="/api/hello"}[1m]))
+        threshold: "3"              # 3 req/s na pod: 12 req/s → 4 pody

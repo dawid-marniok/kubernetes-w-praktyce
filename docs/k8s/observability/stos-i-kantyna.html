@@ -1,0 +1,685 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kantyna w k8s-sages</title>
+<meta name="description" content="Dzień 5 — aplikacja Kantyna na k8s-sages: architektura, droga zamówienia przez sześć usług, bazę i kolejkę, dokąd trafiają trace'y, logi i metryki, scenariusze awarii i zapytania do Grafany.">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@500;700;800&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Ta sama paleta co observability.html: metryki niebieskie, logi brązowe, trace'y różowe, ruch zielony, operatory fioletowe */
+:root {
+  --bg: #eef1f5; --surface: #ffffff; --surface-2: #f6f8fb; --ink: #15233b; --muted: #5b6b82; --line: #d3dbe6; --region: #e3e9f1;
+  --m: #1d6fb8; --l: #b5701a; --t: #a8326e; --req: #2f7d5b; --ctl: #6a5acd; --bad: #c0392b;
+  --m-soft: #dceaf7; --l-soft: #f5e7d2; --t-soft: #f4dbe8; --req-soft: #d9efe4; --ctl-soft: #e6e2fa; --bad-soft: #f8dcd8;
+  --code-bg: #142033; --code-fg: #dbe4f0;
+  --font-display: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1724; --surface: #162133; --surface-2: #1b283d; --ink: #e6edf6; --muted: #9aabc2; --line: #2c3c55; --region: #1a2638;
+    --m: #5aa7ec; --l: #e0a24a; --t: #e27ab0; --req: #5cc497; --ctl: #a99cf0; --bad: #ef6f5e;
+    --m-soft: #1b3350; --l-soft: #3a2c17; --t-soft: #3d1f31; --req-soft: #183a2c; --ctl-soft: #27234a; --bad-soft: #3e1d1a;
+    --code-bg: #0b111b; --code-fg: #dbe4f0; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1724; --surface: #162133; --surface-2: #1b283d; --ink: #e6edf6; --muted: #9aabc2; --line: #2c3c55; --region: #1a2638;
+  --m: #5aa7ec; --l: #e0a24a; --t: #e27ab0; --req: #5cc497; --ctl: #a99cf0; --bad: #ef6f5e;
+  --m-soft: #1b3350; --l-soft: #3a2c17; --t-soft: #3d1f31; --req-soft: #183a2c; --ctl-soft: #27234a; --bad-soft: #3e1d1a;
+  --code-bg: #0b111b; --code-fg: #dbe4f0; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 16px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+.wrap { max-width: 1120px; margin: 0 auto; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.15; margin: 0; }
+h1 { font-size: clamp(2rem, 5vw, 3.2rem); font-weight: 800; letter-spacing: -0.02em; }
+h2 { font-size: clamp(1.5rem, 3.2vw, 2.1rem); font-weight: 800; letter-spacing: -0.01em; }
+h3 { font-size: 1.12rem; font-weight: 700; }
+p { margin: 0; }
+code, pre, .mono { font-family: var(--font-mono); font-size: 0.86em; }
+:not(pre) > code { background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; padding: 0.05em 0.35em; overflow-wrap: anywhere; }
+a { color: var(--m); }
+.eyebrow { font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--m); outline-offset: 2px; }
+
+header.hero { padding-block: 48px 24px; display: grid; gap: 16px; }
+.hero .lead { max-width: 66ch; font-size: 1.12rem; color: var(--muted); }
+.toc { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 0.92rem; }
+.toc a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--line); }
+.toc a:hover { border-color: var(--ink); }
+.facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 760px) { .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.fact { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.fact b { display: block; font-family: var(--font-display); font-size: 1.5rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.fact span { font-size: 0.85rem; color: var(--muted); }
+
+section { padding-block: 40px 8px; display: grid; gap: 18px; }
+section > .intro { max-width: 72ch; color: var(--muted); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+
+/* kod */
+pre { background: var(--code-bg); color: var(--code-fg); border-radius: 8px; padding: 14px 16px; margin: 0; overflow-x: auto; line-height: 1.5; font-size: 0.8rem; }
+.codewrap { position: relative; min-width: 0; }
+.copy { position: absolute; top: 8px; right: 8px; font-size: 0.72rem; font-family: var(--font-mono); border: 1px solid #3a4a63; background: #1e2c42; color: #dbe4f0; border-radius: 4px; padding: 3px 8px; }
+.copy.ok { background: var(--req); border-color: var(--req); color: #fff; }
+.callout { border-left: 3px solid var(--m); background: var(--surface); padding: 12px 16px; font-size: 0.93rem; border-radius: 0 8px 8px 0; border-top: 1px solid var(--line); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.callout.warn { border-left-color: var(--l); }
+/* diagram architektury (SVG): ramki = klaster, namespace'y, węzeł; przyciski włączają przepływ, po strzałkach płyną pakiety */
+.archbox { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; display: grid; min-width: 0; }
+.modes { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px; border-bottom: 1px solid var(--line); }
+.mode { border: 1px solid var(--line); background: var(--surface-2); padding: 6px 12px; border-radius: 6px; font-size: 0.9rem; display: inline-flex; gap: 8px; align-items: center; }
+.mode i { width: 9px; height: 9px; border-radius: 50%; }
+.mode[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.svgscroll { overflow-x: auto; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+svg.arch { display: block; width: 100%; min-width: 900px; height: auto; }
+.zone rect { fill: var(--region); stroke: var(--line); stroke-dasharray: 5 4; }
+.zone.cluster rect { fill: none; stroke: var(--muted); stroke-dasharray: none; stroke-width: 1.4; }
+.zone.aws rect { fill: none; stroke: var(--l); stroke-dasharray: 6 4; }
+.zone text { fill: var(--muted); font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.03em; }
+.zone.cluster text { fill: var(--ink); font-weight: 600; }
+.n { cursor: pointer; }
+.n:focus { outline: none; }
+.n rect { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; transition: stroke 0.2s, fill 0.2s; }
+.n.ext rect { fill: var(--surface-2); stroke-dasharray: 4 3; }
+.n.ctl rect { stroke: var(--ctl); stroke-dasharray: 5 3; }
+.n text.t { fill: var(--ink); font-family: var(--font-body); font-weight: 600; font-size: 14px; }
+.n text.s { fill: var(--muted); font-family: var(--font-mono); font-size: 11px; }
+.n text.b { font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; }
+.b-m { fill: var(--m); } .b-l { fill: var(--l); } .b-t { fill: var(--t); }
+.n:hover rect, .n:focus-visible rect { stroke: var(--ink); }
+.n.sel rect { stroke: var(--ink); stroke-width: 2.6; }
+.n.hot.req rect { stroke: var(--req); fill: var(--req-soft); }
+.n.hot.m rect { stroke: var(--m); fill: var(--m-soft); }
+.n.hot.l rect { stroke: var(--l); fill: var(--l-soft); }
+.n.hot.t rect { stroke: var(--t); fill: var(--t-soft); }
+.n.hot.ctl rect { stroke: var(--ctl); }
+.n, .e, .lbl { transition: opacity 0.2s; }
+svg.dimmed .n:not(.hot) { opacity: 0.28; }
+.e path { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.e.req path { stroke: var(--req); } .e.m path { stroke: var(--m); } .e.l path { stroke: var(--l); } .e.t path { stroke: var(--t); } .e.all path { stroke: var(--muted); }
+.e.ctl path { stroke: var(--ctl); stroke-dasharray: 4 4; }
+svg.dimmed .e:not(.on) { opacity: 0.1; }
+.e.on path { stroke-width: 2.8; }
+.mk-req path { fill: var(--req); } .mk-m path { fill: var(--m); } .mk-l path { fill: var(--l); } .mk-t path { fill: var(--t); } .mk-ctl path { fill: var(--ctl); } .mk-all path { fill: var(--muted); }
+.lbl rect { fill: var(--surface); stroke: var(--line); }
+.lbl text { fill: var(--ink); font-family: var(--font-mono); font-size: 11px; }
+svg.dimmed .lbl:not(.on) { opacity: 0.12; }
+.pk { pointer-events: none; }
+.pk.req { fill: var(--req); } .pk.m { fill: var(--m); } .pk.l { fill: var(--l); } .pk.t { fill: var(--t); } .pk.ctl { fill: var(--ctl); } .pk.all { fill: var(--muted); }
+.archfoot { display: grid; grid-template-columns: minmax(0, 1fr); }
+.panel { padding: 18px; display: grid; gap: 12px; align-content: start; min-width: 0; max-width: 90ch; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 10px 16px; font-size: 0.82rem; color: var(--muted); border-bottom: 1px solid var(--line); }
+.legend span { display: inline-flex; gap: 6px; align-items: center; }
+.legend i { width: 18px; height: 0; border-top: 2.5px solid currentColor; display: inline-block; }
+.legend i.dash { border-top-style: dashed; }
+.panel dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 12px; margin: 0; font-size: 0.9rem; }
+.panel dt { color: var(--muted); }
+.panel dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.sigrow { display: grid; gap: 8px; }
+.sigline { display: grid; grid-template-columns: 78px minmax(0, 1fr); gap: 8px; font-size: 0.88rem; align-items: baseline; }
+.sigline .tag { font-family: var(--font-mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.tag.m { color: var(--m); } .tag.l { color: var(--l); } .tag.t { color: var(--t); }
+
+.stepper { display: grid; gap: 12px; padding: 14px 16px; border-top: 1px solid var(--line); background: var(--surface-2); border-radius: 0 0 10px 10px; }
+.stepper[hidden] { display: none !important; }
+.step-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.step-head .count { font-family: var(--font-mono); font-size: 0.85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.step-btn { border: 1px solid var(--line); background: var(--surface); padding: 6px 14px; border-radius: 6px; }
+.step-btn:disabled { opacity: 0.4; cursor: default; }
+.dots { display: flex; gap: 5px; }
+.dots button { width: 22px; height: 6px; border-radius: 3px; border: 0; background: var(--line); padding: 0; }
+.dots button[aria-current="true"] { background: var(--ink); }
+.step-body { max-width: 80ch; }
+.step-body h3 { margin-bottom: 4px; }
+
+/* waterfall */
+.wf { display: grid; grid-template-columns: minmax(0, 1fr) 300px; }
+@media (max-width: 900px) { .wf { grid-template-columns: minmax(0, 1fr); } }
+.wf-main { padding: 14px; min-width: 0; border-right: 1px solid var(--line); display: grid; gap: 10px; align-content: start; }
+@media (max-width: 900px) { .wf-main { border-right: 0; border-bottom: 1px solid var(--line); } }
+.scen { display: flex; flex-wrap: wrap; gap: 6px; }
+.scen button { border: 1px solid var(--line); background: var(--surface-2); padding: 6px 12px; border-radius: 6px; font-size: 0.88rem; }
+.scen button[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.wf-axis { display: grid; grid-template-columns: minmax(150px, 36%) minmax(0, 1fr); font-family: var(--font-mono); font-size: 0.7rem; color: var(--muted); padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+.wf-axis .ticks { display: flex; justify-content: space-between; font-variant-numeric: tabular-nums; }
+.rows { display: grid; gap: 1px; }
+.row { display: grid; grid-template-columns: minmax(150px, 36%) minmax(0, 1fr); align-items: center; border: 0; background: transparent; text-align: left; padding: 3px 0; border-radius: 4px; }
+.row:hover, .row[aria-pressed="true"] { background: var(--surface-2); }
+.rname { font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.rname .s { font-family: var(--font-mono); font-size: 0.66rem; color: var(--muted); }
+.track { position: relative; height: 16px; }
+.bar { position: absolute; top: 3px; height: 10px; border-radius: 3px; min-width: 2px; background: var(--bc); }
+.bar.err { background: var(--bad); }
+.dur { position: absolute; top: -1px; font-family: var(--font-mono); font-size: 0.66rem; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.wf-side { padding: 16px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.attrs { display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); gap: 3px 10px; font-family: var(--font-mono); font-size: 0.74rem; margin: 0; }
+.attrs dt { color: var(--muted); overflow-wrap: anywhere; }
+.attrs dd { margin: 0; overflow-wrap: anywhere; }
+.svcdots { display: flex; flex-wrap: wrap; gap: 10px; font-size: 0.78rem; color: var(--muted); }
+.svcdots span { display: inline-flex; gap: 5px; align-items: center; }
+.svcdots i { width: 10px; height: 10px; border-radius: 2px; background: var(--bc); }
+
+/* tabele */
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--font-mono); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+tr:last-child td { border-bottom: 0; }
+td.m { color: var(--m); } td.t { color: var(--t); } td.l { color: var(--l); }
+
+/* zapytania */
+.qgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 980px) { .qgrid { grid-template-columns: minmax(0, 1fr); } }
+.qcol { display: grid; gap: 10px; align-content: start; min-width: 0; }
+.qcol h3 small { font-family: var(--font-mono); font-weight: 400; font-size: 0.72rem; color: var(--muted); }
+.qcol.m h3 { color: var(--m); } .qcol.l h3 { color: var(--l); } .qcol.t h3 { color: var(--t); }
+.q { display: grid; gap: 4px; min-width: 0; }
+.q p { font-size: 0.86rem; color: var(--muted); }
+.q pre { font-size: 0.75rem; white-space: pre-wrap; word-break: break-word; padding-right: 64px; }
+footer { padding-top: 40px; color: var(--muted); font-size: 0.85rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="hero">
+  <div class="eyebrow">Kubernetes w praktyce · dzień 5 · temat 3</div>
+  <h1>Kantyna w&nbsp;k8s-sages</h1>
+  <p class="lead">Aplikacja z demo prowadzącego: firmowa stołówka, w której pracownicy zamawiają obiady. Tu zobaczysz, jak działa, którędy idzie jedno zamówienie i dokąd każda usługa wysyła trace'y, logi i metryki. Adres: <a href="https://kantyna.k8s.marniok.dev">kantyna.k8s.marniok.dev</a>, namespace <code>kantyna</code>.</p>
+  <div class="facts">
+    <div class="fact"><b>5</b><span>usług + Postgres w <code>kantyna</code></span></div>
+    <div class="fact"><b>2</b><span>usługi AWS: kolejka SQS i bucket S3</span></div>
+    <div class="fact"><b>20</b><span>spanów w jednym zamówieniu</span></div>
+    <div class="fact"><b>7</b><span>alertów <code>Kantyna*</code> z runbookami</span></div>
+  </div>
+  <nav class="toc" aria-label="Spis treści">
+    <a href="#kantyna">Architektura</a>
+    <a href="#trace">Trace jednego zamówienia</a>
+    <a href="#scenariusze">Awarie na zawołanie</a>
+    <a href="#zapytania">Zapytania</a>
+    <a href="observability.html">Stos observability</a>
+  </nav>
+</header>
+
+<section id="kantyna">
+  <div class="eyebrow">1 · Architektura</div>
+  <h2>Jak działa Kantyna i dokąd wysyła sygnały</h2>
+  <p class="intro">Pracownik (albo generator ruchu) zamawia obiad. Żądanie idzie przez nginx do API, które pyta bazę o ceny, obciąża konto w serwisie płatności, zapisuje zamówienie i wrzuca je do kolejki. Worker odbiera je z kolejki i zapisuje paragon. Każda usługa wysyła trace'y, logi i metryki do stosu w namespace <code>monitoring</code> (litery T, L, M w ramce usługi). Opis samego stosu jest w <a href="observability.html">observability.html</a>.</p>
+  <div class="archbox">
+    <div class="modes" role="group" aria-label="Który przepływ pokazać">
+      <button class="mode" data-mode="all" aria-pressed="true">Wszystko</button>
+      <button class="mode" data-mode="req" aria-pressed="false"><i style="background:var(--req)"></i>Żądanie HTTP</button>
+      <button class="mode" data-mode="async" aria-pressed="false"><i style="background:var(--req)"></i>Przez kolejkę</button>
+      <button class="mode" data-mode="t" aria-pressed="false"><i style="background:var(--t)"></i>Trace'y</button>
+      <button class="mode" data-mode="l" aria-pressed="false"><i style="background:var(--l)"></i>Logi</button>
+      <button class="mode" data-mode="m" aria-pressed="false"><i style="background:var(--m)"></i>Metryki</button>
+      <button class="mode" data-mode="walk" aria-pressed="false"><i style="background:var(--ink)"></i>Zamówienie krok po kroku</button>
+    </div>
+    <div class="legend">
+      <span style="color:var(--req)"><i></i>ruch aplikacji</span>
+      <span style="color:var(--t)"><i></i>trace'y (OTLP)</span>
+      <span style="color:var(--l)"><i></i>logi</span>
+      <span style="color:var(--m)"><i></i>metryki</span>
+      <span>T L M w ramce: sygnały, które wysyła usługa</span>
+    </div>
+    <div class="svgscroll">
+      <svg class="arch" id="kmap" viewBox="0 0 1200 600" role="img" aria-label="Architektura Kantyny: Traefik, nginx, orders-api, payments, Postgres, loadgen i worker w namespace kantyna, kolejka SQS i bucket S3 w AWS, oraz Tempo, Alloy, Loki, Prometheus i Grafana w namespace monitoring"></svg>
+    </div>
+    <div class="archfoot">
+      <aside class="panel" id="svcPanel" aria-live="polite"></aside>
+      <div class="stepper" id="kstepper" hidden>
+        <div class="step-head">
+          <button class="step-btn" id="kprev">← Wstecz</button>
+          <button class="step-btn" id="knext">Dalej →</button>
+          <span class="count" id="kcount"></span>
+          <div class="dots" id="kdots"></div>
+        </div>
+        <div class="step-body" id="kstepbody"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="trace">
+  <div class="eyebrow">2 · Trace</div>
+  <h2>Jedno zamówienie w Tempo</h2>
+  <p class="intro">Prawdziwy trace z k8s-sages (22.10.2026), uproszczony o spany techniczne. Przełącz scenariusz i zobacz, jak wygląda ten sam trace przy awarii. Kliknij wiersz, żeby zobaczyć atrybuty spana.</p>
+  <div class="card wf">
+    <div class="wf-main">
+      <div class="scen" role="group" aria-label="Scenariusz">
+        <button data-s="ok" aria-pressed="true">Normalnie</button>
+        <button data-s="slow" aria-pressed="false">Wolne płatności</button>
+        <button data-s="err" aria-pressed="false">Błąd 500</button>
+        <button data-s="n1" aria-pressed="false">N+1 w menu</button>
+      </div>
+      <div class="svcdots" id="svcdots"></div>
+      <div class="wf-axis"><span>span · usługa</span><span class="ticks" id="ticks"></span></div>
+      <div class="rows" id="rows"></div>
+    </div>
+    <aside class="wf-side" id="wfSide"></aside>
+  </div>
+</section>
+
+<section id="scenariusze">
+  <div class="eyebrow">3 · Scenariusze</div>
+  <h2>Awarie na zawołanie</h2>
+  <p class="intro">Każda usługa co 15 s czyta flagi z ConfigMapy <code>kantyna-flags</code>. Prowadzący zmienia flagę, a po 1–3 min (tyle kubelet odświeża zamontowaną ConfigMapę) widać skutek we wszystkich trzech sygnałach, bez restartu podów. Tak samo działa feature flag w prawdziwej aplikacji.</p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Scenariusz (flaga)</th><th>Metryka i alert</th><th>Trace</th><th>Log</th></tr></thead>
+      <tbody>
+        <tr><td><b>Wolne płatności</b><br><code>payments.latency_ms: 1500</code></td><td class="m">p95 <code>/api/orders</code> &gt; 1 s, <code>KantynaHighLatencyP95</code></td><td class="t">długi span <code>bank authorize</code> w payments</td><td class="l"><code>duration_ms</code> ok. 1500 w logu payments</td></tr>
+        <tr><td><b>Błędy 500</b><br><code>orders-api.error_rate: 0.3</code></td><td class="m">5xx na dashboardzie, <code>KantynaHighErrorRate</code></td><td class="t">czerwone spany od loadgena do orders-api, wyjątek w spanie</td><td class="l"><code>ERROR</code> ze stack trace'em i <code>trace_id</code></td></tr>
+        <tr><td><b>Odmowy płatności</b><br><code>payments.error_rate: 0.5</code></td><td class="m"><code>payments_failed_total</code>, <code>KantynaPaymentsFailing</code></td><td class="t"><code>bank authorize</code> z błędem, 402 w orders-api</td><td class="l"><code>WARN Payment failed</code></td></tr>
+        <tr><td><b>N+1</b><br><code>orders-api.slow_menu_query: true</code></td><td class="m">p95 <code>/api/menu</code> rośnie</td><td class="t">ok. 20 spanów <code>SELECT menu_items</code> w jednym żądaniu</td><td class="l">nic: w logach tego nie widać</td></tr>
+        <tr><td><b>Wyciek z puli</b><br><code>orders-api.db_pool_leak: true</code></td><td class="m">pula w użyciu → 100%, <code>KantynaDBPoolExhausted</code></td><td class="t">rosnący span <code>db pool acquire</code></td><td class="l">timeouty puli</td></tr>
+        <tr><td><b>Wolna kuchnia</b><br><code>worker.processing_delay_ms: 3000</code></td><td class="m">kolejka SQS rośnie, <code>KantynaQueueBacklog</code></td><td class="t">długi <code>kitchen prepare</code> w workerze</td><td class="l">-</td></tr>
+        <tr><td><b>Szczyt ruchu</b><br><code>loadgen.multiplier: 4</code></td><td class="m">żądania/s ×4, CPU podów</td><td class="t">więcej trace'ów, ta sama struktura</td><td class="l">-</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout">Wniosek z tabeli: N+1 widać tylko w trace, wolną bramkę płatności najszybciej w metryce, a przyczynę błędu 500 w logu. Żaden sygnał nie wystarcza sam.</div>
+</section>
+
+<section id="zapytania">
+  <div class="eyebrow">4 · Explore</div>
+  <h2>Zapytania do Kantyny</h2>
+  <p class="intro">Wklej w Grafanie: Explore → wybierz źródło → Code. Dashboard z tymi wykresami: Dashboards → „Kantyna: aplikacja”.</p>
+  <div class="qgrid" id="queries"></div>
+</section>
+
+<footer>Kantyna pochodzi ze szkolenia „AIOps w praktyce”. Na tym szkoleniu dodaliśmy trace'y w każdej usłudze (nginx, Python, Go, worker przez kolejkę), spany zapytań SQL, eksporter metryk Postgresa, dashboard i alerty z <code>for: 1m</code>. Jak działa sam stos: <a href="observability.html">observability.html</a>.</footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function codeBlock(t) { return '<div class="codewrap"><pre>' + esc(t) + '</pre><button class="copy">kopiuj</button></div>'; }
+  document.addEventListener("click", function (ev) {
+    var b = ev.target.closest(".copy"); if (!b) return;
+    var pre = b.parentNode.querySelector("pre"), txt = pre.textContent;
+    function done() { b.textContent = "skopiowane"; b.classList.add("ok"); setTimeout(function () { b.textContent = "kopiuj"; b.classList.remove("ok"); }, 1400); }
+    function fallback() { var r = document.createRange(); r.selectNodeContents(pre); var s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+    try { navigator.clipboard.writeText(txt).then(done, fallback); } catch (e) { fallback(); }
+  });
+
+  /* ---------- silnik diagramu: ramki, węzły, krawędzie z podpisami, pakiety ---------- */
+  function Diagram(svg, D, onPick) {
+    var NSV = "http://www.w3.org/2000/svg";
+    function sv(tag, a, p) { var e = document.createElementNS(NSV, tag); for (var k in a) e.setAttribute(k, a[k]); if (p) p.appendChild(e); return e; }
+    var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var defs = sv("defs", {}, svg);
+    ["req", "m", "l", "t", "ctl", "all"].forEach(function (c) {
+      var mk = sv("marker", { id: D.idp + "mk-" + c, viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse", "class": "mk-" + c }, defs);
+      sv("path", { d: "M0,0 L10,5 L0,10 z" }, mk);
+    });
+    var gZ = sv("g", {}, svg), gE = sv("g", {}, svg), gP = sv("g", {}, svg), gN = sv("g", {}, svg), gL = sv("g", {}, svg);
+    D.zones.forEach(function (z) {
+      var g = sv("g", { "class": "zone " + (z.c || "") }, gZ);
+      sv("rect", { x: z.x, y: z.y, width: z.w, height: z.h, rx: 12 }, g);
+      var t = sv("text", { x: z.x + 12, y: z.ly ? z.ly : z.y + 17 }, g); t.textContent = z.label;
+    });
+    var E = {}, LB = {}, N = {};
+    D.edges.forEach(function (e) {
+      var c0 = e.c.split(" ")[0];
+      var d = "M" + e.p.map(function (p) { return p[0] + "," + p[1]; }).join(" L");
+      var g = sv("g", { "class": "e " + e.c }, gE);
+      var path = sv("path", { d: d, "marker-end": "url(#" + D.idp + "mk-" + c0 + ")" }, g);
+      var tt = sv("title", {}, g); tt.textContent = e.title || e.lb || "";
+      E[e.id] = { g: g, d: d, c0: c0, path: path };
+      if (e.lb) {
+        var lg = sv("g", { "class": "lbl" }, gL), w = e.lb.length * 6.7 + 14;
+        sv("rect", { x: e.lx - w / 2, y: e.ly - 9, width: w, height: 18, rx: 9 }, lg);
+        var tx = sv("text", { x: e.lx, y: e.ly + 4, "text-anchor": "middle" }, lg); tx.textContent = e.lb;
+        LB[e.id] = lg;
+      }
+    });
+    Object.keys(D.geo).forEach(function (id) {
+      var o = D.geo[id], info = D.info(id);
+      var g = sv("g", { "class": "n " + (o.c || ""), tabindex: "0", role: "button", "aria-label": info.t }, gN);
+      sv("rect", { x: o.x, y: o.y, width: o.w, height: o.h, rx: 8 }, g);
+      var cx = o.x + o.w / 2, cy = o.y + o.h / 2 - (o.b ? 5 : 0);
+      var t1 = sv("text", { x: cx, y: cy - 2, "text-anchor": "middle", "class": "t" }, g); t1.textContent = o.t || info.t;
+      var t2 = sv("text", { x: cx, y: cy + 14, "text-anchor": "middle", "class": "s" }, g); t2.textContent = o.s || info.s;
+      if (o.b) {
+        var tb = sv("text", { x: cx, y: o.y + o.h - 8, "text-anchor": "middle", "class": "b" }, g);
+        o.b.forEach(function (k, i) { var ts = sv("tspan", { "class": "b-" + k, dx: i ? 6 : 0 }, tb); ts.textContent = k.toUpperCase(); });
+      }
+      g.addEventListener("click", function () { onPick(id); });
+      g.addEventListener("keydown", function (ev) { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); onPick(id); } });
+      N[id] = g;
+    });
+    function set(hotNodes, hotEdges) {
+      svg.classList.toggle("dimmed", hotNodes !== null);
+      Object.keys(N).forEach(function (id) {
+        var g = N[id];
+        g.classList.remove("hot", "req", "m", "l", "t", "ctl");
+        if (hotNodes && hotNodes[id]) { g.classList.add("hot"); hotNodes[id].split(" ").forEach(function (c) { if (c) g.classList.add(c); }); }
+      });
+      Object.keys(E).forEach(function (id) {
+        var on = !!(hotEdges && hotEdges[id]);
+        E[id].g.classList.toggle("on", on);
+        if (LB[id]) LB[id].classList.toggle("on", on || hotNodes === null);
+      });
+    }
+    function flow(ids) {
+      while (gP.firstChild) gP.removeChild(gP.firstChild);
+      if (reduce || !ids) return;
+      ids.forEach(function (id, i) {
+        var e = E[id]; if (!e) return;
+        var len = e.path.getTotalLength ? e.path.getTotalLength() : 200;
+        var dur = Math.max(1.1, len / 150), n = len > 260 ? 2 : 1;
+        for (var k = 0; k < n; k++) {
+          var c = sv("circle", { r: 4.5, "class": "pk " + e.c0 }, gP);
+          sv("animateMotion", { dur: dur.toFixed(2) + "s", repeatCount: "indefinite", path: e.d, begin: (k * dur / n + i * 0.12).toFixed(2) + "s" }, c);
+        }
+      });
+    }
+    function select(id) { Object.keys(N).forEach(function (k) { N[k].classList.toggle("sel", k === id); }); }
+    return { set: set, flow: flow, select: select };
+  }
+  var S = {
+    loadgen: { t: "loadgen", s: "Python · httpx", tech: "asyncio + httpx, profil dobowy (szczyt 11:30–13:30)",
+      what: "Generator ruchu: 60% przeglądanie menu, 10% wyszukiwanie, 25% zamówienia, 5% status. Wysyła żądania przez nginx, jak prawdziwa przeglądarka.",
+      tr: "Każde żądanie zaczyna nowy trace: span „klient <endpoint>”, a instrumentacja httpx dopisuje nagłówek traceparent.",
+      lg: "JSON, tylko ostrzeżenia (5xx, timeouty).", mt: "loadgen_target_rps, loadgen_requests_total" },
+    web: { t: "web", s: "nginx · OTel module", tech: "nginx-unprivileged 1.29-alpine-otel, ngx_otel_module",
+      what: "Serwuje frontend (HTML/JS) i przekazuje /api/ do orders-api.",
+      tr: "Moduł ngx_otel_module tworzy span „POST /api” (otel_trace on) i przekazuje traceparent dalej (otel_trace_context propagate). Bez modułu nginx przepuściłby nagłówek, ale nie dodałby własnego spana.",
+      lg: "Access log w JSON z trace_id i span_id ($otel_trace_id), więc i z nginx przejdziesz do trace'a.", mt: "brak /metrics: CPU i pamięć z cAdvisora" },
+    orders: { t: "orders-api", s: "Python · FastAPI", tech: "FastAPI, psycopg 3 + pula połączeń, boto3, SDK OpenTelemetry w kodzie",
+      what: "REST API menu i zamówień. Zamówienie: ceny z bazy → płatność → zapis w transakcji → wiadomość do SQS.",
+      tr: "Span serwera z FastAPI, spany wywołań HTTP z httpx, span każdego zapytania SQL (własny kursor z atrybutem db.statement), span „db pool acquire” (czekanie na połączenie), span PRODUCER „… publish” i SQS.SendMessage z botocore.",
+      lg: "JSON z trace_id; błędy ze stack trace'em.", mt: "http_requests_total, http_request_duration_seconds, orders_created_total, db_pool_*, payments_failed_total" },
+    payments: { t: "payments", s: "Go · otelhttp", tech: "Go net/http, otelhttp, eksporter OTLP gRPC",
+      what: "Obciąża konto pracownika. Odpowiada approved albo 502.",
+      tr: "otelhttp tworzy span „POST /pay” jako dziecko spana z orders-api (nagłówek traceparent). W środku ręczny span „bank authorize”: symulowany operator płatności, w nim siedzi opóźnienie z flagi latency_ms.",
+      lg: "slog JSON z trace_id i span_id.", mt: "payments_requests_total, payments_duration_seconds" },
+    postgres: { t: "Postgres", s: "17 · StatefulSet", tech: "postgres:17-alpine + postgres-exporter (sidecar)",
+      what: "Menu i zamówienia, PVC na gp3.",
+      tr: "Baza sama nie wysyła spanów. Spany SQL tworzy klient w orders-api; mają peer.service=postgres, więc baza pojawia się na mapie usług w Tempo.",
+      lg: "log Postgresa (tekst).", mt: "pg_stat_activity_count, pg_stat_database_xact_commit (postgres-exporter)" },
+    sqs: { t: "SQS", s: "kolejka AWS", ext: true, tech: "kantyna-k8s-sages-orders + DLQ (po 5 próbach)",
+      what: "Kolejka zamówień między orders-api a workerem. Uprawnienia przez EKS Pod Identity, bez kluczy w YAML-u.",
+      tr: "Nagłówek traceparent jedzie w atrybutach wiadomości (MessageAttributes). Dzięki temu worker kontynuuje ten sam trace, choć działa sekundy później i w innym podzie.",
+      lg: "-", mt: "worker_queue_visible_messages (głębokość kolejki)" },
+    worker: { t: "worker", s: "Python · boto3", tech: "long polling SQS, boto3, SDK OpenTelemetry",
+      what: "Odbiera zamówienie, „przygotowuje” je w kuchni i zapisuje paragon w S3.",
+      tr: "Span CONSUMER „orders process” z rodzicem odczytanym z atrybutów wiadomości, w nim „kitchen prepare”, S3.PutObject i SQS.DeleteMessage. Long polling co 20 s jest wyciszony, żeby nie robić pustych trace'ów.",
+      lg: "JSON z trace_id.", mt: "worker_messages_processed_total, worker_processing_seconds" },
+    s3: { t: "S3", s: "bucket AWS", ext: true, tech: "kantyna-k8s-sages-receipts-…, szyfrowanie, 30 dni",
+      what: "Paragony w JSON: receipts/RRRR/MM/DD/<id>.json.",
+      tr: "Span S3.PutObject z workera (instrumentacja botocore).", lg: "-", mt: "-" }
+  };
+  var MON = {
+    browser: { t: "Przeglądarka", s: "kantyna.k8s.marniok.dev", what: "Pracownik otwiera Kantynę i składa zamówienie. Ruch wchodzi przez Traefika z certyfikatem Let's Encrypt." },
+    traefik: { t: "Traefik", s: "Ingress", what: "Kontroler Ingress klastra: kończy TLS i kieruje ruch na Service kantyna-web." },
+    tempo: { t: "Tempo", s: "trace'y", what: "Kantyna wysyła tu spany z pięciu usług przez OTLP gRPC (tempo.monitoring.svc:4317), bez agenta pośrodku." },
+    alloy: { t: "Alloy", s: "na każdym węźle", what: "Czyta logi JSON wszystkich podów Kantyny z węzła i wysyła je do Loki; trace_id z logu trafia do structured metadata." },
+    loki: { t: "Loki", s: "logi", what: "Logi Kantyny: {namespace=\"kantyna\"}. Etykieta app to nazwa usługi, ta sama co service.name w trace'ach." },
+    prom: { t: "Prometheus", s: "metryki, alerty", what: "Co 15 s pobiera /metrics z pięciu ServiceMonitorów Kantyny (orders-api, payments, worker, loadgen, postgres-exporter) i liczy 7 reguł alertów Kantyna*." },
+    grafana: { t: "Grafana", s: "dashboard Kantyna", what: "Dashboard „Kantyna: aplikacja”, Explore i alerty. Tu łączysz trzy sygnały po trace_id." }
+  };
+  function info(id) { return S[id] || MON[id]; }
+  var DK = {
+    idp: "k-",
+    info: info,
+    zones: [
+      { x: 155, y: 10, w: 1035, h: 455, c: "cluster", label: "Klaster EKS k8s-sages", ly: 457 },
+      { x: 170, y: 45, w: 120, h: 112, label: "ns traefik" },
+      { x: 305, y: 45, w: 495, h: 400, label: "ns kantyna" },
+      { x: 850, y: 45, w: 325, h: 400, label: "ns monitoring · opis w observability.html", ly: 437 },
+      { x: 305, y: 485, w: 495, h: 105, c: "aws", label: "AWS, poza klastrem · dostęp przez EKS Pod Identity" }
+    ],
+    geo: {
+      browser: { x: 15, y: 80, w: 125, h: 56, c: "ext", s: "pracownik" },
+      traefik: { x: 182, y: 80, w: 96, h: 56 },
+      web: { x: 320, y: 78, w: 125, h: 62, b: ["t", "l"], s: "nginx + OTel" },
+      orders: { x: 480, y: 78, w: 140, h: 62, b: ["t", "l", "m"], s: "Python, FastAPI" },
+      payments: { x: 660, y: 78, w: 125, h: 62, b: ["t", "l", "m"], s: "Go" },
+      loadgen: { x: 320, y: 215, w: 125, h: 62, b: ["t", "m"], s: "generator ruchu" },
+      postgres: { x: 660, y: 215, w: 125, h: 62, b: ["l", "m"], t: "Postgres 17", s: "+ exporter" },
+      worker: { x: 660, y: 350, w: 125, h: 62, b: ["t", "l", "m"], s: "Python, boto3" },
+      sqs: { x: 480, y: 518, w: 140, h: 56, c: "ext", s: "kolejka + DLQ" },
+      s3: { x: 660, y: 518, w: 125, h: 56, c: "ext", s: "paragony" },
+      tempo: { x: 870, y: 80, w: 125, h: 56 },
+      alloy: { x: 870, y: 218, w: 125, h: 56 },
+      prom: { x: 870, y: 353, w: 125, h: 56 },
+      loki: { x: 1030, y: 218, w: 130, h: 56 },
+      grafana: { x: 1030, y: 345, w: 130, h: 72 }
+    },
+    edges: [
+      { id: "e-br-tr", c: "req", p: [[140, 108], [182, 108]], title: "HTTPS" },
+      { id: "e-tr-web", c: "req", p: [[278, 108], [320, 108]], title: "Ingress" },
+      { id: "e-lg-web", c: "req", p: [[382, 215], [382, 140]], lb: "HTTP", lx: 382, ly: 178 },
+      { id: "e-web-ord", c: "req", p: [[445, 103], [480, 103]], title: "/api/ → orders-api:8000" },
+      { id: "e-ord-pay", c: "req", p: [[620, 103], [660, 103]], title: "POST /pay" },
+      { id: "e-ord-pg", c: "req", p: [[620, 126], [640, 126], [640, 246], [660, 246]], lb: "SQL", lx: 640, ly: 186 },
+      { id: "e-ord-sqs", c: "req", p: [[550, 140], [550, 518]], lb: "SendMessage", lx: 550, ly: 330 },
+      { id: "e-sqs-wrk", c: "req", p: [[620, 546], [640, 546], [640, 381], [660, 381]], lb: "long poll", lx: 640, ly: 330 },
+      { id: "e-wrk-s3", c: "req", p: [[722, 412], [722, 518]], lb: "PutObject", lx: 722, ly: 432 },
+      { id: "e-tr", c: "t", p: [[800, 108], [870, 108]], lb: "OTLP ×5", lx: 830, ly: 94 },
+      { id: "e-lg", c: "l", p: [[800, 246], [870, 246]], lb: "stdout ×6", lx: 830, ly: 232 },
+      { id: "e-mt", c: "m", p: [[800, 381], [870, 381]], lb: "scrape ×5", lx: 830, ly: 367 },
+      { id: "e-alloy-loki", c: "l", p: [[995, 246], [1030, 246]], title: "push" },
+      { id: "e-tempo-gr", c: "t", p: [[995, 100], [1168, 100], [1168, 385], [1160, 385]], lb: "TraceQL", lx: 1140, ly: 100 },
+      { id: "e-loki-gr", c: "l", p: [[1095, 274], [1095, 345]], lb: "LogQL", lx: 1095, ly: 310 },
+      { id: "e-prom-gr", c: "m", p: [[995, 381], [1030, 381]], title: "PromQL" }
+    ]
+  };
+  var SVCS = ["loadgen", "web", "orders", "payments", "postgres", "worker"];
+  function sig(ids, c, extra) { var o = {}; ids.forEach(function (i) { o[i] = c; }); for (var k in extra) o[k] = extra[k]; return o; }
+  var KM = {
+    req: { h: "Żądanie HTTP", p: "Zamówienie od pracownika (przez Traefika) albo od generatora ruchu trafia do nginx, który przekazuje /api/ do orders-api. orders-api pyta Postgresa o ceny i woła payments. Klient czeka na odpowiedź, więc te kroki składają się na czas żądania.",
+      n: { browser: "req", traefik: "req", loadgen: "req", web: "req", orders: "req", payments: "req", postgres: "req" }, e: ["e-br-tr", "e-tr-web", "e-lg-web", "e-web-ord", "e-ord-pay", "e-ord-pg"] },
+    async: { h: "Przez kolejkę", p: "Po zapisie zamówienia orders-api wrzuca wiadomość do SQS i od razu odpowiada 201. Worker odbiera wiadomości long pollingiem, przygotowuje zamówienie i zapisuje paragon w S3. Nagłówek traceparent jedzie w atrybutach wiadomości, więc to nadal ten sam trace.",
+      n: { orders: "req", sqs: "req", worker: "req", s3: "req" }, e: ["e-ord-sqs", "e-sqs-wrk", "e-wrk-s3"] },
+    t: { h: "Trace'y: pięć usług, jeden trace", p: "loadgen, nginx, orders-api, payments i worker wysyłają spany OTLP gRPC prosto do Tempo. Postgres nie wysyła spanów: zapytania SQL widać jako spany klienta w orders-api. Tempo skleja spany po trace_id w jedno zamówienie.",
+      n: sig(["loadgen", "web", "orders", "payments", "worker"], "t", { tempo: "t", grafana: "t" }), e: ["e-tr", "e-tempo-gr"] },
+    l: { h: "Logi: JSON z trace_id", p: "Wszystkie usługi piszą na stdout jedną linię JSON na zdarzenie, z polem trace_id (nginx też). Alloy na węźle wysyła je do Loki. Z linii logu przejdziesz w Grafanie do trace'a tego samego zamówienia.",
+      n: sig(SVCS, "l", { alloy: "l", loki: "l", grafana: "l" }), e: ["e-lg", "e-alloy-loki", "e-loki-gr"] },
+    m: { h: "Metryki: pięć ServiceMonitorów", p: "orders-api, payments, worker i loadgen wystawiają /metrics, a Postgres ma sidecar postgres-exporter. Prometheus pobiera je co 15 s, liczy 7 alertów Kantyna* i karmi dashboard „Kantyna: aplikacja”.",
+      n: sig(["loadgen", "orders", "payments", "worker", "postgres"], "m", { prom: "m", grafana: "m" }), e: ["e-mt", "e-prom-gr"] }
+  };
+  var allK = { h: "Cała Kantyna", p: "Zielone strzałki to ruch aplikacji, kolorowe po prawej to sygnały, które Kantyna wysyła do stosu observability. Kliknij usługę, żeby zobaczyć, jak jest zinstrumentowana, albo wybierz „Zamówienie krok po kroku”." };
+  var kwalk = [
+    { h: "Pracownik składa zamówienie", n: { browser: "req", traefik: "req", web: "req", orders: "req", loadgen: "req" }, e: ["e-br-tr", "e-tr-web", "e-lg-web", "e-web-ord"],
+      p: "POST /api/orders przychodzi z przeglądarki przez Traefika albo od generatora ruchu prosto do nginx. Generator zaczyna trace, nginx dokłada span „POST /api” i przekazuje nagłówek traceparent do orders-api." },
+    { h: "Ceny z bazy", n: { orders: "req", postgres: "req" }, e: ["e-ord-pg"],
+      p: "orders-api bierze połączenie z puli (span „db pool acquire”) i pyta Postgresa o ceny dań. Każde zapytanie SQL to osobny span z treścią zapytania w atrybucie db.statement." },
+    { h: "Płatność", n: { orders: "req", payments: "req" }, e: ["e-ord-pay"],
+      p: "orders-api woła payments (Go) przez HTTP. W payments span „bank authorize” udaje operatora płatności i to w nim siedzi opóźnienie z flagi latency_ms. Odmowa albo timeout po 3 s kończy zamówienie kodem 402." },
+    { h: "Zapis i wiadomość do kolejki", n: { orders: "req", postgres: "req", sqs: "req" }, e: ["e-ord-pg", "e-ord-sqs"],
+      p: "Zamówienie i jego pozycje zapisują się w jednej transakcji. Potem orders-api wysyła wiadomość do SQS (span PRODUCER) z traceparent w atrybutach i odpowiada 201. Klient nie czeka na kuchnię." },
+    { h: "Worker odbiera zamówienie", n: { sqs: "req", worker: "req" }, e: ["e-sqs-wrk"],
+      p: "Worker pyta SQS o wiadomości co 20 s (long polling). Z atrybutów odczytuje traceparent i otwiera span CONSUMER „orders process” w tym samym trace, choć działa w innym podzie i kilkadziesiąt milisekund później." },
+    { h: "Paragon w S3", n: { worker: "req", s3: "req" }, e: ["e-wrk-s3"],
+      p: "Span „kitchen prepare” to przygotowanie zamówienia (flaga processing_delay_ms). Potem paragon JSON trafia do S3, a wiadomość znika z kolejki. Po 5 nieudanych próbach wiadomość trafia do kolejki DLQ." },
+    { h: "Sygnały trafiają do stosu", n: sig(SVCS, "t", { tempo: "t", alloy: "l", loki: "l", prom: "m", grafana: "t" }), e: ["e-tr", "e-lg", "e-mt", "e-alloy-loki", "e-tempo-gr", "e-loki-gr", "e-prom-gr"],
+      p: "Każda usługa wysyła spany prosto do Tempo, pisze logi JSON z trace_id (zbiera je Alloy) i wystawia /metrics dla Prometheusa. W Grafanie łączy je trace_id: trace całego zamówienia, logi każdej usługi z tego zamówienia i wykresy z alertami." }
+  ];
+
+  var panel = document.getElementById("svcPanel"), kmode = "all";
+  var KG = Diagram(document.getElementById("kmap"), DK, function (id) { pickNode(id); });
+  function pickNode(id) {
+    if (kmode === "walk") setK("all");
+    KG.select(id);
+    if (S[id]) { pick(id); return; }
+    var o = MON[id];
+    panel.innerHTML = '<div class="eyebrow">' + (id === "browser" ? "poza klastrem" : id === "traefik" ? "namespace traefik" : "stos observability · namespace monitoring") + '</div><h3>' + esc(o.t) + '</h3><p>' + esc(o.what) + '</p>' +
+      (id !== "browser" && id !== "traefik" ? '<p style="color:var(--muted);font-size:.9rem">Jak działa sam komponent: <a href="observability.html">observability.html</a>.</p>' : '');
+  }
+  function pick(id) {
+    var o = S[id];
+    panel.innerHTML = '<div class="eyebrow">' + (o.ext ? "AWS, poza klastrem" : "namespace kantyna") + '</div><h3>' + esc(o.t) + '</h3><p>' + esc(o.what) + '</p>' +
+      '<dl><dt>Technologia</dt><dd>' + esc(o.tech) + '</dd></dl>' +
+      '<div class="sigrow"><div class="sigline"><span class="tag t">trace</span><span>' + esc(o.tr) + '</span></div>' +
+      '<div class="sigline"><span class="tag l">log</span><span>' + esc(o.lg) + '</span></div>' +
+      '<div class="sigline"><span class="tag m">metryki</span><span>' + esc(o.mt) + '</span></div></div>';
+  }
+  function introK() {
+    var m = kmode === "all" ? allK : KM[kmode];
+    panel.innerHTML = '<div class="eyebrow">' + (kmode === "all" ? "legenda" : "przepływ") + '</div><h3>' + esc(m.h) + '</h3><p>' + esc(m.p) + '</p><p style="color:var(--muted);font-size:.88rem">Kliknij usługę na diagramie, żeby zobaczyć szczegóły.</p>';
+  }
+  var kwi = 0, kstep = document.getElementById("kstepper"), kbody = document.getElementById("kstepbody"), kdots = document.getElementById("kdots");
+  kwalk.forEach(function (_, i) {
+    var b = document.createElement("button"); b.type = "button"; b.setAttribute("aria-label", "Krok " + (i + 1));
+    b.addEventListener("click", function () { kwi = i; renderK(); }); kdots.appendChild(b);
+  });
+  function renderK() {
+    var s = kwalk[kwi], he = {};
+    s.e.forEach(function (id) { he[id] = 1; });
+    KG.set(s.n, he); KG.flow(s.e);
+    kbody.innerHTML = '<h3>' + esc(s.h) + '</h3><p>' + esc(s.p) + '</p>';
+    document.getElementById("kcount").textContent = (kwi + 1) + " / " + kwalk.length;
+    document.getElementById("kprev").disabled = kwi === 0;
+    document.getElementById("knext").disabled = kwi === kwalk.length - 1;
+    Array.prototype.forEach.call(kdots.children, function (d, i) { d.setAttribute("aria-current", i === kwi ? "true" : "false"); });
+    panel.innerHTML = '<div class="eyebrow">krok ' + (kwi + 1) + ' z ' + kwalk.length + '</div><p>Podświetlone usługi biorą udział w tym kroku, a pakiety płyną tam, dokąd idzie żądanie albo wiadomość.</p>';
+  }
+  document.getElementById("kprev").addEventListener("click", function () { if (kwi > 0) { kwi--; renderK(); } });
+  document.getElementById("knext").addEventListener("click", function () { if (kwi < kwalk.length - 1) { kwi++; renderK(); } });
+  function setK(m) {
+    kmode = m;
+    document.querySelectorAll(".mode").forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.mode === m ? "true" : "false"); });
+    KG.select(null);
+    kstep.hidden = m !== "walk";
+    if (m === "walk") { kwi = 0; renderK(); return; }
+    if (m === "all") { KG.set(null, null); KG.flow(null); }
+    else { var he = {}; KM[m].e.forEach(function (id) { he[id] = 1; }); KG.set(KM[m].n, he); KG.flow(KM[m].e); }
+    introK();
+  }
+  document.querySelectorAll(".mode").forEach(function (b) { b.addEventListener("click", function () { setK(b.dataset.mode); }); });
+  setK("all");
+
+  /* ---------- waterfall ---------- */
+  var COL = { loadgen: "#7d8aa0", web: "var(--req)", "orders-api": "var(--t)", payments: "var(--m)", worker: "var(--l)" };
+  // [nazwa, usługa, start ms, czas ms, głębokość, atrybuty]
+  function base() {
+    return [
+      ["klient orders_create", "loadgen", 0, 24.9, 0, { "kantyna.loadgen.endpoint": "orders_create", "http.response.status_code": 201 }],
+      ["POST /api", "web", 1.0, 23.0, 1, { "http.method": "POST", "http.target": "/api/orders", "http.status_code": 201 }],
+      ["POST /api/orders", "orders-api", 1.3, 22.4, 2, { "http.route": "/api/orders", "kantyna.order.id": 2417, "kantyna.order.total_pln": 41.5 }],
+      ["db pool acquire", "orders-api", 1.5, 0.03, 3, { "db.pool.max": 10 }],
+      ["SELECT menu_items", "orders-api", 1.7, 0.9, 3, { "db.system": "postgresql", "db.statement": "SELECT price_pln FROM menu_items WHERE id = %s", "peer.service": "postgres" }],
+      ["INSERT orders", "orders-api", 2.8, 0.9, 3, { "db.system": "postgresql", "db.statement": "INSERT INTO orders (employee_id, status, total_pln) VALUES (%s, %s, %s) RETURNING id, created_at" }],
+      ["INSERT order_items", "orders-api", 3.9, 1.0, 3, { "db.system": "postgresql", "db.statement": "INSERT INTO order_items (order_id, menu_item_id, qty, unit_price_pln) VALUES (%s, %s, %s, %s)" }],
+      ["POST (httpx)", "orders-api", 5.2, 2.2, 3, { "http.method": "POST", "http.url": "http://kantyna-payments:8080/pay" }],
+      ["POST /pay", "payments", 6.4, 0.12, 4, { "kantyna.order.ref": "2417", "kantyna.payment.amount_pln": 41.5 }],
+      ["bank authorize", "payments", 6.45, 0.01, 5, { "kantyna.payment.injected_delay_ms": 0 }],
+      ["kantyna-k8s-sages-orders publish", "orders-api", 8.0, 6.3, 3, { "span.kind": "PRODUCER", "messaging.system": "aws_sqs", "messaging.destination.name": "kantyna-k8s-sages-orders" }],
+      ["SQS.SendMessage", "orders-api", 8.1, 6.1, 4, { "rpc.service": "SQS", "rpc.method": "SendMessage" }],
+      ["orders process", "worker", 40, 180, 4, { "span.kind": "CONSUMER", "messaging.operation": "process", "kantyna.order.id": "2417" }],
+      ["kitchen prepare", "worker", 41, 153, 5, { "kantyna.worker.delay_ms": 0 }],
+      ["S3.PutObject", "worker", 195, 21.9, 5, { "rpc.service": "S3", "rpc.method": "PutObject", "aws.s3.bucket": "kantyna-k8s-sages-receipts-…" }],
+      ["SQS.DeleteMessage", "worker", 217, 4.5, 5, { "rpc.service": "SQS", "rpc.method": "DeleteMessage" }]
+    ];
+  }
+  var notes = {
+    ok: "Cała ścieżka HTTP trwa ok. 25 ms; baza i płatność to drobne paski. Worker startuje ok. 40 ms później, w innym podzie, ale w tym samym trace.",
+    slow: "Kafelek p95 na dashboardzie mówi tylko „wolno”. Trace pokazuje gdzie: 1,5 s siedzi w „bank authorize” w payments. Baza i kolejka są szybkie.",
+    err: "Flaga error_rate kończy żądanie 500, zanim dotknie bazy. Span orders-api ma status ERROR i zdarzenie z wyjątkiem; na czerwono także web i loadgen, bo dostały 500.",
+    n1: "GET /api/menu z flagą slow_menu_query: jedno zapytanie o listę id, potem osobne zapytanie o każde danie. W metrykach widać tylko wolniejsze menu, w trace widać wzorzec N+1."
+  };
+  function scenario(s) {
+    var r = base();
+    if (s === "slow") {
+      r[9][3] = 1500.0; r[9][5]["kantyna.payment.injected_delay_ms"] = 1500;
+      r[8][3] = 1500.2; r[7][3] = 1502.0;
+      [0, 1, 2].forEach(function (i) { r[i][3] += 1500; });
+      r[10][2] += 1500; r[11][2] += 1500; r[12][2] += 1500; r[13][2] += 1500; r[14][2] += 1500; r[15][2] += 1500;
+    }
+    if (s === "err") {
+      r = r.slice(0, 3);
+      r[0][3] = 4.1; r[1][3] = 3.2; r[2][3] = 2.6;
+      r.forEach(function (x) { x[6] = true; });
+      r[0][5]["http.response.status_code"] = 500; r[1][5]["http.status_code"] = 500;
+      r[2][5] = { "http.route": "/api/orders", "http.status_code": 500, "otel.status_code": "ERROR", "exception.type": "UpstreamUnavailableError" };
+    }
+    if (s === "n1") {
+      r = [["klient menu", "loadgen", 0, 31, 0, { "kantyna.loadgen.endpoint": "menu" }],
+           ["GET /api", "web", 0.8, 29.6, 1, { "http.target": "/api/menu" }],
+           ["GET /api/menu", "orders-api", 1.1, 29.0, 2, { "http.route": "/api/menu" }],
+           ["db pool acquire", "orders-api", 1.3, 0.03, 3, {}],
+           ["SELECT menu_items", "orders-api", 1.5, 0.9, 3, { "db.statement": "SELECT id FROM menu_items ORDER BY category, name" }]];
+      for (var i = 0; i < 20; i++) r.push(["SELECT menu_items", "orders-api", 2.6 + i * 1.35, 1.1, 3, { "db.statement": "SELECT id, name, category, price_pln FROM menu_items WHERE id = %s" }]);
+    }
+    return r;
+  }
+  var rowsEl = document.getElementById("rows"), side = document.getElementById("wfSide"), ticks = document.getElementById("ticks"), cur = "ok";
+  function fmt(ms) { return ms >= 100 ? Math.round(ms) + " ms" : ms >= 1 ? ms.toFixed(1) + " ms" : (ms * 1000).toFixed(0) + " µs"; }
+  function render(s) {
+    cur = s;
+    var r = scenario(s), end = 0;
+    r.forEach(function (x) { end = Math.max(end, x[2] + x[3]); });
+    end = end * 1.08;
+    ticks.innerHTML = [0, 0.25, 0.5, 0.75, 1].map(function (f) { return "<span>" + fmt(end * f).replace(" ", "&nbsp;") + "</span>"; }).join("");
+    rowsEl.innerHTML = "";
+    r.forEach(function (x, i) {
+      var b = document.createElement("button"); b.type = "button"; b.className = "row"; b.setAttribute("aria-pressed", "false");
+      var left = x[2] / end * 100, w = Math.max(x[3] / end * 100, 0.25);
+      var labelLeft = left + w > 78 ? "auto" : (left + w + 0.8) + "%", labelRight = left + w > 78 ? (100 - left + 0.8) + "%" : "auto";
+      b.innerHTML = '<span class="rname" style="padding-left:' + (x[4] * 10) + 'px">' + esc(x[0]) + ' <span class="s">' + esc(x[1]) + '</span></span>' +
+        '<span class="track"><span class="bar' + (x[6] ? " err" : "") + '" style="--bc:' + COL[x[1]] + ';left:' + left + '%;width:' + w + '%"></span>' +
+        '<span class="dur" style="left:' + labelLeft + ';right:' + labelRight + '">' + fmt(x[3]) + '</span></span>';
+      b.addEventListener("click", function () {
+        Array.prototype.forEach.call(rowsEl.children, function (c) { c.setAttribute("aria-pressed", "false"); });
+        b.setAttribute("aria-pressed", "true"); showSpan(x);
+      });
+      rowsEl.appendChild(b);
+    });
+    side.innerHTML = '<div class="eyebrow">scenariusz</div><p>' + esc(notes[s]) + '</p><p style="color:var(--muted);font-size:.88rem">Kliknij span, żeby zobaczyć jego atrybuty.</p>';
+  }
+  function showSpan(x) {
+    var a = x[5], keys = Object.keys(a);
+    side.innerHTML = '<div class="eyebrow">' + esc(x[1]) + '</div><h3>' + esc(x[0]) + '</h3><p class="mono" style="font-size:.85rem">' + fmt(x[3]) + (x[6] ? ' · <b style="color:var(--bad)">ERROR</b>' : '') + '</p>' +
+      (keys.length ? '<dl class="attrs">' + keys.map(function (k) { return '<dt>' + esc(k) + '</dt><dd>' + esc(a[k]) + '</dd>'; }).join("") + '</dl>' : "") +
+      '<p style="color:var(--muted);font-size:.88rem">' + esc(notes[cur]) + '</p>';
+  }
+  document.getElementById("svcdots").innerHTML = Object.keys(COL).map(function (k) { return '<span style="--bc:' + COL[k] + '"><i></i>' + esc(k) + '</span>'; }).join("");
+  Array.prototype.forEach.call(document.querySelectorAll(".scen button"), function (b) {
+    b.addEventListener("click", function () {
+      Array.prototype.forEach.call(document.querySelectorAll(".scen button"), function (o) { o.setAttribute("aria-pressed", String(o === b)); });
+      render(b.dataset.s);
+    });
+  });
+  render("ok");
+
+  /* ---------- zapytania ---------- */
+  var Q = [
+    { c: "m", h: "Metryki", s: "PromQL · Prometheus", q: [
+      ["Żądania na sekundę według endpointu", 'sum by (route) (rate(http_requests_total{namespace="kantyna", app="orders-api"}[1m]))'],
+      ["p95 według endpointu", 'histogram_quantile(0.95, sum by (le, route) (rate(http_request_duration_seconds_bucket{namespace="kantyna", app="orders-api"}[2m])))'],
+      ["Odsetek błędów 5xx", 'sum(rate(http_requests_total{namespace="kantyna", status=~"5.."}[5m])) / sum(rate(http_requests_total{namespace="kantyna"}[5m]))'],
+      ["Mapa usług z metryk Tempo", 'sum by (client, server) (rate(traces_service_graph_request_total{client=~"loadgen|web|orders-api|payments|worker"}[5m]))'] ] },
+    { c: "l", h: "Logi", s: "LogQL · Loki", q: [
+      ["Błędy w całej aplikacji", '{namespace="kantyna", level="ERROR"}'],
+      ["Wolne płatności z logu payments", '{namespace="kantyna", app="payments"} | json | duration_ms > 500'],
+      ["Wszystkie logi jednego zamówienia (wklej trace_id)", '{namespace="kantyna"} | trace_id="<trace_id>"'],
+      ["Access log nginx: odpowiedzi 5xx", '{namespace="kantyna", app="web"} | json | status >= 500'] ] },
+    { c: "t", h: "Trace'y", s: "TraceQL · Tempo", q: [
+      ["Zamówienia dłuższe niż 1 s", '{resource.service.name="orders-api" && name="POST /api/orders" && duration > 1s}'],
+      ["Trace'y z błędem w dowolnej usłudze", '{resource.service.name=~"web|orders-api|payments|worker" && status=error}'],
+      ["Zapytania SQL wolniejsze niż 50 ms", '{span.db.system="postgresql" && duration > 50ms}'],
+      ["Zamówienia, które dotarły do workera", '{resource.service.name="worker" && name="orders process"}'] ] }
+  ];
+  document.getElementById("queries").innerHTML = Q.map(function (col) {
+    return '<div class="qcol ' + col.c + '"><h3>' + esc(col.h) + ' <small>' + esc(col.s) + '</small></h3>' +
+      col.q.map(function (x) { return '<div class="q"><p>' + esc(x[0]) + '</p>' + codeBlock(x[1]) + '</div>'; }).join("") + '</div>';
+  }).join("");
+})();
+</script>
+</body>
+</html>

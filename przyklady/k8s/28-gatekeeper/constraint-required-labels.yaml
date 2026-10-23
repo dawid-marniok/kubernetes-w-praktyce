@@ -1,0 +1,17 @@
+# Constraint: każdy Deployment ma etykietę app.kubernetes.io/part-of (do jakiej aplikacji należy).
+# Celowo zawsze dryrun: pokazuje w audycie, ile istniejących Deploymentów łamie regułę, nic nie blokując.
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequiredLabels
+metadata:
+  name: deployment-ma-part-of
+spec:
+  enforcementAction: dryrun
+  match:
+    kinds:
+    - apiGroups: ["apps"]
+      kinds: ["Deployment"]
+    namespaceSelector:
+      matchLabels:
+        polityki: gatekeeper
+  parameters:
+    labels: ["app.kubernetes.io/part-of"]

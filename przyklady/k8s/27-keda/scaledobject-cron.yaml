@@ -1,0 +1,17 @@
+# Do pokazania (krok 5): drugi typ triggera, bez żadnej metryki. Raport działa w godzinach pracy, poza nimi 0 podów.
+# Kilka triggerów w jednym ScaledObject: wygrywa ten, który chce więcej replik.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: raport
+spec:
+  scaleTargetRef:
+    name: raport
+  minReplicaCount: 0                # poza oknem: zero podów, zero kosztu
+  triggers:
+    - type: cron
+      metadata:
+        timezone: Europe/Warsaw
+        start: 0 8 * * 1-5          # pn–pt 8:00
+        end: 0 18 * * 1-5           # pn–pt 18:00
+        desiredReplicas: "2"

@@ -1,0 +1,40 @@
+# Generator ruchu do podinfo (release "pi" → Service pi-podinfo:9898): co ok. 0,5 s strona główna,
+# co kilka sekund błąd 500 i wolne żądanie 1 s. Daje wykres żądań po kodzie odpowiedzi i p95.
+# Zatrzymanie: kubectl scale deploy podinfo-ruch --replicas=0
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: podinfo-ruch
+  labels: {app: podinfo-ruch}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: podinfo-ruch}
+  template:
+    metadata:
+      labels: {app: podinfo-ruch}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: ruch
+          image: busybox:1.37
+          command: ["sh", "-c"]
+          args:
+            - |
+              i=0
+              while true; do
+                wget -q -O /dev/null http://pi-podinfo:9898/ || true
+                i=$((i+1))
+                if [ $((i % 10)) -eq 0 ]; then wget -q -O /dev/null http://pi-podinfo:9898/status/500 2>/dev/null || true; fi
+                if [ $((i % 15)) -eq 0 ]; then wget -q -O /dev/null http://pi-podinfo:9898/delay/1 || true; fi
+                sleep 0.5
+              done
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: ["ALL"]}
+          resources:
+            requests: {cpu: 5m, memory: 8Mi}
+            limits: {cpu: 50m, memory: 32Mi}

@@ -1,0 +1,14 @@
+# Constraint: K8sImageTag bez parametrów, na Podach w namespace'ach z etykietą polityki=gatekeeper.
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sImageTag
+metadata:
+  name: tag-wersji-bez-latest
+spec:
+  enforcementAction: dryrun
+  match:
+    kinds:
+    - apiGroups: [""]
+      kinds: ["Pod"]
+    namespaceSelector:
+      matchLabels:
+        polityki: gatekeeper

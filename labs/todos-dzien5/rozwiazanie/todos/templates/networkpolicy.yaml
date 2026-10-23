@@ -1,0 +1,170 @@
+{{- if .Values.networkPolicy.enabled }}
+# NetworkPolicy z dnia 4: default-deny dla podów ToDos i strzałki Traefik → web:8080 → api:3001 → mongo:27017.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: todos-default-deny
+  labels:
+    {{- include "todos.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: todos
+  policyTypes: [Ingress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: web-from-traefik
+  labels:
+    {{- include "todos.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: todos-web
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.ingressNamespace }}
+      ports:
+        - port: 8080
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-from-web
+  labels:
+    {{- include "todos.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: todos-api
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: todos-web
+      ports:
+        - port: 3001
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mongo-from-api
+  labels:
+    {{- include "todos.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: todos-mongo
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: todos-api
+        - podSelector:
+            matchLabels:
+              app: todos-backup
+      ports:
+        - port: 27017
+          protocol: TCP
+{{- if .Values.networkPolicy.egress }}
+---
+# (*) egress z dnia 4: DNS dla wszystkich, web → api, api i backup → mongo
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: todos-egress-dns
+  labels:
+    {{- include "todos.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: todos
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: web-egress-api
+  labels:
+    {{- include "todos.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: todos-web
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: todos-api
+      ports:
+        - port: 3001
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: to-mongo-egress
+  labels:
+    {{- include "todos.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values: [todos-api, todos-backup]
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: todos-mongo
+      ports:
+        - port: 27017
+          protocol: TCP
+{{- if .Values.otel.enabled }}
+---
+# lab19: spany z api do Tempo przez OTLP/HTTP (namespace monitoring)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-egress-otlp
+  labels:
+    {{- include "todos.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: todos-api
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: 4318
+          protocol: TCP
+{{- end }}
+{{- end }}
+{{- end }}

@@ -14,7 +14,11 @@ spec:
   source:
     repoURL: https://github.com/dawid-marniok/kubernetes-w-praktyce.git
     targetRevision: main            # gałąź, tag albo commit
-    path: przyklady/k8s/29-gitops-argocd/app/overlays/prod   # kustomization.yaml → Argo CD sam robi kustomize build
+    path: przyklady/k8s/29-gitops-argocd/app   # Chart.yaml → Argo CD sam robi helm template
+    helm:
+      valueFiles:
+        - values-prod.yaml          # ścieżka względem path; values.yaml chart bierze zawsze
+      # releaseName domyślnie = nazwa Application (podinfo-prod) → od niej nazwy obiektów
   destination:
     server: https://kubernetes.default.svc   # ten sam klaster, w którym działa Argo CD
     namespace: gitops-demo

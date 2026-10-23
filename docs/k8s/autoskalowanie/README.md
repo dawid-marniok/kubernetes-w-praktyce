@@ -12,7 +12,7 @@ Gotowe manifesty: `przyklady/k8s/14-hpa/`. Ćwiczysz w lab11 (zasoby, quota, HPA
 - **KEDA** skaluje według zdarzeń, np. długości kolejki, i potrafi zejść do zera. Pod spodem i tak steruje HPA.
 - **Cluster Autoscaler / Karpenter / EKS Auto Mode** dokładają węzły, gdy pody nie mieszczą się na istniejących.
 
-**Na k8s-sages:** działają HPA (metrics-server jest add-onem EKS) i in-place resize (Kubernetes 1.35). KEDA, VPA i Karpentera nie ma. Węzłów jest stała liczba (3), a Twój namespace ma ResourceQuota.
+**Na k8s-sages:** działają HPA (metrics-server jest add-onem EKS), in-place resize (Kubernetes 1.35) i KEDA 2.21 (namespace `keda`; `ScaledObject` tworzy prowadzący, rola kursanta tego nie obejmuje, zob. demo dnia 5). VPA i Karpentera nie ma. Węzłów jest stała liczba (3), a Twój namespace ma ResourceQuota.
 
 ## HPA: jak działa
 
@@ -69,7 +69,7 @@ Pułapki:
 
 ## KEDA: skalowanie od zdarzeń
 
-KEDA (Kubernetes Event-Driven Autoscaling) to projekt CNCF w statusie graduated, instalowany Helmem przez administratora klastra (`helm install keda kedacore/keda -n keda --create-namespace`). Na k8s-sages jej nie ma.
+KEDA (Kubernetes Event-Driven Autoscaling) to projekt CNCF w statusie graduated, instalowany Helmem przez administratora klastra (`helm install keda kedacore/keda -n keda --create-namespace`). Na k8s-sages jest (2.21). W dniu 5 prowadzący pokazuje skalowanie po metryce z Prometheusa: przykład niżej.
 
 ```
 ScaledObject ─watch─► keda-operator ─tworzy─► HPA keda-hpa-<nazwa>
@@ -115,6 +115,33 @@ spec:
 ```
 
 120 wiadomości przy `queueLength: 5` → 24 pody (przycięte do `maxReplicaCount`). Zero podów to zimny start: pierwsza wiadomość po ciszy czeka na polling i start poda.
+
+### Skalowanie po metryce z Prometheusa (demo dnia 5)
+
+Ta sama metryka, którą piszesz w Grafanie, może sterować liczbą podów. Cel: 3 żądania na sekundę na pod.
+
+```yaml
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: keda-app
+spec:
+  scaleTargetRef: {name: keda-app}
+  minReplicaCount: 1                 # HTTP: zostaw 1, zero = zimny start dla pierwszego żądania
+  maxReplicaCount: 6
+  triggers:
+  - type: prometheus
+    metadata:
+      serverAddress: http://kube-prometheus-stack-prometheus.monitoring.svc:9090
+      query: sum(rate(http_requests_total{namespace="demo", service="keda-app"}[1m]))
+      threshold: "3"
+```
+
+15 req/s → `ceil(15 / 3)` = 5 podów. Sprawdzasz `kubectl get scaledobject` (READY, ACTIVE) i `kubectl get hpa` (powstał `keda-hpa-keda-app`). Zapytanie musi zwracać **jedną liczbę** (stąd `sum`); pusty wynik KEDA domyślnie liczy jako 0 (`ignoreNullValues: "true"`), więc literówka w zapytaniu nie daje błędu, tylko stałe minimum replik.
+
+Trigger bez metryki, `cron`: `start: 0 8 * * 1-5`, `end: 0 18 * * 1-5`, `desiredReplicas: "2"`, `timezone: Europe/Warsaw`. Poza oknem `minReplicaCount: 0`, czyli zero podów. Kilka triggerów w jednym ScaledObject: wygrywa ten, który chce więcej replik.
+
+`keda.sh/v1alpha1` to produkcyjne API KEDA od lat. Co znaczy alpha w CRD projektu, a co w API Kubernetesa: [`crd/README.md`](../crd/README.md#wersje-api-alpha-beta-v1).
 
 ## VPA: Vertical Pod Autoscaler
 

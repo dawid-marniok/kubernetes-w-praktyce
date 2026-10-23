@@ -2,7 +2,7 @@
 
 Po szkoleniu wspólny klaster znika. Jeśli chcesz dalej ćwiczyć albo nie masz dostępu do klastra, postaw Kubernetesa u siebie. Ten plik pomaga wybrać narzędzie, postawić klaster i przenieść na niego laby.
 
-Na szkoleniu kind przydaje się tam, gdzie na wspólnym klastrze nie wolno ruszać węzłów (tainty, cordon, drain — [`przyklady/k8s/15-affinity-taints/kind-taint-pdb-drain/`](../../../przyklady/k8s/15-affinity-taints/kind-taint-pdb-drain/)), i jako plan B bez klastra. Instalację i nasz klaster z pliku `setup/kind/kind-szkolenie.yaml` opisuje [`setup/kind.md`](../../../setup/kind.md) — tu tego nie powtarzam, tylko uzupełniam.
+Na szkoleniu pracujesz na EKS, a kind pokazuje prowadzący na początku dnia 5. Po szkoleniu przyda się tam, gdzie na wspólnym klastrze nie wolno było ruszać węzłów (tainty, cordon, drain — [`przyklady/k8s/15-affinity-taints/kind-taint-pdb-drain/`](../../../przyklady/k8s/15-affinity-taints/kind-taint-pdb-drain/)), i jako plan B bez klastra. Instalację i nasz klaster z pliku `setup/kind/kind-szkolenie.yaml` opisuje [`setup/kind.md`](../../../setup/kind.md) — tu tego nie powtarzam, tylko uzupełniam.
 
 | Sekcja | Co w niej jest |
 |---|---|
@@ -33,7 +33,7 @@ Wniosek: do nauki obiektów Kubernetesa, Helma, operatorów i diagnozy lokalny k
 
 | Narzędzie | Co to | Wymagania | Wiele węzłów | LoadBalancer | Ingress | Licencja / koszt | System | Kiedy wybrać |
 |---|---|---|---|---|---|---|---|---|
-| **kind** | węzły jako kontenery Dockera, czysty Kubernetes (kubeadm) | Docker albo Podman; ok. 3 GB RAM na nasz klaster | tak, w pliku konfiguracji | osobno: cloud-provider-kind | brak w zestawie; instalujesz sam (np. Traefik) | Apache 2.0, darmowy | macOS, Windows, Linux | testy, CI, laby z węzłami; to używamy na szkoleniu |
+| **kind** | węzły jako kontenery Dockera, czysty Kubernetes (kubeadm) | Docker albo Podman; ok. 3 GB RAM na nasz klaster | tak, w pliku konfiguracji | osobno: cloud-provider-kind | brak w zestawie; instalujesz sam (np. Traefik) | Apache 2.0, darmowy | macOS, Windows, Linux | testy, CI, laby z węzłami; ten pokazujemy na szkoleniu |
 | **minikube** | klaster w kontenerze albo VM, dużo dodatków (`addons`) | 2 CPU, 2 GB RAM, 20 GB dysku; Docker, Podman albo hypervisor | tak, `--nodes` | `minikube tunnel` | addon `ingress` (ingress-nginx) | Apache 2.0, darmowy | macOS, Windows, Linux | nauka od zera, gotowe dodatki jednym poleceniem |
 | **k3d** | k3s (lekka dystrybucja od Rancher/SUSE) w kontenerach Dockera | Docker; mało RAM | tak, `--agents` | wbudowany ServiceLB + mapowanie portów | Traefik w zestawie (klasa `traefik`) | MIT, darmowy | macOS, Windows, Linux | najszybszy start, Ingress i LB od razu, mało pamięci |
 | **Docker Desktop** (wbudowany Kubernetes) | klaster w Docker Desktop; tryb `kubeadm` (1 węzeł) albo od 4.38 tryb `kind` (wiele węzłów, wybór wersji) | Docker Desktop; tryb kind wymaga magazynu obrazów containerd | tak, w trybie kind | Service `LoadBalancer` dostępny na `localhost` (sprawdź w swojej wersji) | brak w zestawie | darmowy dla osób prywatnych, edukacji i małych firm; w większych firmach płatna subskrypcja | macOS, Windows, Linux | masz już Docker Desktop i chcesz klaster jednym kliknięciem |
@@ -56,7 +56,7 @@ Skrót najważniejszych poleceń:
 kind create cluster --config setup/kind/kind-szkolenie.yaml   # z katalogu głównego repo; kontekst kind-szkolenie
 kubectl config current-context                                # kind-szkolenie
 kind load docker-image todos-api:1.0.0 --name szkolenie       # obraz z laptopa do węzłów, bez rejestru
-kubectl apply -k setup/kind/metrics-server                    # kubectl top, HPA
+kubectl apply -f setup/kind/metrics-server/metrics-server.yaml                    # kubectl top, HPA; tylko na kind!
 kind delete cluster --name szkolenie
 ```
 

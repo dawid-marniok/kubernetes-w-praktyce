@@ -1,0 +1,15 @@
+# ToDos · dzień 5: „produkcja” w tym samym namespace. Tylko różnice względem values.yaml:
+# helm upgrade todos ./todos -f values-prod.yaml --set registry=… --set host=…
+web:
+  replicas: 3
+
+api:
+  hpa:
+    minReplicas: 3
+    maxReplicas: 4           # quota namespace'u: więcej się nie zmieści razem z mongo i web
+
+networkPolicy:
+  egress: true
+
+alerts:
+  enabled: true

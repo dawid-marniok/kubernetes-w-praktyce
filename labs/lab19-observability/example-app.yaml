@@ -1,0 +1,93 @@
+# example-app (app/example-app): metryki /metrics, logi JSON, trace'y OTLP → Tempo.
+# Przed apply zamień <REJESTR> na rejestr podany przez prowadzącego.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: example-app
+  labels: {app: example-app}
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: example-app}
+  template:
+    metadata:
+      labels: {app: example-app}
+    spec:
+      containers:
+        - name: app
+          image: <REJESTR>/example-app:1.0.0
+          ports:
+            - {name: http, containerPort: 8080}
+          env:
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://tempo.monitoring.svc:4318
+            - name: OTEL_SERVICE_NAME
+              value: example-app
+          readinessProbe:
+            httpGet: {path: /health, port: http}
+          livenessProbe:
+            httpGet: {path: /health, port: http}
+            initialDelaySeconds: 10
+          resources:
+            requests: {cpu: 20m, memory: 64Mi}
+            limits: {cpu: 200m, memory: 192Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities: {drop: [ALL]}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: example-app
+  labels: {app: example-app}      # po tej etykiecie wybiera ServiceMonitor
+spec:
+  selector: {app: example-app}
+  ports:
+    - name: http                  # ServiceMonitor szuka portu po NAZWIE
+      port: 8080
+      targetPort: http
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: example-app
+spec:
+  selector:
+    matchLabels: {app: example-app}
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+---
+# Ruch: co sekundę hello, co 3 s slow, co 5 s error
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: example-load
+  labels: {app: example-load}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: example-load}
+  template:
+    metadata:
+      labels: {app: example-load}
+    spec:
+      containers:
+        - name: load
+          image: busybox:1.37
+          command: ["sh", "-c"]
+          args:
+            - |
+              i=0
+              while true; do
+                i=$((i+1))
+                wget -q -O /dev/null "http://example-app:8080/api/hello?name=u$i"
+                [ $((i % 3)) -eq 0 ] && wget -q -O /dev/null "http://example-app:8080/api/slow"
+                [ $((i % 5)) -eq 0 ] && wget -q -O /dev/null "http://example-app:8080/api/error" 2>/dev/null
+                sleep 1
+              done
+          resources:
+            requests: {cpu: 5m, memory: 8Mi}
+            limits: {cpu: 50m, memory: 32Mi}

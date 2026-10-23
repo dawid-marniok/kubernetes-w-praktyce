@@ -1,0 +1,17 @@
+# Trace'y w ToDos bez zmiany kodu i obrazu: OpenTelemetry Operator (namespace monitoring) wstrzykuje SDK Node.js
+# do każdego nowego poda z tą adnotacją. <login> podmienia sed z README (krok 6).
+spec:
+  template:
+    metadata:
+      annotations:
+        instrumentation.opentelemetry.io/inject-nodejs: "monitoring/otel"
+    spec:
+      containers:
+        - name: api
+          env:
+            # wszyscy mają Deployment "api": bez własnej nazwy trace'y całej grupy zlałyby się w jeden serwis
+            - name: OTEL_SERVICE_NAME
+              value: todos-api-<login>
+          resources:
+            limits:
+              memory: 384Mi         # SDK zajmuje dodatkowe 50–100 Mi; przy 256Mi grozi OOMKilled

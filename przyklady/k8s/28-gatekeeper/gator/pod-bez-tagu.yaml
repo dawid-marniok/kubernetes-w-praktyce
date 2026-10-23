@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bez-tagu
+  namespace: demo
+spec:
+  containers:
+  - name: app
+    image: registry.k8s.io/pause      # brak tagu = :latest

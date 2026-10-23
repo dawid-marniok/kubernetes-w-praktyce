@@ -1,0 +1,644 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sekrety w Kubernetesie</title>
+<meta name="description" content="Dzień 5 — ściąga: jak hasło trafia do kontenera. Animowana droga sekretu dla siedmiu podejść: zwykły Secret, Sealed Secrets, SOPS, External Secrets, Secrets Store CSI, Vault Agent Injector, SDK w aplikacji. Rotacja: plik kontra env.">
+<style>
+:root {
+  --navy: #012438;
+  --acc: #41C0F0;
+  --light: #EBF8FD;
+  --light2: #E1EDF8;
+
+  --bg: #ffffff;
+  --ink: #0f2535;
+  --muted: #557080;
+  --panel: var(--light);
+  --strong: var(--navy);
+  --on-strong: #ffffff;
+  --head: #0a7aa8;
+  --code-bg: var(--light2);
+  --border: #cfe0ea;
+  --flow: #0a9bd4;
+
+  --ok: #1d7a44;
+  --ok-bg: #dcf2e4;
+  --bad: #b42318;
+  --bad-bg: #fde3df;
+  --warn: #8a5a00;
+  --warn-bg: #fdf0d2;
+  --act: #0a7aa8;
+  --act-bg: #dff3fc;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #08151e;
+    --ink: #e3eef4;
+    --muted: #9cb4c3;
+    --panel: #0f2532;
+    --strong: #0d4b70;
+    --head: #41C0F0;
+    --code-bg: #12293a;
+    --border: #23404f;
+    --flow: #41C0F0;
+
+    --ok: #6fd99a;
+    --ok-bg: #12382a;
+    --bad: #ff9a8c;
+    --bad-bg: #4a1c18;
+    --warn: #f3c66b;
+    --warn-bg: #3a2c0c;
+    --act: #7fd6f7;
+    --act-bg: #0e3a52;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+.wrap { max-width: 1080px; margin: 0 auto; padding: 0 16px 64px; }
+header.hero { background: var(--navy); color: #fff; padding: 32px 0 26px; border-bottom: 6px solid var(--acc); }
+header.hero .wrap { padding-bottom: 0; }
+.kicker { color: var(--acc); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; font-size: 13px; margin: 0 0 6px; }
+.kicker a { color: var(--acc); }
+h1 { font-size: clamp(26px, 5.5vw, 40px); line-height: 1.15; margin: 0 0 10px; }
+.hero p.lead { max-width: 720px; margin: 0; color: #d6e9f3; font-size: 17px; }
+section { margin-top: 44px; scroll-margin-top: 16px; }
+h2 { font-size: clamp(21px, 4.2vw, 27px); line-height: 1.25; margin: 0 0 6px; display: flex; gap: 12px; align-items: baseline; }
+h2 .n { color: var(--acc); font-weight: 800; font-size: 1.2em; line-height: 1; }
+.sub { color: var(--muted); margin: 0 0 14px; }
+p { margin: 0 0 10px; }
+a { color: var(--head); }
+code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: .9em; }
+:not(pre) > code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+pre { background: var(--code-bg); padding: 12px 14px; border-radius: 8px; overflow-x: auto; margin: 0; font-size: 13.5px; line-height: 1.5; }
+pre .c { color: var(--muted); }
+.box { border: 1px solid var(--border); border-radius: 14px; background: var(--panel); padding: 14px; }
+
+/* przełączniki */
+.seg { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.seg button { font: inherit; font-size: 14.5px; padding: 7px 13px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg); color: var(--ink); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--strong); color: var(--on-strong); border-color: var(--strong); font-weight: 700; }
+.seg button:hover { border-color: var(--acc); }
+.seg button:focus-visible, .ctl button:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; }
+.seg .grp { font-size: 12px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); align-self: center; margin: 0 2px 0 8px; }
+.seg .grp:first-child { margin-left: 0; }
+
+/* base64 */
+.b64 { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); align-items: end; }
+@media (min-width: 720px) { .b64 { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); } }
+.b64 label { display: block; font-size: 13px; font-weight: 700; color: var(--muted); margin-bottom: 4px; }
+.b64 input { width: 100%; font: 15px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--ink); }
+.b64 input:focus-visible { outline: 3px solid var(--acc); outline-offset: 1px; }
+.b64 .eq { font-weight: 800; color: var(--bad); padding-bottom: 8px; text-align: center; }
+
+/* diagram */
+.stage { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+.svgwrap { overflow-x: auto; border-radius: 12px; background: var(--bg); border: 1px solid var(--border); }
+.svgwrap svg { display: block; width: 100%; min-width: 660px; height: auto; }
+svg text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+.zone-lbl { fill: var(--muted); font-size: 13px; font-weight: 800; letter-spacing: .08em; }
+.cluster { fill: var(--panel); stroke: var(--border); stroke-width: 1.5; }
+.pod { fill: var(--bg); stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 6 4; }
+.appc { fill: var(--panel); stroke: var(--border); stroke-width: 1.2; }
+.box-lbl { fill: var(--muted); font-size: 13.5px; font-weight: 700; }
+.nd rect { fill: var(--bg); stroke: var(--border); stroke-width: 1.5; transition: fill .25s, stroke .25s; }
+.nd .t { fill: var(--ink); font-size: 16px; font-weight: 700; }
+.nd .s { fill: var(--muted); font-size: 13px; }
+.nd { transition: opacity .25s; }
+.nd.off { opacity: .32; }
+.nd.off rect { stroke-dasharray: 5 4; }
+.nd.plain rect { fill: var(--bad-bg); stroke: var(--bad); stroke-width: 2; }
+.nd.val rect { fill: var(--warn-bg); stroke: var(--warn); stroke-width: 2; }
+.nd.enc rect { fill: var(--ok-bg); stroke: var(--ok); stroke-width: 2; }
+.nd.act rect { fill: var(--act-bg); stroke: var(--act); stroke-width: 2; }
+.nd.pulse rect { stroke-width: 3.5; }
+.e { fill: none; stroke: var(--flow); stroke-width: 2.6; visibility: hidden; marker-end: url(#arr); }
+.e.todo { visibility: visible; stroke: var(--muted); opacity: .45; stroke-dasharray: 6 5; stroke-width: 2; }
+.e.done { visibility: visible; }
+.e.cur { visibility: visible; stroke-width: 3.6; }
+#arr path { fill: var(--flow); }
+.dot { fill: var(--acc); stroke: var(--bg); stroke-width: 2; }
+.bdg circle { fill: var(--strong); }
+.bdg text { fill: var(--on-strong); font-size: 12px; font-weight: 800; }
+.bdg.todo { opacity: .45; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--muted); margin: 10px 2px 0; }
+.legend span::before { content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -2px; border: 2px solid var(--border); }
+.legend .l-plain::before { background: var(--bad-bg); border-color: var(--bad); }
+.legend .l-val::before { background: var(--warn-bg); border-color: var(--warn); }
+.legend .l-enc::before { background: var(--ok-bg); border-color: var(--ok); }
+.legend .l-act::before { background: var(--act-bg); border-color: var(--act); }
+
+.side { display: grid; gap: 12px 18px; grid-template-columns: minmax(0, 1fr); min-width: 0; }
+@media (min-width: 860px) { .side { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); } .side .ctl { grid-column: 1 / -1; } }
+.side .info { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.ctl { display: flex; gap: 6px; flex-wrap: wrap; }
+.ctl button { font: inherit; font-size: 14px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--ink); cursor: pointer; }
+.ctl button.primary { background: var(--strong); color: var(--on-strong); border-color: var(--strong); font-weight: 700; }
+.ctl button:hover { border-color: var(--acc); }
+ol.steps { list-style: none; counter-reset: s; margin: 0; padding: 0; display: grid; gap: 6px; align-content: start; }
+ol.steps li { counter-increment: s; display: grid; grid-template-columns: 26px 1fr; gap: 8px; align-items: start; font-size: 14.5px; padding: 7px 9px; border-radius: 8px; border: 1px solid transparent; color: var(--muted); transition: background .2s, color .2s; }
+ol.steps li::before { content: counter(s); display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--border); color: var(--ink); font-weight: 800; font-size: 12.5px; }
+ol.steps li.done { color: var(--ink); }
+ol.steps li.done::before { background: var(--strong); color: var(--on-strong); }
+ol.steps li.cur { color: var(--ink); background: var(--bg); border-color: var(--acc); }
+ol.steps li.cur::before { background: var(--acc); color: var(--navy); }
+.facts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.fact { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; min-width: 0; }
+.fact .k { font-size: 11.5px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.fact .fv { font-size: 14px; font-weight: 700; }
+.fact .fv.no { color: var(--ok); }
+.fact .fv.yes { color: var(--warn); }
+.note { border-left: 4px solid var(--acc); background: var(--bg); border-radius: 0 8px 8px 0; padding: 8px 12px; font-size: 14.5px; margin: 0; }
+
+/* rotacja */
+.rot { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 860px) { .rot { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.chain { display: grid; gap: 6px; }
+.lane { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); padding: 8px 12px; }
+.lane .nm { font-size: 14.5px; min-width: 0; }
+.lane .nm small { display: block; color: var(--muted); font-size: 12.5px; }
+.lane.src { background: var(--panel); }
+.down { text-align: center; color: var(--muted); font-size: 13px; line-height: 1; }
+.v { font: 800 14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padding: 3px 10px; border-radius: 6px; border: 1.5px solid; white-space: nowrap; transition: background .3s, color .3s, transform .3s; }
+.v.v1 { color: var(--warn); background: var(--warn-bg); border-color: var(--warn); }
+.v.v2 { color: var(--ok); background: var(--ok-bg); border-color: var(--ok); }
+.v.flip { transform: scale(1.15); }
+.term { background: var(--code-bg); border-radius: 8px; padding: 10px 14px; font: 13.5px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-x: auto; white-space: pre; }
+.term .p { color: var(--head); font-weight: 700; }
+.term .w { color: var(--warn); font-weight: 700; }
+.term .g { color: var(--ok); font-weight: 700; }
+.rot-out { font-size: 16px; font-weight: 600; min-height: 3.2em; }
+
+/* inny sejf */
+.vault { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 860px) { .vault { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); } }
+.login { display: grid; gap: 6px; }
+.login .lstep { display: grid; grid-template-columns: 26px 1fr; gap: 8px; align-items: start; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; font-size: 14.5px; }
+.login .lstep b { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--strong); color: var(--on-strong); font-size: 12.5px; }
+.same { font-size: 14px; color: var(--muted); margin-top: 8px; }
+
+/* wybór */
+.pick { display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 760px) { .pick { grid-template-columns: 1fr 1fr; } }
+.pick button { text-align: left; font: inherit; display: grid; gap: 2px; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg); color: var(--ink); cursor: pointer; }
+.pick button:hover, .pick button:focus-visible { border-color: var(--acc); outline: none; }
+.pick .q { font-size: 14.5px; color: var(--muted); }
+.pick .a { font-weight: 800; color: var(--head); }
+
+footer { margin-top: 52px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--border); padding-top: 16px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="kicker">Dzień 5 · ściąga · <a href="README.md">wersja tekstowa</a></p>
+    <h1>Jak hasło trafia do kontenera</h1>
+    <p class="lead">Siedem dróg, dwa pytania: <strong>kto pobiera sekret</strong> i <strong>gdzie on ląduje</strong>. Wybierz podejście i patrz, jak płynie wartość.</p>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- 1 ============================================================ -->
+<section id="base64">
+  <h2><span class="n">1</span> Punkt wyjścia: base64 to nie szyfrowanie</h2>
+  <div class="box">
+    <div class="b64">
+      <div><label for="b64-plain">hasło</label><input id="b64-plain" type="text" value="Sup3rT4jne!" autocomplete="off" spellcheck="false"></div>
+      <div class="eq" aria-hidden="true">⇄</div>
+      <div><label for="b64-enc">w <code>secret.yaml</code> (pole <code>data</code>)</label><input id="b64-enc" type="text" value="U3VwM3JUNGpuZSE=" autocomplete="off" spellcheck="false"></div>
+    </div>
+    <p style="margin:10px 0 0;font-size:14.5px">Każdy odkoduje to jednym <code>base64 -d</code>. Plik <code>secret.yaml</code> w repo = hasło w repo. Dlatego sejf.</p>
+  </div>
+</section>
+
+<!-- 2 ============================================================ -->
+<section id="droga">
+  <h2><span class="n">2</span> Droga sekretu</h2>
+  <p class="sub">Kliknij podejście. Animacja pokazuje kolejne kroki, kolory mówią, co gdzie leży.</p>
+
+  <div class="seg" id="ap-seg" role="group" aria-label="Podejście">
+    <span class="grp">sekret w Gicie</span>
+    <button type="button" data-ap="plain" aria-pressed="false">Zwykły Secret</button>
+    <button type="button" data-ap="sealed" aria-pressed="false">Sealed Secrets</button>
+    <button type="button" data-ap="sops" aria-pressed="false">SOPS</button>
+    <span class="grp">sekret w sejfie</span>
+    <button type="button" data-ap="eso" aria-pressed="true">External Secrets (ESO)</button>
+    <button type="button" data-ap="csi" aria-pressed="false">Secrets Store CSI</button>
+    <button type="button" data-ap="injector" aria-pressed="false">Vault Agent Injector</button>
+    <button type="button" data-ap="sdk" aria-pressed="false">SDK w aplikacji</button>
+  </div>
+
+  <div class="stage">
+    <div>
+      <div class="svgwrap">
+        <svg id="map" viewBox="0 0 960 512" role="img" aria-labelledby="map-t">
+          <title id="map-t">Droga sekretu od źródła do kontenera</title>
+          <defs>
+            <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+
+          <text class="zone-lbl" x="20" y="44">POZA KLASTREM</text>
+          <rect class="cluster" x="240" y="20" width="700" height="482" rx="16"/>
+          <text class="zone-lbl" x="924" y="44" text-anchor="end">KLASTER EKS</text>
+          <rect class="pod" x="540" y="58" width="384" height="420" rx="14"/>
+          <text class="box-lbl" x="556" y="80">Pod</text>
+          <rect class="appc" x="556" y="190" width="352" height="272" rx="12"/>
+          <text class="box-lbl" x="572" y="212">kontener aplikacji</text>
+
+          <g id="edges">
+            <path class="e" id="e-git_etcd" d="M200 105H248V235H280"/>
+            <path class="e" id="e-git_ctrl" d="M200 95H280"/>
+            <path class="e" id="e-kms_ctrl" d="M200 375H262V115H280"/>
+            <path class="e" id="e-vault_ctrl" d="M200 235H254V85H280"/>
+            <path class="e" id="e-ctrl_etcd" d="M375 130V200"/>
+            <path class="e" id="e-etcd_env" d="M470 245H526V260H572"/>
+            <path class="e" id="e-etcd_file" d="M470 225H516V176H817V230"/>
+            <path class="e" id="e-vault_node" d="M200 250H254V365H280"/>
+            <path class="e" id="e-node_file" d="M470 365H817V290"/>
+            <path class="e" id="e-vault_sidecar" d="M200 222H226V38H645V90"/>
+            <path class="e" id="e-sidecar_file" d="M645 150V168H800V230"/>
+            <path class="e" id="e-vault_mem" d="M200 262H230V488H732V450"/>
+          </g>
+
+          <g class="nd" id="n-git"><rect x="20" y="60" width="180" height="70" rx="10"/><text class="t" x="110" y="88" text-anchor="middle">Git</text><text class="s" x="110" y="110" text-anchor="middle" data-def="—"></text></g>
+          <g class="nd" id="n-vault"><rect x="20" y="200" width="180" height="70" rx="10"/><text class="t" x="110" y="228" text-anchor="middle">Sejf</text><text class="s" x="110" y="250" text-anchor="middle" data-def="nie używany"></text></g>
+          <g class="nd" id="n-kms"><rect x="20" y="340" width="180" height="70" rx="10"/><text class="t" x="110" y="368" text-anchor="middle">KMS</text><text class="s" x="110" y="390" text-anchor="middle" data-def="nie używany"></text></g>
+
+          <g class="nd" id="n-ctrl"><rect x="280" y="60" width="190" height="70" rx="10"/><text class="t" x="375" y="88" text-anchor="middle">Kontroler</text><text class="s" x="375" y="110" text-anchor="middle" data-def="nie używany"></text></g>
+          <g class="nd" id="n-etcd"><rect x="280" y="200" width="190" height="70" rx="10"/><text class="t" x="375" y="228" text-anchor="middle">Secret w etcd</text><text class="s" x="375" y="250" text-anchor="middle" data-def="nie używany"></text></g>
+          <g class="nd" id="n-node"><rect x="280" y="330" width="190" height="70" rx="10"/><text class="t" x="375" y="358" text-anchor="middle">Węzeł: sterownik CSI</text><text class="s" x="375" y="380" text-anchor="middle" data-def="nie używany"></text></g>
+
+          <g class="nd" id="n-sidecar"><rect x="560" y="90" width="170" height="60" rx="10"/><text class="t" x="645" y="114" text-anchor="middle">vault-agent</text><text class="s" x="645" y="134" text-anchor="middle" data-def="nie używany"></text></g>
+          <g class="nd" id="n-env"><rect x="572" y="230" width="150" height="60" rx="10"/><text class="t" x="647" y="254" text-anchor="middle">env</text><text class="s" x="647" y="274" text-anchor="middle" data-def="zmienna"></text></g>
+          <g class="nd" id="n-file"><rect x="742" y="230" width="150" height="60" rx="10"/><text class="t" x="817" y="254" text-anchor="middle">plik</text><text class="s" x="817" y="274" text-anchor="middle" data-def="wolumen"></text></g>
+          <g class="nd" id="n-mem"><rect x="572" y="390" width="320" height="60" rx="10"/><text class="t" x="732" y="414" text-anchor="middle">pamięć procesu</text><text class="s" x="732" y="434" text-anchor="middle" data-def="nie używana"></text></g>
+
+          <g id="badges"></g>
+          <g id="dots"></g>
+        </svg>
+      </div>
+      <div class="legend" aria-hidden="true">
+        <span class="l-plain">jawna wartość, łatwo wycieka</span>
+        <span class="l-val">wartość, chroniona uprawnieniami</span>
+        <span class="l-enc">szyfrogram albo tylko odnośnik</span>
+        <span class="l-act">wykonuje pracę</span>
+      </div>
+    </div>
+
+    <div class="side">
+      <div class="ctl">
+        <button type="button" class="primary" id="b-play">▶ odtwórz</button>
+        <button type="button" id="b-prev" aria-label="poprzedni krok">←</button>
+        <button type="button" id="b-next" aria-label="następny krok">→</button>
+      </div>
+      <ol class="steps" id="steps" aria-live="polite"></ol>
+      <div class="info">
+        <div class="facts" id="facts"></div>
+        <p class="note" id="note"></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 3 ============================================================ -->
+<section id="rotacja">
+  <h2><span class="n">3</span> Zmiana hasła: kto widzi ją od razu?</h2>
+  <p class="sub">ESO, jeden Secret czytany na trzy sposoby. Klikaj „dalej”.</p>
+  <div class="box rot">
+    <div class="chain" id="lanes">
+      <div class="lane src"><div class="nm"><strong>Sejf</strong><small>AWS Secrets Manager</small></div><span class="v" data-l="vault"></span></div>
+      <div class="down">▼ ESO co <code>refreshInterval</code></div>
+      <div class="lane src"><div class="nm"><strong>Secret w etcd</strong><small>todos-sejf</small></div><span class="v" data-l="secret"></span></div>
+      <div class="down">▼ kubelet</div>
+      <div class="lane"><div class="nm">wolumen: plik<small>/sejf/API_KEY</small></div><span class="v" data-l="vol"></span></div>
+      <div class="lane"><div class="nm"><code>env</code> / <code>envFrom</code><small>zmienna API_KEY</small></div><span class="v" data-l="env"></span></div>
+      <div class="lane"><div class="nm">wolumen + <code>subPath</code><small>/app/config/API_KEY</small></div><span class="v" data-l="sub"></span></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+      <div class="ctl" id="rot-ctl">
+        <button type="button" class="primary" data-r="next">dalej →</button>
+        <button type="button" data-r="prev">←</button>
+        <button type="button" data-r="reset">od początku</button>
+      </div>
+      <p class="rot-out" id="rot-out" aria-live="polite"></p>
+      <div class="term" id="rot-term"></div>
+      <p class="note" style="font-size:14px">Plik zmienia się sam, ale aplikacja musi go przeczytać ponownie. Automatyczny restart: <a href="https://github.com/stakater/Reloader">Reloader</a>. Bez czekania na <code>refreshInterval</code>: <code>kubectl annotate externalsecret todos-sejf force-sync=$(date +%s) --overwrite</code></p>
+    </div>
+  </div>
+</section>
+
+<!-- 4 ============================================================ -->
+<section id="inny-sejf">
+  <h2><span class="n">4</span> Inny sejf w ESO = inny magazyn</h2>
+  <p class="sub"><code>ExternalSecret</code> zostaje ten sam. Zmienia się <code>SecretStore</code> i sposób logowania, zawsze bez hasła w YAML-u.</p>
+  <div class="seg" id="vs-seg" role="group" aria-label="Sejf">
+    <button type="button" data-vs="aws" aria-pressed="true">AWS Secrets Manager</button>
+    <button type="button" data-vs="azure" aria-pressed="false">Azure Key Vault</button>
+    <button type="button" data-vs="vault" aria-pressed="false">HashiCorp Vault</button>
+  </div>
+  <div class="box vault">
+    <pre id="vs-yaml"></pre>
+    <div>
+      <div class="login" id="vs-login"></div>
+      <p class="same" id="vs-same"></p>
+    </div>
+  </div>
+</section>
+
+<!-- 5 ============================================================ -->
+<section id="kiedy">
+  <h2><span class="n">5</span> Które wybrać?</h2>
+  <p class="sub">Kliknij swoją sytuację, diagram wyżej pokaże drogę.</p>
+  <div class="pick">
+    <button type="button" data-go="eso"><span class="q">Firma ma sejf, aplikacja czyta env albo plik</span><span class="a">External Secrets Operator</span></button>
+    <button type="button" data-go="csi"><span class="q">Audyt: sekret nie może leżeć w etcd</span><span class="a">Secrets Store CSI</span></button>
+    <button type="button" data-go="injector"><span class="q">Vault i hasła do bazy generowane per pod</span><span class="a">Vault Agent Injector</span></button>
+    <button type="button" data-go="sealed"><span class="q">Mały zespół, GitOps, brak sejfu</span><span class="a">Sealed Secrets albo SOPS</span></button>
+    <button type="button" data-go="sdk"><span class="q">Aplikacja i tak jest związana z jedną chmurą</span><span class="a">SDK w aplikacji</span></button>
+    <button type="button" data-go="plain"><span class="q">Lab, demo, nic poza klastrem</span><span class="a">Zwykły Secret</span></button>
+  </div>
+  <p class="note" style="margin-top:14px">Gdy powstaje <code>Secret</code>, zasady z dnia 4 dalej działają: kto ma <code>get secrets</code> albo <code>create pods</code> w namespace, ten widzi wartość.</p>
+</section>
+
+<footer>Kubernetes w praktyce · Dzień 5 · październik 2026 · EKS, External Secrets Operator (API <code>external-secrets.io/v1</code>). Diagnoza błędów i komendy: <a href="README.md">README.md</a>. Pliki z dema: <code>przyklady/k8s/25-external-secrets/</code>.</footer>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var NS = 'http://www.w3.org/2000/svg';
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function yaml(s) {
+    return s.split('\n').map(function (l) {
+      var i = l.indexOf('#');
+      return i === -1 ? esc(l) : esc(l.slice(0, i)) + '<span class="c">' + esc(l.slice(i)) + '</span>';
+    }).join('\n');
+  }
+  function seg(el, attr, cb) {
+    el.addEventListener('click', function (e) {
+      var b = e.target.closest('button[' + attr + ']');
+      if (!b) return;
+      el.querySelectorAll('button[' + attr + ']').forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+      cb(b.getAttribute(attr));
+    });
+  }
+
+  /* ============ base64 ============ */
+  var plain = $('b64-plain'), enc = $('b64-enc');
+  plain.addEventListener('input', function () { enc.value = btoa(String.fromCharCode.apply(null, new TextEncoder().encode(plain.value))); });
+  enc.addEventListener('input', function () {
+    try {
+      var bin = atob(enc.value.trim()), b = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i);
+      plain.value = new TextDecoder().decode(b);
+    } catch (err) { plain.value = '(to nie jest base64)'; }
+  });
+
+  /* ============ droga sekretu ============ */
+  // stan węzła: plain | val | enc | act | off
+  var NODES = ['git', 'vault', 'kms', 'ctrl', 'etcd', 'node', 'sidecar', 'env', 'file', 'mem'];
+  function withPod(o) { o.env = ['val', 'zmienna']; o.file = ['val', 'wolumen tmpfs']; return o; }
+
+  var AP = {
+    plain: {
+      nodes: withPod({ git: ['plain', 'secret.yaml (base64!)'], etcd: ['val', 'kopia wartości'] }),
+      steps: [
+        { e: ['git_etcd'], t: '<code>kubectl apply</code> wgrywa Secret z YAML-a' },
+        { e: ['etcd_env', 'etcd_file'], t: 'Pod czyta Secret: <code>env</code> albo plik' }
+      ],
+      facts: [['Kopia w etcd', 'tak', 'yes'], ['Zmiana hasła', 'ręcznie + restart'], ['Sejf nie działa', 'nie ma sejfu'], ['Kto pobiera', 'Ty, ręcznie']],
+      note: 'Hasło ląduje w repo albo w historii shella. Dobre tylko na lab i demo.'
+    },
+    sealed: {
+      nodes: withPod({ git: ['enc', 'SealedSecret: szyfrogram'], ctrl: ['act', 'Sealed Secrets'], etcd: ['val', 'kopia wartości'] }),
+      steps: [
+        { e: ['git_ctrl'], t: 'Argo CD wgrywa <code>SealedSecret</code> z Gita' },
+        { e: ['ctrl_etcd'], t: 'Kontroler odszyfrowuje kluczem prywatnym i tworzy Secret' },
+        { e: ['etcd_env', 'etcd_file'], t: 'Pod czyta zwykły Secret' }
+      ],
+      facts: [['Kopia w etcd', 'tak', 'yes'], ['Zmiana hasła', 'kubeseal + commit'], ['Ryzyko', 'utrata klucza prywatnego'], ['Klucz', 'w klastrze']],
+      note: 'Zaszyfrować może każdy (klucz publiczny), odszyfrować tylko klaster.'
+    },
+    sops: {
+      nodes: withPod({ git: ['enc', 'wartości ENC[…]'], kms: ['act', 'tylko klucz danych'], ctrl: ['act', 'Flux / Argo CD+KSOPS'], etcd: ['val', 'kopia wartości'] }),
+      steps: [
+        { e: ['git_ctrl'], t: 'GitOps pobiera zaszyfrowany plik z Gita' },
+        { e: ['kms_ctrl'], t: 'KMS odszyfrowuje klucz danych (uprawnienie IAM)' },
+        { e: ['ctrl_etcd'], t: 'Do klastra trafia zwykły Secret' },
+        { e: ['etcd_env', 'etcd_file'], t: 'Pod czyta Secret' }
+      ],
+      facts: [['Kopia w etcd', 'tak', 'yes'], ['Zmiana hasła', 'sops edit + commit'], ['KMS nie działa', 'brak nowych wdrożeń'], ['Klucz', 'w KMS, dostęp przez IAM']],
+      note: 'W KMS leży tylko klucz, hasło leży w Gicie. Odszyfruje każdy, komu IAM da kms:Decrypt.'
+    },
+    eso: {
+      nodes: withPod({ git: ['enc', 'ExternalSecret: odnośnik'], vault: ['val', 'AWS Secrets Manager'], ctrl: ['act', 'External Secrets (ESO)'], etcd: ['val', 'kopia, odświeżana'] }),
+      steps: [
+        { e: ['git_ctrl'], t: '<code>ExternalSecret</code> mówi: co pobrać i do jakiego Secretu' },
+        { e: ['vault_ctrl'], t: 'ESO pobiera z sejfu rolą IAM (Pod Identity)' },
+        { e: ['ctrl_etcd'], t: 'Tworzy Secret i nadpisuje go co <code>refreshInterval</code>' },
+        { e: ['etcd_env', 'etcd_file'], t: 'Pod czyta Secret, o sejfie nic nie wie' }
+      ],
+      facts: [['Kopia w etcd', 'tak', 'yes'], ['Zmiana hasła', 'w sejfie, synchronizuje się samo'], ['Sejf nie działa', 'Secret zostaje, pody startują'], ['Tożsamość', 'jedna rola kontrolera']],
+      note: 'Domyślny wybór: aplikacja bez zmian. Tak działa demo na k8s-sages.'
+    },
+    csi: {
+      nodes: { git: ['enc', 'SecretProviderClass'], vault: ['val', 'AWS / Azure / Vault'], node: ['act', 'sterownik + provider'], etcd: ['off', 'brak Secretu'], file: ['val', 'tmpfs z sejfu'], env: ['off', 'tylko przez sync'] },
+      steps: [
+        { e: ['vault_node'], t: 'Przy starcie poda sterownik loguje się do sejfu <b>tożsamością poda</b>' },
+        { e: ['node_file'], t: 'Montuje plik w podzie, bez Secretu w etcd' }
+      ],
+      facts: [['Kopia w etcd', 'nie', 'no'], ['Zmiana hasła', 'opcjonalne odpytywanie'], ['Sejf nie działa', 'nowy pod nie wstanie'], ['Tożsamość', 'ServiceAccount poda']],
+      note: 'Gdy wymóg brzmi: sekret nie może leżeć w etcd. Zmienna env tylko po włączeniu synchronizacji do Secret.'
+    },
+    injector: {
+      nodes: { vault: ['val', 'HashiCorp Vault'], sidecar: ['act', 'dodany przez webhook'], etcd: ['off', 'brak Secretu'], file: ['val', 'emptyDir'], env: ['off', 'zmienna'] },
+      steps: [
+        { e: [], n: 'sidecar', t: 'Webhook Vaulta dokleja do poda sidecar <code>vault-agent</code>' },
+        { e: ['vault_sidecar'], t: 'Agent loguje się tokenem ServiceAccount (Kubernetes auth)' },
+        { e: ['sidecar_file'], t: 'Zapisuje sekret do pliku i odświeża go' }
+      ],
+      facts: [['Kopia w etcd', 'nie', 'no'], ['Zmiana hasła', 'agent odnawia sam'], ['Sejf nie działa', 'pod nie wstanie'], ['Tożsamość', 'ServiceAccount poda']],
+      note: 'Tylko z Vaultem. Jedyna droga do haseł generowanych osobno dla każdego poda (lease).'
+    },
+    sdk: {
+      nodes: { vault: ['val', 'AWS Secrets Manager'], etcd: ['off', 'brak Secretu'], mem: ['val', 'get_secret_value()'], env: ['off', 'zmienna'], file: ['off', 'wolumen'] },
+      steps: [
+        { e: ['vault_mem'], t: 'Aplikacja pyta sejf przez SDK, rolą IAM poda' },
+        { e: [], n: 'mem', t: 'Hasło jest tylko w pamięci procesu' }
+      ],
+      facts: [['Kopia w etcd', 'nie', 'no'], ['Zmiana hasła', 'aplikacja sama'], ['Sejf nie działa', 'zależy od kodu'], ['Cena', 'lock-in w kodzie']],
+      note: 'Kubernetes daje tylko tożsamość. Zmiana chmury = zmiana kodu, nie YAML-a.'
+    }
+  };
+
+  var cur = null, step = -1, timer = null, raf = null;
+
+  function setNode(id, st, sub) {
+    var g = $('n-' + id), s = g.querySelector('.s');
+    g.setAttribute('class', 'nd ' + st);
+    s.textContent = sub != null ? sub : s.getAttribute('data-def');
+  }
+  function edge(id) { return $('e-' + id); }
+
+  function select(k) {
+    stop();
+    cur = AP[k];
+    NODES.forEach(function (id) {
+      var n = cur.nodes[id];
+      setNode(id, n ? n[0] : 'off', n ? n[1] : null);
+    });
+    document.querySelectorAll('#edges .e').forEach(function (p) { p.setAttribute('class', 'e'); });
+    var bg = $('badges'); bg.innerHTML = '';
+    cur.steps.forEach(function (s, i) {
+      s.e.forEach(function (id) { edge(id).setAttribute('class', 'e todo'); });
+      if (!s.e.length) return;
+      var p = edge(s.e[0]), L = p.getTotalLength(), pt = p.getPointAtLength(L / 2);
+      var g = document.createElementNS(NS, 'g'); g.setAttribute('class', 'bdg todo'); g.setAttribute('data-i', i);
+      var c = document.createElementNS(NS, 'circle'); c.setAttribute('cx', pt.x); c.setAttribute('cy', pt.y); c.setAttribute('r', 11);
+      var t = document.createElementNS(NS, 'text'); t.setAttribute('x', pt.x); t.setAttribute('y', pt.y + 4); t.setAttribute('text-anchor', 'middle'); t.textContent = i + 1;
+      g.appendChild(c); g.appendChild(t); bg.appendChild(g);
+    });
+    $('steps').innerHTML = cur.steps.map(function (s) { return '<li><span>' + s.t + '</span></li>'; }).join('');
+    $('facts').innerHTML = cur.facts.map(function (f) {
+      return '<div class="fact"><div class="k">' + f[0] + '</div><div class="fv ' + (f[2] || '') + '">' + f[1] + '</div></div>';
+    }).join('');
+    $('note').textContent = cur.note;
+    step = -1;
+    play();
+  }
+
+  function go(i) {
+    if (!cur) return;
+    i = Math.max(-1, Math.min(cur.steps.length - 1, i));
+    step = i;
+    cur.steps.forEach(function (s, j) {
+      var cls = j < i ? 'done' : j === i ? 'cur' : 'todo';
+      s.e.forEach(function (id) { edge(id).setAttribute('class', 'e ' + cls); });
+      var b = document.querySelector('#badges [data-i="' + j + '"]');
+      if (b) b.setAttribute('class', 'bdg' + (j > i ? ' todo' : ''));
+      $('steps').children[j].className = j < i ? 'done' : j === i ? 'cur' : '';
+    });
+    NODES.forEach(function (id) { $('n-' + id).classList.remove('pulse'); });
+    var s = cur.steps[i];
+    if (s && s.n) $('n-' + s.n).classList.add('pulse');
+    animate(s ? s.e : []);
+  }
+
+  function animate(ids) {
+    cancelAnimationFrame(raf);
+    var dots = $('dots'); dots.innerHTML = '';
+    if (!ids.length || reduce) return;
+    var items = ids.map(function (id) {
+      var p = edge(id), c = document.createElementNS(NS, 'circle');
+      c.setAttribute('r', 7); c.setAttribute('class', 'dot'); dots.appendChild(c);
+      return { p: p, L: p.getTotalLength(), c: c };
+    });
+    var t0 = null, dur = 1100;
+    function frame(ts) {
+      if (t0 === null) t0 = ts;
+      var k = Math.min(1, (ts - t0) / dur), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+      items.forEach(function (it) { var pt = it.p.getPointAtLength(it.L * e); it.c.setAttribute('cx', pt.x); it.c.setAttribute('cy', pt.y); });
+      if (k < 1) raf = requestAnimationFrame(frame); else dots.innerHTML = '';
+    }
+    raf = requestAnimationFrame(frame);
+  }
+
+  function stop() { clearTimeout(timer); timer = null; }
+  function play() {
+    stop();
+    var i = 0;
+    (function tick() {
+      go(i);
+      i++;
+      if (i < cur.steps.length) timer = setTimeout(tick, reduce ? 600 : 1700);
+    })();
+  }
+
+  seg($('ap-seg'), 'data-ap', select);
+  $('b-play').addEventListener('click', play);
+  $('b-next').addEventListener('click', function () { stop(); go(step + 1); });
+  $('b-prev').addEventListener('click', function () { stop(); go(step - 1); });
+  document.querySelectorAll('.pick button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var k = b.getAttribute('data-go');
+      document.querySelectorAll('#ap-seg button').forEach(function (x) { x.setAttribute('aria-pressed', x.getAttribute('data-ap') === k ? 'true' : 'false'); });
+      $('droga').scrollIntoView({ behavior: reduce ? 'auto' : 'smooth' });
+      select(k);
+    });
+  });
+
+  /* ============ rotacja ============ */
+  var ROT = [
+    { v: { vault: 1, secret: 1, vol: 1, env: 1, sub: 1 }, t: 'Start: wszędzie wersja 1.', log: 'env=sejf-wersja-1 plik=sejf-wersja-1' },
+    { v: { vault: 2, secret: 1, vol: 1, env: 1, sub: 1 }, t: 'Zmieniasz hasło w sejfie. Klaster jeszcze nic nie wie.', cmd: 'aws secretsmanager put-secret-value --secret-id szkolenie/demo/todos ...', log: 'env=sejf-wersja-1 plik=sejf-wersja-1' },
+    { v: { vault: 2, secret: 2, vol: 1, env: 1, sub: 1 }, t: 'Po refreshInterval (30 s) ESO nadpisuje Secret.', log: 'env=sejf-wersja-1 plik=sejf-wersja-1' },
+    { v: { vault: 2, secret: 2, vol: 2, env: 1, sub: 1 }, t: 'Po ok. minucie kubelet podmienia plik. env i subPath dalej stare.', log: 'env=<w>sejf-wersja-1</w> plik=<g>sejf-wersja-2</g>' },
+    { v: { vault: 2, secret: 2, vol: 2, env: 2, sub: 2 }, t: 'Restart poda: nowe pody, wszędzie wersja 2.', cmd: 'kubectl rollout restart deploy/sejf-app', log: 'env=<g>sejf-wersja-2</g> plik=<g>sejf-wersja-2</g>' }
+  ];
+  var r = 0, prevV = null;
+  function renderRot() {
+    var s = ROT[r];
+    document.querySelectorAll('#lanes .v').forEach(function (el) {
+      var l = el.getAttribute('data-l'), v = s.v[l];
+      el.className = 'v v' + v;
+      el.textContent = 'wersja-' + v;
+      if (prevV && prevV[l] !== v && !reduce) { el.classList.add('flip'); setTimeout(function () { el.classList.remove('flip'); }, 350); }
+    });
+    prevV = s.v;
+    $('rot-out').textContent = 'Krok ' + r + ' z ' + (ROT.length - 1) + ': ' + s.t;
+    var log = esc(s.log).replace(/&lt;(w|g)&gt;/g, '<span class="$1">').replace(/&lt;\/(w|g)&gt;/g, '</span>');
+    $('rot-term').innerHTML = (s.cmd ? '<span class="p">$</span> ' + esc(s.cmd) + '\n' : '') + '<span class="p">$</span> kubectl logs deploy/sejf-app --tail=1\n' + log;
+  }
+  $('rot-ctl').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-r]'); if (!b) return;
+    var a = b.getAttribute('data-r');
+    r = a === 'next' ? Math.min(ROT.length - 1, r + 1) : a === 'prev' ? Math.max(0, r - 1) : 0;
+    renderRot();
+  });
+
+  /* ============ inny sejf ============ */
+  var VS = {
+    aws: {
+      y: 'apiVersion: external-secrets.io/v1\nkind: ClusterSecretStore\nmetadata:\n  name: aws-secrets-manager\nspec:\n  provider:\n    aws:\n      service: SecretsManager\n      region: eu-central-1\n  conditions:\n    - namespaces: [demo]   # rola kontrolera jest wspólna',
+      l: ['Pod Identity daje kontrolerowi ESO rolę IAM', 'ESO woła Secrets Manager tymczasowymi poświadczeniami', 'Polityka IAM wpuszcza tylko sekrety szkolenie/*'],
+      same: 'Tożsamość: jedna rola kontrolera. Dlatego conditions ogranicza namespace\'y.'
+    },
+    azure: {
+      y: 'apiVersion: external-secrets.io/v1\nkind: SecretStore\nmetadata:\n  name: azure-kv\nspec:\n  provider:\n    azurekv:\n      vaultUrl: https://<sejf>.vault.azure.net\n      authType: WorkloadIdentity\n      serviceAccountRef:\n        name: eso-keyvault   # SA z client-id',
+      l: ['ServiceAccount jest sfederowany z tożsamością w Entra ID', 'ESO wymienia token SA na token Azure', 'Key Vault sprawdza uprawnienia tej tożsamości'],
+      same: 'Tożsamość: ServiceAccount w namespace zespołu (Workload Identity na AKS).'
+    },
+    vault: {
+      y: 'apiVersion: external-secrets.io/v1\nkind: SecretStore\nmetadata:\n  name: vault\nspec:\n  provider:\n    vault:\n      server: https://vault.example.com:8200\n      path: secret          # mount KV\n      version: v2\n      auth:\n        kubernetes:\n          mountPath: kubernetes\n          role: eso-demo      # rola w Vaulcie\n          serviceAccountRef: {name: eso-vault}',
+      l: ['ESO wysyła do Vaulta token ServiceAccount eso-vault', 'Vault pyta API serwer klastra, czy token jest prawdziwy (TokenReview)', 'Rola eso-demo daje politykę i token Vaulta na 1 h'],
+      same: 'Po stronie Vaulta raz: auth kubernetes, polityka, rola związana z SA i namespace. Endpoint API prywatny? Użyj auth: jwt.'
+    }
+  };
+  function renderVs(k) {
+    var v = VS[k];
+    $('vs-yaml').innerHTML = yaml(v.y);
+    $('vs-login').innerHTML = v.l.map(function (t, i) { return '<div class="lstep"><b>' + (i + 1) + '</b><span>' + esc(t) + '</span></div>'; }).join('');
+    $('vs-same').textContent = v.same;
+  }
+  seg($('vs-seg'), 'data-vs', renderVs);
+
+  renderRot();
+  renderVs('aws');
+  select('eso');
+})();
+</script>
+</body>
+</html>

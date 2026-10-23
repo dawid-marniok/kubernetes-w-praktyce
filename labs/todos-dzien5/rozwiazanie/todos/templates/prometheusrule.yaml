@@ -1,0 +1,40 @@
+{{- if .Values.alerts.enabled }}
+# Alerty ToDos z metryk kube-state-metrics i kubeleta: aplikacja nie musi mieć /metrics.
+# {{ "{{" }} … {{ "}}" }} w adnotacjach to szablony Prometheusa, nie Helma: Helm musi je przepuścić dosłownie.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: todos-alerts
+  labels:
+    {{- include "todos.labels" . | nindent 4 }}
+spec:
+  groups:
+    - name: todos-{{ .Release.Namespace }}
+      rules:
+        - alert: TodosApiNiedostepne
+          expr: kube_deployment_status_replicas_available{namespace="{{ .Release.Namespace }}", deployment="api"} < 1
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "ToDos w {{ .Release.Namespace }}: żaden pod api nie jest Ready"
+            runbook: "kubectl get pods -l app=todos-api; kubectl describe pod -l app=todos-api; kubectl logs deploy/api"
+        - alert: TodosMongoNieGotowe
+          expr: kube_statefulset_status_replicas_ready{namespace="{{ .Release.Namespace }}", statefulset="mongo"} < 1
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "ToDos w {{ .Release.Namespace }}: mongo-0 nie jest Ready"
+            runbook: "kubectl describe pod mongo-0; kubectl logs mongo-0"
+        - alert: TodosMongoMaloMiejsca
+          expr: |
+            kubelet_volume_stats_available_bytes{namespace="{{ .Release.Namespace }}", persistentvolumeclaim="data-mongo-0"}
+              / kubelet_volume_stats_capacity_bytes{namespace="{{ .Release.Namespace }}", persistentvolumeclaim="data-mongo-0"} < 0.2
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Dysk bazy ToDos: zostało {{ "{{" }} $value | humanizePercentage {{ "}}" }} wolnego miejsca"
+            runbook: "kubectl exec mongo-0 -- df -h /data/db"
+{{- end }}

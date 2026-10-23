@@ -1,0 +1,46 @@
+replicaCount: 1          # ignorowane, gdy autoscaling.enabled (repliki ustawia HPA)
+
+image:
+  repository: nginx
+  tag: ""                # pusty = appVersion z Chart.yaml (1.29)
+  pullPolicy: IfNotPresent   # IfNotPresent, Always, Never
+
+# Bez resources pod nie przejdzie przez ResourceQuota bez LimitRange; zawsze podawaj requests i limits
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi
+
+service:
+  type: ClusterIP        # ClusterIP, NodePort, LoadBalancer
+  port: 80
+
+# ServiceMonitor wymaga CRD Prometheus Operatora (kube-prometheus-stack) i endpointu /metrics w aplikacji
+serviceMonitor:
+  enabled: false
+  interval: 30s
+  path: /metrics
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80   # cel HPA: % requests.cpu
+
+serviceAccount:
+  create: true           # false = użyj istniejącego SA (name) albo default
+  name: ""
+  annotations: {}
+
+nameOverride: ""
+fullnameOverride: ""
+podAnnotations: {}
+imagePullSecrets: []
+podSecurityContext: {}
+securityContext: {}
+nodeSelector: {}
+affinity: {}
+tolerations: []

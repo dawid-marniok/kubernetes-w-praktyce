@@ -1,0 +1,15 @@
+# Pod, który pisze dwie linie i kończy się błędem. Po kubectl delete jego logi zostają tylko w Loki.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: crash
+  labels: {app: crash}
+spec:
+  restartPolicy: Never
+  containers:
+    - name: crash
+      image: busybox:1.37
+      command: ["sh", "-c", "echo START; echo 'error: brak konfiguracji DATABASE_URL'; sleep 5; exit 1"]
+      resources:
+        requests: {cpu: 10m, memory: 16Mi}
+        limits: {cpu: 50m, memory: 32Mi}

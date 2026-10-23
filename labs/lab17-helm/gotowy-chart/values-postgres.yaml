@@ -1,0 +1,20 @@
+# PostgreSQL z chartu CloudPirates (oci://registry-1.docker.io/cloudpirates/postgres, wersja 0.21.2, PostgreSQL 18.6).
+# Nadpisujesz tylko to, co inne niż w `helm show values`. Przed instalacją podmień <REJESTR-TRENERA> (sed z README).
+image:
+  registry: <REJESTR-TRENERA>        # obraz skopiowany do ECR prowadzącego: bez limitu Docker Hub
+  repository: postgres
+  tag: "18.6"
+  imagePullPolicy: IfNotPresent
+auth:
+  password: "szkolenie-pg"           # hasło użytkownika postgres; na produkcji auth.existingSecret
+config:
+  postgresql:
+    effective_cache_size: 256MB      # domyślnie 4GB, a pod ma limit 512Mi
+podSecurityContext:
+  fsGroup: 999
+  seccompProfile: {type: RuntimeDefault}   # wymaganie PSA restricted; chart domyślnie go nie ustawia
+persistence:
+  size: 1Gi                          # domyślnie 8Gi; StorageClass domyślna (gp3)
+resources:
+  requests: {cpu: 100m, memory: 256Mi}
+  limits: {cpu: 500m, memory: 512Mi}

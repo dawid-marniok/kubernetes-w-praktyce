@@ -4,7 +4,7 @@ Jak ruch z internetu dochodzi do Twojego poda. Ten katalog:
 
 | Plik | Co w nim jest |
 |---|---|
-| `README.md` (ten plik) | typy Service i co tworzą w AWS, Ingress, Gateway API, diagnoza |
+| `README.md` (ten plik) | typy Service i co tworzą w AWS, Ingress, Gateway API, [kiedy Ingress, kiedy Gateway API](#kiedy-ingress-kiedy-gateway-api), diagnoza |
 | [`cert-manager.md`](cert-manager.md) | jak powstaje certyfikat HTTPS: cert-manager, Let's Encrypt, HTTP-01 i DNS-01, alternatywy |
 | [`on-prem.md`](on-prem.md) | to samo na własnych serwerach: MetalLB, zewnętrzny load balancer, DNS, wewnętrzne CA |
 | [`diagram.html`](diagram.html) | interaktywny diagram drogi żądania i wystawiania certyfikatu — **otwórz w przeglądarce** (`open diagram.html`) |
@@ -267,7 +267,7 @@ Community **ingress-nginx** jest wycofany (koniec utrzymania 03.2026, bez popraw
 
 ## Ingress a Gateway API
 
-Gateway API (`gateway.networking.k8s.io/v1`) to następca Ingressu. W labie ćwiczysz Ingress, a Gateway API pokazuje prowadzący w demie. Na klastrze szkoleniowym Gateway API nie jest domyślnie włączone: jego CRD nie są wbudowane w Kubernetesa, trzeba je doinstalować i włączyć obsługę w Traefiku (oraz w cert-managerze, jeśli certyfikat ma zamawiać Gateway). Czy są: `kubectl get crd | grep gateway.networking.k8s.io`.
+Gateway API (`gateway.networking.k8s.io/v1`) to następca Ingressu. W labie ćwiczysz Ingress, a Gateway API pokazuje prowadzący w demie. Jego CRD nie są wbudowane w Kubernetesa: administrator klastra je doinstalowuje i włącza obsługę w kontrolerze (oraz w cert-managerze, jeśli certyfikat ma zamawiać Gateway). Na k8s-sages są: CRD v1.6.1 z kanału standard i GatewayClass `traefik` (`kubectl get crd | grep gateway.networking.k8s.io`, `kubectl get gatewayclass`). Rola kursanta nie obejmuje tworzenia `HTTPRoute`, więc ćwiczysz je lokalnie albo na własnym klastrze.
 
 Podział ról: zespół platformy tworzy **Gateway** (porty, hosty, TLS, kto może się podpiąć), zespół aplikacji tylko **HTTPRoute** z `parentRefs` wskazującym ten Gateway. Gotowa para do przećwiczenia na kind albo własnym klastrze: `przyklady/k8s/07-gateway-api/gateway.yaml` (Gateway `przyklad-gw`, listenery na portach entrypointów Traefika 8000/8443, certyfikat z cert-managera) i `httproute.yaml` (host `gw-<login>.<DOMENA>`).
 
@@ -305,7 +305,31 @@ spec:                                   spec:
             port: {number: 80}                weight: 100     # canary: drugi backend z weight: 10
 ```
 
-Kiedy co: Ingress jest stabilny (`networking.k8s.io/v1`) i **nie zniknie** — istniejące projekty nie muszą migrować. Nowe projekty, canary, rozdział ról platforma/aplikacja → Gateway API.
+### Kiedy Ingress, kiedy Gateway API
+
+**Dojrzałość.** Gateway API jest GA od wersji 1.0 (październik 2023): `GatewayClass`, `Gateway`, `HTTPRoute` i `GRPCRoute` są w `v1`, kanał **standard**. Obok jest kanał **experimental** z funkcjami w trakcie projektowania. Kanał jest ważniejszy niż numer wersji: na produkcji instaluj CRD z kanału standard, a z experimental bierz tylko to, czego świadomie potrzebujesz. Ingress jest stabilny od 1.19 (`networking.k8s.io/v1`), ale **zamrożony**: nie dostaje nowych funkcji i nie zniknie z Kubernetesa.
+
+**Dlaczego w ogóle Gateway.** Ingress opisuje tylko host, ścieżkę, TLS i backend. Wszystko inne to adnotacje jednego kontrolera, więc YAML przestaje być przenośny, a zespół aplikacji musi znać szczegóły kontrolera. Gateway API ma te funkcje w specyfikacji i dzieli odpowiedzialność: platforma trzyma `Gateway` (porty, certyfikaty, kto może się podpiąć), zespół aplikacji tylko `HTTPRoute`.
+
+| Sytuacja | Wybierz | Dlaczego |
+|---|---|---|
+| Prosta aplikacja: host + ścieżka + TLS, jeden zespół | **Ingress** | mniej obiektów, każdy kontroler i każdy poradnik to zna, cert-manager działa od lat |
+| Istniejący projekt na Ingressie, który działa | **Ingress**, migracja przy okazji | Ingress nie zniknie; migruj, gdy potrzebujesz czegoś z wierszy niżej albo zmieniasz kontroler |
+| Kontroler ingress-nginx (wycofany 03.2026) | **migracja**: Gateway API albo Ingress na innym kontrolerze | bez poprawek bezpieczeństwa; adnotacje nginx i tak trzeba przepisać, więc to dobry moment na Gateway |
+| Kilka zespołów na jednym klastrze, platforma zarządza certyfikatami i portami | **Gateway API** | `Gateway` w namespace platformy, `HTTPRoute` w namespace'ach zespołów, `allowedRoutes` i `ReferenceGrant` pilnują, kto może się podpiąć |
+| Canary, podział ruchu wagami, blue-green | **Gateway API** | `backendRefs[].weight` w standardzie zamiast adnotacji kontrolera |
+| Routing po nagłówku, metodzie, query string | **Gateway API** | natywnie w `matches` |
+| gRPC, TCP, TLS passthrough | **Gateway API** | `GRPCRoute` (GA), `TLSRoute`/`TCPRoute` (sprawdź kanał w swojej wersji); Ingress obsługuje tylko HTTP(S) |
+| Możliwa zmiana kontrolera (Traefik ↔ Envoy Gateway ↔ Istio ↔ kontroler chmury) | **Gateway API** | ten sam YAML działa z każdą implementacją zgodną ze specyfikacją |
+| Funkcja tylko w jednym kontrolerze (np. Middleware Traefika) | oba | w Ingressie adnotacja, w `HTTPRoute` filtr `ExtensionRef` wskazujący `Middleware`; tak czy inaczej to kawałek niezależny od standardu |
+
+**Na co uważać przy Gateway API.**
+- CRD instaluje administrator i to on wybiera wersję. Kontroler musi wspierać tę wersję (Traefik, Envoy Gateway i inne publikują tabelę zgodności).
+- Status czytasz z warunków: `kubectl describe httproute` → `Accepted`, `ResolvedRefs`. Trasa, której Gateway nie przyjął (zły `parentRefs`, namespace niedozwolony w `allowedRoutes`), nie daje błędu przy `apply`, tylko nie działa.
+- cert-manager zamawia certyfikat z adnotacji na `Gateway`, nie na trasie (obsługę Gateway API włącza się w konfiguracji cert-managera, `enableGatewayAPI`).
+- Narzędzie do migracji: `ingress2gateway` (projekt Kubernetes SIG Network) tłumaczy Ingress z adnotacjami popularnych kontrolerów na Gateway + HTTPRoute. Wynik trzeba przejrzeć.
+
+Krótko: **Ingress wystarczy, gdy jest prosto i działa. Gateway API wybierz w nowym projekcie, przy wielu zespołach, przy canary i wszędzie tam, gdzie piszesz adnotacje kontrolera.**
 
 ## Na EKS, a on-prem?
 

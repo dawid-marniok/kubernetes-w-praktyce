@@ -1,0 +1,13 @@
+# Łamie obie reguły: Docker Hub (nie ma go na liście rejestrów) i tag :latest.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: zly-latest
+  labels: {app: gk-test}
+spec:
+  containers:
+  - name: app
+    image: nginx:latest
+    resources:
+      requests: {cpu: 10m, memory: 32Mi}
+      limits: {memory: 64Mi}

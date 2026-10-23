@@ -1,0 +1,38 @@
+# Nazwy od nazwy releasu: Argo CD ustawia ją na nazwę Application (podinfo-prod).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  labels: {app: podinfo, release: {{ .Release.Name }}}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels: {app: podinfo, release: {{ .Release.Name }}}
+  template:
+    metadata:
+      labels: {app: podinfo, release: {{ .Release.Name }}}
+      annotations:
+        # suma kontrolna ConfigMapy: zmiana napisu = inna adnotacja = nowy szablon poda = rollout.
+        # Bez niej zmiana ConfigMapy nie restartuje podów (dzień 2).
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: podinfo
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          ports:
+            - {name: http, containerPort: 9898}
+          envFrom:
+            - configMapRef: {name: {{ .Release.Name }}-config}
+          readinessProbe:
+            httpGet: {path: /readyz, port: http}
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}

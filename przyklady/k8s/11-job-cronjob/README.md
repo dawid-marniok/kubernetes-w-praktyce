@@ -9,6 +9,7 @@
 | `job.yaml` | Job z `backoffLimit`, `activeDeadlineSeconds`, `ttlSecondsAfterFinished` |
 | `job-indexed.yaml` | `completionMode: Indexed`: 5 części, 2 naraz, numer w `JOB_COMPLETION_INDEX` |
 | `cronjob.yaml` | CronJob z `timeZone`, `concurrencyPolicy: Forbid`, historią i TTL |
+| `cronjob-forbid.yaml` | CronJob co minutę z zadaniem na 90 s: `Forbid` pomija przebiegi, które by się nałożyły |
 
 Każde pole spoza oczywistych ma w pliku komentarz: co robi i jakie przyjmuje wartości.
 
@@ -58,6 +59,16 @@ kubectl patch cronjob przyklad-cleanup -p '{"spec":{"suspend":true}}'
 kubectl get cronjob przyklad-cleanup
 ```
 Co powinieneś zobaczyć: `SUSPEND True`, nowe Joby przestają się pojawiać. Przywrócenie: to samo z `false`.
+
+**6. Forbid: przebieg dłuższy niż odstęp**
+
+W drugim terminalu: `kubectl get jobs -w`.
+```bash
+kubectl apply -f cronjob-forbid.yaml
+kubectl get cronjob long-running              # po 3–4 min: LAST SCHEDULE co ok. 2 min
+kubectl logs job/<nazwa-joba-long-running>    # nazwa z drugiego terminala
+```
+Co powinieneś zobaczyć: nowy Job mniej więcej co 2 minuty, choć harmonogram mówi „co minutę”. Zadanie trwa 90 s, więc przebieg z następnej minuty trafia na trwający i jest pomijany. W logu `start …` i po 90 s `koniec …`; kolejny Job startuje dopiero po końcu poprzedniego. Z `concurrencyPolicy: Allow` działałyby dwa naraz, z `Replace` trwający byłby przerywany i nigdy by się nie skończył.
 
 ## Sprzątanie
 ```bash
