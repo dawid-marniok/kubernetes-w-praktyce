@@ -1,15 +1,9 @@
 # RabbitMQ z chartu CloudPirates (oci://registry-1.docker.io/cloudpirates/rabbitmq, wersja 0.21.32, RabbitMQ 4.4.0).
-# Nadpisujesz tylko to, co inne niż w `helm show values`. Przed instalacją podmień <REJESTR-TRENERA> (sed z README).
+# Nadpisujesz tylko to, co inne niż w `helm show values`. Obraz zostaje z chartu (Docker Hub, wersja przypięta digestem).
 image:
-  registry: <REJESTR-TRENERA>        # obraz skopiowany do ECR prowadzącego: bez limitu Docker Hub
-  repository: rabbitmq
-  tag: "4.4.0-management"            # wariant z panelem www (port 15672)
-  imagePullPolicy: IfNotPresent
+  imagePullPolicy: IfNotPresent     # domyślnie Always: każdy start poda pyta Docker Hub o obraz (limit pobrań);
+                                   # obraz jest przypięty digestem, więc kopia na węźle wystarczy
 initContainer:
-  image:
-    registry: <REJESTR-TRENERA>
-    repository: busybox
-    tag: "1.37.0"
   resources:
     requests: {cpu: 10m, memory: 16Mi}
     limits: {cpu: 50m, memory: 32Mi}

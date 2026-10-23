@@ -1,10 +1,8 @@
 # PostgreSQL z chartu CloudPirates (oci://registry-1.docker.io/cloudpirates/postgres, wersja 0.21.2, PostgreSQL 18.6).
-# Nadpisujesz tylko to, co inne niż w `helm show values`. Przed instalacją podmień <REJESTR-TRENERA> (sed z README).
+# Nadpisujesz tylko to, co inne niż w `helm show values`. Obraz zostaje z chartu (Docker Hub, wersja przypięta digestem).
 image:
-  registry: <REJESTR-TRENERA>        # obraz skopiowany do ECR prowadzącego: bez limitu Docker Hub
-  repository: postgres
-  tag: "18.6"
-  imagePullPolicy: IfNotPresent
+  imagePullPolicy: IfNotPresent     # domyślnie Always: każdy start poda pyta Docker Hub o obraz (limit pobrań);
+                                   # obraz jest przypięty digestem, więc kopia na węźle wystarczy
 auth:
   password: "szkolenie-pg"           # hasło użytkownika postgres; na produkcji auth.existingSecret
 config:

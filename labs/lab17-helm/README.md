@@ -116,19 +116,16 @@ helm show values oci://registry-1.docker.io/cloudpirates/rabbitmq --version 0.21
 grep -n -E '^(image|auth|persistence|resources):' -A4 rabbitmq-defaults.yaml
 ```
 
-Porównaj z gotowym plikiem `gotowy-chart/values-rabbitmq.yaml`: nadpisujesz tylko rejestr obrazu, hasło, rozmiar dysku i zasoby. Reszta zostaje z chartu.
+Porównaj z gotowym plikiem `gotowy-chart/values-rabbitmq.yaml`: nadpisujesz tylko `imagePullPolicy`, hasło, rozmiar dysku i zasoby. Obraz i reszta zostają z chartu. Zwróć uwagę na `image.tag`: autor chartu przypiął wersję i digest (`@sha256:…`), więc ta sama wersja chartu zawsze daje ten sam obraz.
 
-**b) Wartości z rejestrem prowadzącego**
-
-Obrazy są skopiowane do ECR prowadzącego, żeby dziesięć osób naraz nie wpadło w limit pobrań Docker Hub. Adres dostajesz od prowadzącego (ten sam co w lab19 dla `example-app`):
+**b) Twoje wartości i podgląd**
 
 ```bash
-REJESTR_TRENERA=<konto>.dkr.ecr.eu-central-1.amazonaws.com/trener      # od prowadzącego
-sed "s|<REJESTR-TRENERA>|$REJESTR_TRENERA|" gotowy-chart/values-rabbitmq.yaml > my-rabbitmq.yaml
-helm template mq oci://registry-1.docker.io/cloudpirates/rabbitmq --version 0.21.32 -f my-rabbitmq.yaml | grep -E 'image:|storage:'
+cp gotowy-chart/values-rabbitmq.yaml my-rabbitmq.yaml
+helm template mq oci://registry-1.docker.io/cloudpirates/rabbitmq --version 0.21.32 -f my-rabbitmq.yaml | grep -E 'image:|imagePullPolicy:|storage:'
 ```
 
-✅ Obrazy z Twojego `REJESTR_TRENERA`, dysk `1Gi`.
+✅ Obraz `docker.io/rabbitmq:4.4.0-management@sha256:…` prosto z chartu, `imagePullPolicy: IfNotPresent`, dysk `1Gi`.
 
 **c) Instalacja i sprawdzenie**
 
@@ -221,7 +218,7 @@ Podbij `version` w `Chart.yaml`, spakuj i wypchnij jeszcze raz: w ECR są dwie w
 | W `helm template` tag `1.3` zamiast `1.30` | Tag bez cudzysłowu został liczbą: `tag: "1.30"` |
 | `UPGRADE FAILED: … has no deployed releases` | Pierwsza instalacja się nie udała: `helm uninstall t1` i od nowa |
 | `unknown flag: --rollback-on-failure` | Masz Helm 3: użyj `--atomic` |
-| Krok 9: pod w `ImagePullBackOff` | Nie podmieniony `<REJESTR-TRENERA>` albo literówka: `grep image: <(helm get manifest mq)` |
+| Krok 9: pod w `ImagePullBackOff`, w zdarzeniach `429 Too Many Requests` | Limit pobrań Docker Hub z adresu klastra: odczekaj kilka minut, kubelet sam ponowi pobranie (`kubectl describe pod mq-rabbitmq-0`) |
 | Krok 9: `--wait` kończy się `timed out`, pod `Pending` | PVC czeka na dysk (`kubectl get pvc`, `kubectl describe pod mq-rabbitmq-0`); `exceeded quota` → usuń zbędne pody albo zmniejsz `resources` |
 | Krok 9: `Error: ... 429 Too Many Requests` przy `helm show`/`install` | Limit Docker Hub na pobranie chartu: odczekaj minutę albo poproś prowadzącego o paczkę `.tgz` (`helm install mq ./rabbitmq-0.21.32.tgz -f my-rabbitmq.yaml`) |
 | Krok 9: RabbitMQ restartuje się (`OOMKilled`) | Limit pamięci za niski: zostaw `512Mi` lub więcej |

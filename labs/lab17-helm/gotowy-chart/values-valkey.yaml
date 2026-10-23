@@ -1,10 +1,8 @@
 # Valkey (otwarty fork Redisa) z chartu CloudPirates (oci://registry-1.docker.io/cloudpirates/valkey, wersja 0.25.16, Valkey 9.1.0).
-# Nadpisujesz tylko to, co inne niż w `helm show values`. Przed instalacją podmień <REJESTR-TRENERA> (sed z README).
+# Nadpisujesz tylko to, co inne niż w `helm show values`. Obraz zostaje z chartu (Docker Hub, wersja przypięta digestem).
 image:
-  registry: <REJESTR-TRENERA>        # obraz skopiowany do ECR prowadzącego: bez limitu Docker Hub
-  repository: valkey/valkey
-  tag: "9.1.0-alpine3.23"
-  imagePullPolicy: IfNotPresent
+  imagePullPolicy: IfNotPresent     # domyślnie Always: każdy start poda pyta Docker Hub o obraz (limit pobrań);
+                                   # obraz jest przypięty digestem, więc kopia na węźle wystarczy
 architecture: standalone             # jeden pod; replication = master + repliki (replicaCount)
 auth:
   enabled: true
