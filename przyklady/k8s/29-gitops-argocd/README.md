@@ -135,4 +135,5 @@ kind delete cluster --name gitops
 - **Sekrety nie trafiają do gita jawnym tekstem.** W GitOps: External Secrets (przykład `25-external-secrets/`), Sealed Secrets albo SOPS.
 - **Webhook zamiast czekania.** GitHub może powiadomić Argo CD o pushu (webhook), wtedy sync rusza od razu. Wymaga adresu Argo CD dostępnego z internetu.
 - **Wiele środowisk i klastrów.** `ApplicationSet` generuje wiele Application z jednego wzoru (np. dev i prod z dwóch plików wartości). Flux robi to samo innymi CRD (`GitRepository`, `HelmRelease`).
+- **GitOps a zwykły pipeline CI/CD:** ściąga [`docs/k8s/gitops/`](../../../docs/k8s/gitops/README.md) i [wizualizacja](../../../docs/k8s/gitops/gitops.html): push i pull krok po kroku, symulator driftu, plusy i minusy.
 - **Dokumentacja:** https://argo-cd.readthedocs.io/en/stable/ (Getting Started, Automated Sync Policy, Helm)

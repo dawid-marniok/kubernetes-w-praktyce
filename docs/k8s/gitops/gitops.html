@@ -1,0 +1,1291 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GitOps z Argo CD</title>
+<meta name="description" content="Dzień 5 · ściąga: jak działa Argo CD w porównaniu ze zwykłym pipeline'em CI/CD. Model push i pull krok po kroku, symulator driftu i trybów synchronizacji, obiekt Application z opisem pól, kto ma klucze do klastra, plusy i minusy z filtrem, kiedy co wybrać.">
+<style>
+:root {
+  --navy: #012438;
+  --acc: #41C0F0;
+  --light: #EBF8FD;
+  --light2: #E1EDF8;
+
+  --bg: #ffffff;
+  --ink: #0f2535;
+  --muted: #557080;
+  --panel: var(--light);
+  --card: #ffffff;
+  --card-line: #b9d3e2;
+  --strong: var(--navy);
+  --on-strong: #ffffff;
+  --strong-title: var(--acc);
+  --head: #0a7aa8;
+  --line: #34505f;
+  --code-bg: var(--light2);
+  --row-alt: #f4fafd;
+  --border: #d5e4ed;
+
+  --ok: #1d7a44;
+  --ok-bg: #dcf2e4;
+  --bad: #b42318;
+  --bad-bg: #fde3df;
+  --warn: #8a5300;
+  --warn-bg: #fff0d4;
+  --act: #0a7aa8;
+  --act-bg: #dff3fc;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #08151e;
+    --ink: #e3eef4;
+    --muted: #9cb4c3;
+    --panel: #0f2532;
+    --card: #142f3f;
+    --card-line: #2c5065;
+    --strong: #0d4b70;
+    --on-strong: #ffffff;
+    --strong-title: #7fd6f7;
+    --head: #41C0F0;
+    --line: #a8c3d2;
+    --code-bg: #12293a;
+    --row-alt: #0d1f2b;
+    --border: #23404f;
+
+    --ok: #6fd99a;
+    --ok-bg: #12382a;
+    --bad: #ff9a8c;
+    --bad-bg: #4a1c18;
+    --warn: #ffcf70;
+    --warn-bg: #3d2e0e;
+    --act: #7fd6f7;
+    --act-bg: #0e3a52;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px 64px; }
+header.hero { background: var(--navy); color: #fff; padding: 40px 0 32px; border-bottom: 6px solid var(--acc); }
+header.hero .wrap { padding-bottom: 0; }
+.kicker { color: var(--acc); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; font-size: 13px; margin: 0 0 6px; }
+.kicker a { color: var(--acc); }
+h1 { font-size: clamp(28px, 6vw, 44px); line-height: 1.15; margin: 0 0 12px; }
+.hero p.lead { max-width: 720px; margin: 0; color: #d6e9f3; font-size: 17px; }
+.hero code { background: rgba(65,192,240,.18); color: #fff; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0 0; padding: 0; list-style: none; }
+.chips li { background: rgba(65,192,240,.14); border: 1px solid rgba(65,192,240,.45); color: #e6f6fd; border-radius: 999px; padding: 3px 12px; font-size: 14px; }
+nav.toc { margin: 28px 0 8px; }
+nav.toc ol { display: flex; flex-wrap: wrap; gap: 6px 8px; padding: 0; margin: 0; list-style: none; counter-reset: toc; }
+nav.toc li { counter-increment: toc; }
+nav.toc a { display: inline-block; text-decoration: none; color: var(--ink); background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 4px 10px; font-size: 14px; }
+nav.toc a::before { content: counter(toc) ". "; color: var(--head); font-weight: 700; }
+nav.toc a:hover, nav.toc a:focus-visible { border-color: var(--acc); }
+section { margin-top: 48px; scroll-margin-top: 16px; }
+h2 { font-size: clamp(22px, 4.5vw, 28px); line-height: 1.25; margin: 0 0 10px; display: flex; gap: 12px; align-items: baseline; }
+h2 .n { color: var(--acc); font-weight: 800; font-size: 1.25em; line-height: 1; }
+h3 { font-size: 18px; margin: 24px 0 8px; }
+p { margin: 0 0 12px; }
+a { color: var(--head); }
+code, kbd, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: .9em; }
+:not(pre) > code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+pre { background: var(--code-bg); padding: 12px 14px; border-radius: 8px; overflow-x: auto; margin: 0 0 12px; }
+pre .c { color: var(--muted); }
+.key { border-left: 5px solid var(--acc); background: var(--panel); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; }
+.key strong { color: var(--ink); }
+.key.warnk { border-left-color: var(--bad); }
+.key.okk { border-left-color: var(--ok); }
+figure { margin: 20px 0; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px; min-width: 0; }
+figure .scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+figure svg { display: block; width: 100%; height: auto; }
+figcaption { font-size: 14px; color: var(--muted); margin-top: 8px; }
+figcaption .hint { display: none; }
+@media (max-width: 640px) {
+  figure { padding: 8px; margin-left: -4px; margin-right: -4px; }
+  figure .scroll svg.wide { min-width: 820px; }
+  figcaption .hint { display: inline; }
+}
+.grid2 { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+.grid2 > * { min-width: 0; }
+@media (min-width: 820px) { .grid2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.tablewrap { overflow-x: auto; margin: 16px 0; border: 1px solid var(--border); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+thead th { background: var(--navy); color: #fff; font-size: 14px; }
+tbody tr:nth-child(even) { background: var(--row-alt); }
+tbody tr:last-child td { border-bottom: 0; }
+td:first-child { font-weight: 700; }
+@media (max-width: 640px) {
+  table.stack thead { display: none; }
+  table.stack, table.stack tbody, table.stack tr, table.stack td { display: block; width: 100%; }
+  table.stack tr { border-bottom: 1px solid var(--border); padding: 6px 0; }
+  table.stack td { border: 0; padding: 4px 12px; }
+  table.stack td[data-h]::before { content: attr(data-h); display: block; font-size: 12px; font-weight: 700; color: var(--head); text-transform: uppercase; letter-spacing: .05em; }
+}
+.cards { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 720px) { .cards { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.card { border: 1px solid var(--border); border-radius: 12px; background: var(--bg); padding: 14px; min-width: 0; }
+.card h3 { margin: 0 0 6px; }
+.card ul { margin: 0; padding-left: 20px; }
+.card li { margin-bottom: 4px; }
+.card.yes { border-top: 5px solid var(--ok); }
+.card.no { border-top: 5px solid var(--warn); }
+.card.mix { border-top: 5px solid var(--acc); }
+footer { margin-top: 56px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--border); padding-top: 16px; }
+ol.plain, ul.plain { margin: 0 0 12px; padding-left: 22px; }
+ol.plain li, ul.plain li { margin-bottom: 6px; }
+
+/* --- SVG --- */
+svg text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; fill: var(--ink); font-size: 14px; }
+svg .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+svg .b { font-weight: 700; }
+svg .s { font-size: 12.5px; fill: var(--muted); }
+svg .h { font-size: 13px; font-weight: 800; letter-spacing: .06em; fill: var(--head); }
+svg .panel2 { fill: var(--panel); stroke: var(--card-line); stroke-width: 1; }
+svg .panel { fill: var(--bg); stroke: var(--card-line); stroke-width: 1; }
+svg .box { fill: var(--card); stroke: var(--card-line); stroke-width: 1.2; transition: stroke .25s, fill .25s; }
+svg .box.argo { stroke: var(--acc); stroke-width: 1.6; }
+svg .box.keybad { fill: var(--bad-bg); stroke: var(--bad); stroke-width: 1.6; }
+svg .box.keyok { fill: var(--ok-bg); stroke: var(--ok); stroke-width: 1.6; }
+svg .db { fill: var(--acc); }
+svg .db-t { fill: var(--navy); font-weight: 800; }
+svg .ln { fill: none; stroke: var(--line); stroke-width: 1.8; }
+svg .ln.dash { stroke-dasharray: 6 5; }
+svg .ln.acc { stroke: var(--acc); stroke-width: 2.6; }
+svg .ln.bad { stroke: var(--bad); stroke-width: 2.4; }
+svg .ln.ok { stroke: var(--ok); stroke-width: 2.4; }
+svg .mk { fill: var(--line); }
+svg .mk-acc { fill: var(--acc); }
+svg .mk-bad { fill: var(--bad); }
+svg .mk-ok { fill: var(--ok); }
+svg .num circle { fill: var(--strong); stroke: var(--acc); stroke-width: 2; }
+svg .num text { fill: #fff; font-weight: 800; font-size: 13px; }
+svg .lbl { font-size: 12.5px; fill: var(--muted); font-style: italic; }
+svg .bad-t { fill: var(--bad); }
+svg .ok-t { fill: var(--ok); }
+/* kroki diagramu */
+svg .st { transition: opacity .3s; }
+svg .st.todo { opacity: .16; }
+svg .st.cur .box, svg .st.cur.box { stroke: var(--acc); stroke-width: 3; fill: var(--act-bg); }
+svg .st.cur .ln, svg .st.cur.ln { stroke-width: 3.6; }
+.js svg .st.todo .num, .js svg .num.st.todo { opacity: .3; }
+
+/* --- krokowy diagram --- */
+.btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; align-items: center; }
+button.b { font: inherit; font-size: 15px; padding: 7px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--ink); cursor: pointer; }
+button.b.primary { background: var(--strong); color: var(--on-strong); border-color: var(--strong); font-weight: 700; }
+button.b:hover, button.b:focus-visible { border-color: var(--acc); }
+button.b:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; }
+button.b:disabled { opacity: .45; cursor: not-allowed; }
+.tickno { font-size: 14px; color: var(--muted); margin-left: auto; }
+ol.steps { list-style: none; counter-reset: s; margin: 12px 0 0; padding: 0; display: grid; gap: 6px; }
+@media (min-width: 820px) { ol.steps { grid-template-columns: 1fr 1fr; } }
+ol.steps li { counter-increment: s; display: grid; grid-template-columns: 26px 1fr; gap: 8px; align-items: start; font-size: 14.5px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--muted); cursor: pointer; }
+ol.steps li::before { content: counter(s); display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--panel); border: 1px solid var(--border); font-weight: 800; font-size: 13px; color: var(--ink); }
+ol.steps li.past { color: var(--ink); }
+ol.steps li.past::before { border-color: var(--ok); }
+ol.steps li.on { color: var(--ink); border-color: var(--acc); background: var(--act-bg); }
+ol.steps li.on::before { background: var(--strong); color: #fff; border-color: var(--acc); }
+ol.steps li:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; }
+
+/* --- przełączniki --- */
+.seg { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 2px; }
+.seg button { font: inherit; font-size: 13.5px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg); color: var(--ink); cursor: pointer; }
+.seg button code { background: none; padding: 0; font-size: 12.5px; }
+.seg button:hover { border-color: var(--acc); }
+.seg button[aria-pressed="true"] { background: var(--strong); color: var(--on-strong); border-color: var(--strong); font-weight: 700; }
+.seg button.danger { border-color: var(--bad); color: var(--bad); }
+.seg button:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; }
+.seg button:disabled { opacity: .45; cursor: not-allowed; }
+.seg .grp { font-size: 12px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); align-self: center; margin: 0 2px 0 8px; }
+.seg .grp:first-child { margin-left: 0; }
+.acts { display: grid; gap: 10px 18px; grid-template-columns: minmax(0, 1fr); background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; }
+@media (min-width: 820px) { .acts { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .acts .full { grid-column: 1 / -1; } }
+.acts .al { font-weight: 700; font-size: 14px; }
+.acts .al small { font-weight: 400; color: var(--muted); }
+
+/* --- symulator --- */
+.board { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); margin-top: 12px; }
+@media (min-width: 900px) { .board { grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr) minmax(0, 1fr); } }
+.pane { border: 1.5px solid var(--card-line); border-radius: 10px; background: var(--card); padding: 10px 11px; min-width: 0; }
+.pane .ph { font-size: 12.5px; font-weight: 800; letter-spacing: .06em; color: var(--head); text-transform: uppercase; margin: 0 0 6px; }
+.pane .ph small { text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--muted); }
+.pane.off { border-style: dashed; border-color: var(--warn); }
+.obj { font-size: 12.5px; line-height: 1.4; padding: 4px 7px; border-radius: 6px; border: 1px solid var(--border); border-left: 4px solid var(--acc); background: var(--bg); margin-bottom: 4px; overflow-wrap: anywhere; }
+.obj b { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.obj .m { display: block; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11.5px; }
+.obj .m.drift { color: var(--bad); font-weight: 700; }
+.obj.file { border-left-color: var(--strong); }
+.fresh { box-shadow: 0 0 0 3px var(--acc); }
+.gone { opacity: .55; text-decoration: line-through; border-color: var(--bad) !important; background: var(--bad-bg) !important; color: var(--bad); }
+.pods { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.pods i { display: inline-block; width: 16px; height: 16px; border-radius: 4px; background: var(--ok); }
+.pods i.badp { background: var(--bad); }
+.pods i.newp { background: var(--acc); }
+.badges { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 8px; }
+.badge { display: inline-block; font-size: 13px; font-weight: 800; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--border); }
+.badge.ok { background: var(--ok-bg); color: var(--ok); border-color: var(--ok); }
+.badge.bad { background: var(--bad-bg); color: var(--bad); border-color: var(--bad); }
+.badge.warn { background: var(--warn-bg); color: var(--warn); border-color: var(--warn); }
+.badge.act { background: var(--act-bg); color: var(--act); border-color: var(--act); }
+.badge.mut { background: var(--panel); color: var(--muted); }
+.diffl { margin: 4px 0 0; padding: 0; list-style: none; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.diffl li { padding: 2px 6px; border-radius: 4px; background: var(--warn-bg); color: var(--warn); margin-bottom: 3px; overflow-wrap: anywhere; }
+.diffl li.pr { background: var(--bad-bg); color: var(--bad); }
+.small { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
+.minibtns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.minibtns button { font: inherit; font-size: 13px; padding: 3px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--panel); color: var(--ink); cursor: pointer; }
+.minibtns button:hover { border-color: var(--acc); }
+.minibtns button:disabled { opacity: .4; cursor: not-allowed; }
+.minibtns button:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; }
+pre.term { background: var(--navy); color: #d6e9f3; font-size: 12.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; margin: 10px 0 0; min-height: 6em; max-height: 16em; overflow-y: auto; }
+pre.term .cmd { color: var(--acc); font-weight: 700; }
+pre.term .er { color: #ffb4a8; }
+pre.term .wa { color: #ffd98a; }
+pre.term .okl { color: #8fe3b0; }
+pre.term .cm { color: #8aa6b6; }
+.msg { margin: 10px 0 0; font-size: 14.5px; min-height: 3.2em; border-left: 4px solid var(--acc); padding: 6px 10px; background: var(--bg); border-radius: 0 6px 6px 0; }
+.msg.stuck { border-left-color: var(--bad); }
+.msg.done { border-left-color: var(--ok); }
+.msg.wait { border-left-color: var(--warn); }
+
+/* --- adnotowany YAML --- */
+.yaml { font-size: 13.5px; line-height: 1.55; }
+.yaml .k { cursor: pointer; border-radius: 3px; padding: 0 2px; background: rgba(65,192,240,.18); border-bottom: 1px dashed var(--acc); }
+.yaml .k:hover, .yaml .k:focus-visible, .yaml .k.sel { background: var(--acc); color: var(--navy); outline: none; }
+.yinfo { position: sticky; top: 12px; border: 1px solid var(--border); border-left: 5px solid var(--acc); border-radius: 0 10px 10px 0; background: var(--bg); padding: 12px 14px; min-height: 12em; }
+.yinfo h3 { margin: 0 0 6px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 16px; color: var(--head); }
+.yinfo p { font-size: 15px; }
+.yinfo p:last-child { margin-bottom: 0; }
+
+/* --- tabela plusów i minusów --- */
+.tag { display: inline-block; font-size: 12.5px; font-weight: 700; padding: 0 8px; border-radius: 999px; white-space: nowrap; }
+.tag.push { background: var(--warn-bg); color: var(--warn); }
+.tag.git { background: var(--ok-bg); color: var(--ok); }
+.tag.tie { background: var(--panel); color: var(--muted); border: 1px solid var(--border); }
+table.pm td:first-child { width: 17%; }
+table.pm td.w-push { box-shadow: inset 4px 0 0 var(--warn); }
+table.pm td.w-git { box-shadow: inset 4px 0 0 var(--ok); }
+table.pm tr[hidden] { display: none; }
+.count { font-size: 14px; color: var(--muted); margin: 6px 0 0; }
+
+/* --- klucze --- */
+.atk { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); margin-top: 10px; }
+@media (min-width: 820px) { .atk { grid-template-columns: 1fr 1fr; } }
+.atk .msg { margin: 0; }
+.atk .msg b.t { display: block; font-size: 12.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--head); }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="kicker">Dzień 5 · ściąga · <a href="README.md">wersja tekstowa</a></p>
+    <h1>GitOps z Argo CD a zwykły pipeline</h1>
+    <p class="lead">Pipeline CI/CD wypycha zmianę do klastra i kończy pracę. Argo CD siedzi w klastrze, sam pobiera stan z gita i bez końca pilnuje, żeby klaster się z nim zgadzał. Ta ściąga pokazuje oba modele krok po kroku, co się dzieje przy ręcznej zmianie i co realnie zyskujesz, a co tracisz.</p>
+    <ul class="chips" aria-label="Kontekst">
+      <li>push: CI → klaster</li>
+      <li>pull: klaster ← git</li>
+      <li>pętla rekoncyliacji</li>
+      <li>drift · selfHeal · prune</li>
+      <li>Argo CD 3.5 · chart argo-cd 10.10.5</li>
+      <li>EKS · ECR</li>
+    </ul>
+  </div>
+</header>
+
+<main class="wrap">
+<nav class="toc" aria-label="Spis treści">
+  <ol>
+    <li><a href="#modele">Dwa modele: push i pull</a></li>
+    <li><a href="#drift">Pętla i drift: symulator</a></li>
+    <li><a href="#application">Obiekt Application</a></li>
+    <li><a href="#klucze">Kto ma klucze do klastra</a></li>
+    <li><a href="#plusy">Plusy i minusy</a></li>
+    <li><a href="#kiedy">Kiedy co</a></li>
+    <li><a href="#dalej">Na szkoleniu i dalej</a></li>
+  </ol>
+</nav>
+
+<!-- 1 ============================================================ -->
+<section id="modele">
+  <h2><span class="n">1</span> Dwa modele obok siebie</h2>
+  <p>W obu modelach CI robi to samo na początku: testy, build obrazu, push do rejestru. Różnica jest w ostatnim kroku. Kto wgrywa zmianę do klastra i czy ktoś patrzy na klaster potem?</p>
+
+  <h3>Push: klasyczny pipeline (GitHub Actions, GitLab CI)</h3>
+  <figure id="f-push">
+    <div class="btns">
+      <button type="button" class="b primary" data-do="next">dalej →</button>
+      <button type="button" class="b" data-do="play">odtwórz</button>
+      <button type="button" class="b" data-do="reset">od nowa</button>
+      <span class="tickno" aria-live="polite">krok 0 z 7</span>
+    </div>
+    <div class="scroll">
+    <svg class="wide" viewBox="0 0 1000 340" role="img" aria-labelledby="pu-t pu-d">
+      <title id="pu-t">Model push: pipeline wdraża do klastra</title>
+      <desc id="pu-d">Commit trafia do repozytorium aplikacji. Runner CI robi testy, build i push obrazu do ECR, a potem z poświadczeniami do klastra wykonuje helm upgrade. Klaster pobiera obraz. Pipeline kończy pracę i nie patrzy więcej na klaster.</desc>
+      <defs>
+        <marker id="pa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="mk-acc" d="M0 0L10 5L0 10z"/></marker>
+        <marker id="pb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="mk-bad" d="M0 0L10 5L0 10z"/></marker>
+        <marker id="pg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="mk" d="M0 0L10 5L0 10z"/></marker>
+      </defs>
+
+      <g class="st" data-s="1">
+        <rect class="box" x="16" y="40" width="150" height="60" rx="10"/>
+        <text class="b" x="91" y="66" text-anchor="middle">Ty</text>
+        <text class="s mono" x="91" y="86" text-anchor="middle">git push</text>
+        <path class="ln acc" d="M166 70 H214" marker-end="url(#pa)"/>
+        <rect class="box" x="220" y="40" width="180" height="60" rx="10"/>
+        <text class="b" x="310" y="66" text-anchor="middle">repo aplikacji</text>
+        <text class="s" x="310" y="86" text-anchor="middle">GitHub · kod + chart</text>
+      </g>
+
+      <rect class="panel2" x="450" y="16" width="300" height="160" rx="12"/>
+      <text class="h" x="466" y="38">RUNNER CI</text>
+      <g class="st" data-s="2">
+        <path class="ln acc" d="M400 70 H444" marker-end="url(#pa)"/>
+        <rect class="box" x="466" y="52" width="84" height="44" rx="8"/>
+        <text class="b" x="508" y="79" text-anchor="middle">testy</text>
+      </g>
+      <g class="st" data-s="3">
+        <rect class="box" x="558" y="52" width="84" height="44" rx="8"/>
+        <text class="b" x="600" y="79" text-anchor="middle">build</text>
+      </g>
+      <g class="st" data-s="4">
+        <rect class="box" x="650" y="52" width="84" height="44" rx="8"/>
+        <text class="b" x="692" y="79" text-anchor="middle">push</text>
+        <path class="ln acc" d="M734 74 H794" marker-end="url(#pa)"/>
+        <rect class="db" x="800" y="40" width="184" height="64" rx="14"/>
+        <text class="db-t" x="892" y="68" text-anchor="middle">ECR</text>
+        <text class="mono" x="892" y="88" text-anchor="middle" style="font-size:12px;fill:var(--navy)">todos-api:1.4.2</text>
+      </g>
+      <g class="st" data-s="5">
+        <rect class="box keybad" x="466" y="112" width="268" height="48" rx="8"/>
+        <text class="b bad-t" x="600" y="133" text-anchor="middle">poświadczenia do klastra</text>
+        <text class="s mono" x="600" y="151" text-anchor="middle">kubeconfig albo rola IAM</text>
+        <path class="ln bad" d="M560 160 V216" marker-end="url(#pb)"/>
+        <text class="lbl" x="572" y="196">helm upgrade --install</text>
+      </g>
+
+      <rect class="panel2" x="450" y="200" width="534" height="96" rx="12"/>
+      <text class="h" x="466" y="222">KLASTER EKS</text>
+      <g class="st" data-s="5">
+        <rect class="box" x="470" y="232" width="180" height="50" rx="8"/>
+        <text class="b" x="560" y="262" text-anchor="middle">kube-apiserver</text>
+      </g>
+      <g class="st" data-s="6">
+        <path class="ln acc" d="M650 257 H774" marker-end="url(#pa)"/>
+        <rect class="box" x="780" y="232" width="190" height="50" rx="8"/>
+        <text class="b" x="875" y="254" text-anchor="middle">Deployment → pody</text>
+        <text class="s" x="875" y="272" text-anchor="middle">rollout nowej wersji</text>
+        <path class="ln dash" d="M892 104 V226" marker-end="url(#pg)"/>
+        <text class="lbl" x="900" y="170">pull obrazu</text>
+      </g>
+      <g class="st" data-s="7">
+        <rect class="box keyok" x="16" y="150" width="400" height="56" rx="10"/>
+        <text class="b ok-t" x="216" y="174" text-anchor="middle">pipeline zielony · koniec</text>
+        <text class="s" x="216" y="194" text-anchor="middle">runner znika, poświadczenia czekają na następny raz</text>
+        <text class="b" x="216" y="234" text-anchor="middle">kubectl scale / edit / delete po wdrożeniu?</text>
+        <text class="s" x="216" y="254" text-anchor="middle">nikt tego nie widzi do następnego pipeline'u</text>
+      </g>
+
+      <g class="num st" data-s="1"><circle cx="190" cy="50" r="13"/><text x="190" y="55" text-anchor="middle">1</text></g>
+      <g class="num st" data-s="2"><circle cx="422" cy="50" r="13"/><text x="422" y="55" text-anchor="middle">2</text></g>
+      <g class="num st" data-s="4"><circle cx="766" cy="54" r="13"/><text x="766" y="59" text-anchor="middle">4</text></g>
+      <g class="num st" data-s="5"><circle cx="540" cy="190" r="13"/><text x="540" y="195" text-anchor="middle">5</text></g>
+      <g class="num st" data-s="6"><circle cx="712" cy="240" r="13"/><text x="712" y="245" text-anchor="middle">6</text></g>
+      <text class="b st" data-s="7" x="500" y="324" text-anchor="middle" style="font-size:15px">Pipeline wdraża raz i zapomina. Między wdrożeniami klastra nikt nie pilnuje.</text>
+    </svg>
+    </div>
+    <ol class="steps">
+      <li tabindex="0"><span>Commit i push do repo aplikacji. Webhook budzi CI.</span></li>
+      <li tabindex="0"><span>Runner pobiera kod i odpala testy.</span></li>
+      <li tabindex="0"><span><code>docker build</code>: obraz z tagiem, np. SHA commita albo <code>1.4.2</code>.</span></li>
+      <li tabindex="0"><span><code>docker push</code> do ECR.</span></li>
+      <li tabindex="0"><span>Runner wyciąga z sekretów CI kubeconfig albo rolę IAM i robi <code>helm upgrade --install</code> (albo <code>kubectl apply</code>).</span></li>
+      <li tabindex="0"><span>Klaster robi rollout. Węzły pobierają obraz z ECR.</span></li>
+      <li tabindex="0"><span>Pipeline kończy się na zielono. Do następnego commita nikt nie porównuje klastra z repo.</span></li>
+    </ol>
+    <figcaption><span class="hint">Przewiń diagram w bok. </span>Kliknij krok na liście, żeby do niego skoczyć. <code>helm upgrade --wait --atomic</code> czeka na gotowe pody i cofa release przy błędzie, więc pipeline zna wynik wdrożenia od razu.</figcaption>
+  </figure>
+
+  <h3>Pull: GitOps z Argo CD</h3>
+  <figure id="f-pull">
+    <div class="btns">
+      <button type="button" class="b primary" data-do="next">dalej →</button>
+      <button type="button" class="b" data-do="play">odtwórz</button>
+      <button type="button" class="b" data-do="reset">od nowa</button>
+      <span class="tickno" aria-live="polite">krok 0 z 8</span>
+    </div>
+    <div class="scroll">
+    <svg class="wide" viewBox="0 0 1000 440" role="img" aria-labelledby="pl-t pl-d">
+      <title id="pl-t">Model pull: Argo CD w klastrze pobiera stan z gita</title>
+      <desc id="pl-d">CI robi testy, build, push obrazu do ECR i commit z nowym tagiem do repo konfiguracji. W klastrze, w namespace argocd, repo-server odpytuje repo i renderuje manifesty helm template. application-controller porównuje je z klastrem i robi sync przez kube-apiserver. Potem dalej obserwuje klaster.</desc>
+      <defs>
+        <marker id="qa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="mk-acc" d="M0 0L10 5L0 10z"/></marker>
+        <marker id="qo" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="mk-ok" d="M0 0L10 5L0 10z"/></marker>
+        <marker id="qg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="mk" d="M0 0L10 5L0 10z"/></marker>
+      </defs>
+
+      <g class="st" data-s="1">
+        <rect class="box" x="16" y="30" width="140" height="56" rx="10"/>
+        <text class="b" x="86" y="54" text-anchor="middle">Ty</text>
+        <text class="s mono" x="86" y="74" text-anchor="middle">git push</text>
+        <path class="ln acc" d="M156 58 H190" marker-end="url(#qa)"/>
+        <rect class="box" x="196" y="30" width="170" height="56" rx="10"/>
+        <text class="b" x="281" y="54" text-anchor="middle">repo aplikacji</text>
+        <text class="s" x="281" y="74" text-anchor="middle">kod</text>
+      </g>
+      <g class="st" data-s="2">
+        <path class="ln acc" d="M366 58 H400" marker-end="url(#qa)"/>
+        <rect class="box" x="406" y="20" width="260" height="76" rx="10"/>
+        <text class="h" x="536" y="44" text-anchor="middle">RUNNER CI</text>
+        <text class="b" x="536" y="66" text-anchor="middle">testy · build · push</text>
+        <text class="s" x="536" y="84" text-anchor="middle">bez dostępu do klastra</text>
+        <path class="ln acc" d="M666 58 H794" marker-end="url(#qa)"/>
+        <rect class="db" x="800" y="28" width="170" height="60" rx="14"/>
+        <text class="db-t" x="885" y="54" text-anchor="middle">ECR</text>
+        <text class="mono" x="885" y="74" text-anchor="middle" style="font-size:12px;fill:var(--navy)">todos-api:1.4.2</text>
+      </g>
+      <g class="st" data-s="3">
+        <path class="ln acc" d="M536 96 V124" marker-end="url(#qa)"/>
+        <text class="lbl" x="548" y="116">commit: tag 1.4.2</text>
+        <rect class="box" x="406" y="130" width="260" height="56" rx="10"/>
+        <text class="b" x="536" y="154" text-anchor="middle">repo konfiguracji</text>
+        <text class="s mono" x="536" y="174" text-anchor="middle">values-prod.yaml · tag: 1.4.2</text>
+      </g>
+
+      <rect class="panel2" x="16" y="222" width="968" height="206" rx="12"/>
+      <text class="h" x="32" y="244">KLASTER EKS</text>
+      <rect class="panel" x="32" y="254" width="572" height="160" rx="10"/>
+      <text class="h" x="220" y="276">NAMESPACE ARGOCD</text>
+
+      <g class="st" data-s="4" data-c="4 5">
+        <path class="ln ok" d="M200 286 V158 H400" marker-end="url(#qo)"/>
+        <text class="lbl" x="210" y="150">git fetch: co 120 s + do 60 s</text>
+        <text class="lbl" x="210" y="206">(Refresh / webhook: od razu)</text>
+      </g>
+      <g class="st" data-s="0" data-c="4 5">
+        <rect class="box argo" x="48" y="290" width="160" height="44" rx="8"/>
+        <text class="b" x="128" y="310" text-anchor="middle">repo-server</text>
+        <text class="s mono" x="128" y="326" text-anchor="middle">helm template</text>
+      </g>
+      <g class="st" data-s="5">
+        <path class="ln acc" d="M208 312 H218" marker-end="url(#qa)"/>
+      </g>
+      <g class="st" data-s="0" data-c="6 8">
+        <rect class="box argo" x="224" y="290" width="210" height="44" rx="8"/>
+        <text class="b" x="329" y="310" text-anchor="middle">application-controller</text>
+        <text class="s" x="329" y="326" text-anchor="middle">porównaj → sync</text>
+      </g>
+      <g class="st" data-s="0">
+        <rect class="box" x="48" y="352" width="150" height="44" rx="8"/>
+        <text class="b" x="123" y="372" text-anchor="middle">argocd-server</text>
+        <text class="s" x="123" y="388" text-anchor="middle">UI, API, Refresh</text>
+        <rect class="box" x="210" y="352" width="90" height="44" rx="8"/>
+        <text class="b" x="255" y="379" text-anchor="middle">redis</text>
+        <rect class="box" x="312" y="352" width="276" height="44" rx="8"/>
+        <text class="b" x="450" y="372" text-anchor="middle">applicationset-controller</text>
+        <text class="s" x="450" y="388" text-anchor="middle">wiele Application z jednego wzoru</text>
+      </g>
+
+      <g class="st" data-s="0" data-c="7">
+        <rect class="box" x="640" y="286" width="150" height="52" rx="8"/>
+        <text class="b" x="715" y="317" text-anchor="middle">kube-apiserver</text>
+      </g>
+      <g class="st" data-s="7">
+        <path class="ln acc" d="M434 304 H634" marker-end="url(#qa)"/>
+        <text class="lbl" x="470" y="296">sync = apply</text>
+        <path class="ln acc" d="M790 312 H814" marker-end="url(#qa)"/>
+        <rect class="box" x="820" y="254" width="150" height="160" rx="10"/>
+        <text class="h" x="895" y="276" text-anchor="middle">GITOPS-DEMO</text>
+        <text class="mono" x="895" y="306" text-anchor="middle" style="font-size:12.5px">Deployment</text>
+        <text class="mono" x="895" y="328" text-anchor="middle" style="font-size:12.5px">Service</text>
+        <text class="mono" x="895" y="350" text-anchor="middle" style="font-size:12.5px">ConfigMap</text>
+        <text class="s" x="895" y="380" text-anchor="middle">pody z nowym</text>
+        <text class="s" x="895" y="396" text-anchor="middle">obrazem</text>
+        <path class="ln dash" d="M940 88 V248" marker-end="url(#qg)"/>
+        <text class="lbl" x="932" y="200" text-anchor="end">pull obrazu</text>
+      </g>
+      <g class="st" data-s="8">
+        <path class="ln ok dash" d="M640 326 H440" marker-end="url(#qo)"/>
+        <text class="lbl" x="482" y="346">watch: zmiany w klastrze</text>
+      </g>
+
+      <g class="num st" data-s="1"><circle cx="173" cy="40" r="13"/><text x="173" y="45" text-anchor="middle">1</text></g>
+      <g class="num st" data-s="2"><circle cx="730" cy="40" r="13"/><text x="730" y="45" text-anchor="middle">2</text></g>
+      <g class="num st" data-s="3"><circle cx="516" cy="112" r="13"/><text x="516" y="117" text-anchor="middle">3</text></g>
+      <g class="num st" data-s="4"><circle cx="226" cy="180" r="13"/><text x="226" y="185" text-anchor="middle">4</text></g>
+      <g class="num st" data-s="7"><circle cx="600" cy="282" r="13"/><text x="600" y="287" text-anchor="middle">7</text></g>
+      <g class="num st" data-s="8"><circle cx="462" cy="339" r="12"/><text x="462" y="344" text-anchor="middle">8</text></g>
+    </svg>
+    </div>
+    <ol class="steps">
+      <li tabindex="0"><span>Commit i push do repo aplikacji.</span></li>
+      <li tabindex="0"><span>CI: testy, build, push obrazu do ECR. Runner nie ma żadnych poświadczeń do klastra.</span></li>
+      <li tabindex="0"><span>CI robi commit z nowym tagiem do repo konfiguracji (np. <code>image.tag</code> w <code>values-prod.yaml</code>). Na tym CI kończy pracę.</span></li>
+      <li tabindex="0"><span>Argo CD sam odpytuje repo: domyślnie co 120 s + do 60 s losowo, więc do ok. 3 min. Przycisk Refresh, adnotacja <code>argocd.argoproj.io/refresh=normal</code> albo webhook z GitHuba: od razu.</span></li>
+      <li tabindex="0"><span>repo-server renderuje manifesty: widzi <code>Chart.yaml</code>, więc robi <code>helm template</code> z <code>valueFiles</code>. Umie też Kustomize i czysty YAML.</span></li>
+      <li tabindex="0"><span>application-controller porównuje wynik z tym, co jest w klastrze. Różnica = <strong>OutOfSync</strong>.</span></li>
+      <li tabindex="0"><span>Sync: controller wysyła manifesty do kube-apiservera (apply). Rollout, pody pobierają obraz z ECR. Status <strong>Synced</strong>, potem <strong>Healthy</strong>.</span></li>
+      <li tabindex="0"><span>I dalej w kółko: controller obserwuje zasoby w klastrze (watch) i co kilka minut porównuje je z gitem. Ręczna zmiana zostaje zauważona.</span></li>
+    </ol>
+    <figcaption><span class="hint">Przewiń diagram w bok. </span>Ramki w namespace <code>argocd</code> to pody z instalacji Helmem (chart <code>argo/argo-cd</code>). Repo aplikacji i repo konfiguracji mogą być jednym repo z osobnym katalogiem. Częściej są osobne, żeby commit z tagiem nie odpalał znowu CI.</figcaption>
+  </figure>
+
+  <div class="key"><strong>Argo CD nie „nasłuchuje na push”.</strong> To pętla rekoncyliacji, ta sama idea co kontroler i operator z dnia 4 (<a href="../crd/crd.html#petla">pętla kontrolera</a>): obserwuj, porównaj stan zadany (git) z rzeczywistym (klaster), działaj. Webhook z GitHuba tylko przyspiesza krok „obserwuj” po stronie gita. Bez niego wszystko działa tak samo, tylko wolniej.</div>
+</section>
+
+<!-- 2 ============================================================ -->
+<section id="drift">
+  <h2><span class="n">2</span> Pętla rekoncyliacji i drift: symulator</h2>
+  <p><strong>Drift</strong> to różnica między tym, co jest w gicie, a tym, co działa w klastrze. Powstaje, gdy ktoś zmieni coś ręcznie (<code>kubectl scale</code>, <code>edit</code>, <code>delete</code>). Wybierz tryb i klikaj akcje. Zobacz, kto zauważy zmianę i kto ją cofnie. Aplikacja to <code>podinfo-prod</code> z przykładu 29: 2 repliki, tag <code>6.14.1</code>, napis <code>prod v1</code>.</p>
+
+  <figure>
+    <div class="acts">
+      <div class="full">
+        <div class="al">Tryb <small>· kto wdraża i czy pilnuje</small></div>
+        <div class="seg" role="group" aria-label="Tryb wdrażania" id="d-modes">
+          <button type="button" data-m="push">pipeline push</button>
+          <button type="button" data-m="manual">Argo CD bez automated</button>
+          <button type="button" data-m="auto"><code>automated</code></button>
+          <button type="button" data-m="heal"><code>automated</code> + <code>selfHeal</code></button>
+          <button type="button" data-m="prune">+ <code>prune</code></button>
+        </div>
+      </div>
+      <div>
+        <div class="al">Ręcznie w klastrze <small>· kubectl</small></div>
+        <div class="seg" role="group" aria-label="Akcje w klastrze">
+          <button type="button" data-a="scale"><code>scale --replicas=5</code></button>
+          <button type="button" data-a="delsvc" class="danger"><code>delete svc</code></button>
+          <button type="button" data-a="image"><code>set image :6.99.9</code></button>
+        </div>
+      </div>
+      <div>
+        <div class="al">W gicie <small>· commit + push</small></div>
+        <div class="seg" role="group" aria-label="Akcje w gicie">
+          <button type="button" data-a="commit">commit: nowy napis</button>
+          <button type="button" data-a="rmfile" id="d-rm">usuń <code>service.yaml</code></button>
+          <button type="button" data-a="reset">od nowa</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="board">
+      <div class="pane" id="d-git"></div>
+      <div class="pane" id="d-argo"></div>
+      <div class="pane" id="d-k8s"></div>
+    </div>
+
+    <pre class="term" id="d-term" aria-live="polite"></pre>
+    <div class="msg" id="d-msg" aria-live="polite"></div>
+    <figcaption>Czasy w logu to czasy z naszego EKS: sync Application ok. 5 s, drift (<code>scale</code>) cofnięty w mniej niż 2 s, commit → nowa strona po ok. 8 s z Refresh, pełny cykl odpytywania zmierzony na 3 min 4 s. Tag <code>6.99.9</code> nie istnieje: pody wiszą w <code>ImagePullBackOff</code>, Argo CD pokazuje <strong>Degraded</strong>.</figcaption>
+  </figure>
+
+  <div class="tablewrap">
+    <table class="stack">
+      <thead><tr><th>Tryb</th><th>Ręczna zmiana w klastrze</th><th>Nowy commit</th><th>Plik usunięty z gita</th></tr></thead>
+      <tbody>
+        <tr><td data-h="Tryb">pipeline push</td><td data-h="Ręczna zmiana">zostaje, nikt nie wie; następny <code>helm upgrade</code> nadpisze pola z chartu</td><td data-h="Nowy commit">pipeline wdraża od razu</td><td data-h="Plik usunięty"><code>helm upgrade</code> usuwa zasób z release'u; <code>kubectl apply</code> bez <code>--prune</code> go zostawia</td></tr>
+        <tr><td data-h="Tryb">Argo CD bez <code>automated</code></td><td data-h="Ręczna zmiana">OutOfSync + Diff, czeka na ręczny Sync</td><td data-h="Nowy commit">OutOfSync, czeka na ręczny Sync</td><td data-h="Plik usunięty">OutOfSync; Sync usunie tylko z zaznaczonym Prune</td></tr>
+        <tr><td data-h="Tryb"><code>automated</code></td><td data-h="Ręczna zmiana">OutOfSync, ale <strong>nie cofa</strong></td><td data-h="Nowy commit">sync sam, po odpytaniu repo</td><td data-h="Plik usunięty">zasób zostaje, OutOfSync („requires pruning”)</td></tr>
+        <tr><td data-h="Tryb">+ <code>selfHeal</code></td><td data-h="Ręczna zmiana">cofa w kilka sekund</td><td data-h="Nowy commit">sync sam</td><td data-h="Plik usunięty">zasób dalej zostaje</td></tr>
+        <tr><td data-h="Tryb">+ <code>prune</code></td><td data-h="Ręczna zmiana">cofa w kilka sekund</td><td data-h="Nowy commit">sync sam</td><td data-h="Plik usunięty">usuwa z klastra</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Dwa statusy Argo CD warto czytać osobno. <strong>Sync</strong>: czy klaster zgadza się z gitem (<code>Synced</code> / <code>OutOfSync</code>). <strong>Health</strong>: czy to, co działa, jest zdrowe (<code>Healthy</code>, <code>Progressing</code> w trakcie rolloutu, <code>Degraded</code> przy błędzie, <code>Missing</code> gdy zasobu brak). Aplikacja może być <code>Synced</code> i <code>Degraded</code> naraz: w gicie jest zły tag, Argo CD wiernie go wdrożył.</p>
+</section>
+
+<!-- 3 ============================================================ -->
+<section id="application">
+  <h2><span class="n">3</span> Obiekt Application</h2>
+  <p><code>Application</code> to CRD Argo CD. Mówi: „pilnuj, żeby w tym klastrze i namespace było to, co w tym repo pod tą ścieżką”. Po lewej <code>application.yaml</code> z przykładu 29. Najedź albo kliknij podświetlone pole.</p>
+
+  <div class="grid2">
+<pre class="yaml" id="y-src">apiVersion: <span class="k" data-k="api" tabindex="0">argoproj.io/v1alpha1</span>
+kind: Application
+metadata:
+  name: <span class="k" data-k="name" tabindex="0">podinfo-prod</span>
+  namespace: <span class="k" data-k="ns" tabindex="0">argocd</span>
+  finalizers:
+    - <span class="k" data-k="fin" tabindex="0">resources-finalizer.argocd.argoproj.io/background</span>
+spec:
+  <span class="k" data-k="project" tabindex="0">project: default</span>
+  source:
+    <span class="k" data-k="repo" tabindex="0">repoURL</span>: https://github.com/dawid-marniok/kubernetes-w-praktyce.git
+    <span class="k" data-k="rev" tabindex="0">targetRevision</span>: main
+    <span class="k" data-k="path" tabindex="0">path</span>: przyklady/k8s/29-gitops-argocd/app
+    helm:
+      <span class="k" data-k="values" tabindex="0">valueFiles</span>:
+        - values-prod.yaml
+  <span class="k" data-k="dest" tabindex="0">destination</span>:
+    server: https://kubernetes.default.svc
+    namespace: gitops-demo
+  syncPolicy:
+    <span class="k" data-k="auto" tabindex="0">automated</span>:
+      <span class="k" data-k="prune" tabindex="0">prune: true</span>
+      <span class="k" data-k="heal" tabindex="0">selfHeal: true</span>
+    syncOptions:
+      - <span class="k" data-k="cns" tabindex="0">CreateNamespace=true</span></pre>
+    <div class="yinfo" id="y-info" aria-live="polite"></div>
+  </div>
+
+  <h3>Helm w Argo CD to nie <code>helm install</code></h3>
+  <div class="grid2">
+    <ul class="plain">
+      <li>Argo CD tylko renderuje chart (<code>helm template</code>) i sam robi apply. Release'u Helma nie ma.</li>
+      <li><code>helm list -n gitops-demo</code> jest pusty. Nie ma Secretów <code>sh.helm.release.v1.*</code>.</li>
+      <li><code>helm rollback</code> nie działa. Historia = <code>git log</code> + zakładka <strong>History and Rollback</strong> w UI.</li>
+      <li>Rollback = <code>git revert</code> i push. Rollback z UI jest możliwy tylko bez <code>automated</code> (inaczej Argo CD od razu wróci do gita).</li>
+    </ul>
+    <ul class="plain">
+      <li>Hooki Helma (<code>helm.sh/hook: pre-install</code> itd.) Argo CD tłumaczy na swoje hooki (PreSync, PostSync).</li>
+      <li><code>lookup</code> w szablonach zwraca pusto: repo-server nie pyta klastra.</li>
+      <li><strong>Flux</strong> dla porównania robi prawdziwy <code>helm install</code> / <code>upgrade</code> przez obiekt <code>HelmRelease</code>. Tam <code>helm list</code> pokazuje release.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 4 ============================================================ -->
+<section id="klucze">
+  <h2><span class="n">4</span> Kto ma klucze do klastra</h2>
+  <p>Najważniejsza różnica dla bezpieczeństwa. W push to CI wchodzi do klastra, więc CI musi mieć klucze. W pull klaster sam wychodzi po zmiany, a CI dostaje tylko prawo zapisu do repo.</p>
+
+  <figure>
+    <div class="scroll">
+    <svg class="wide" viewBox="0 0 1000 300" role="img" aria-labelledby="k-t k-d">
+      <title id="k-t">Poświadczenia w modelu push i pull</title>
+      <desc id="k-d">W push runnery CI mają poświadczenia do klastrów dev i prod i łączą się z kube-apiserverem z zewnątrz. W pull CI ma tylko prawo zapisu do repo konfiguracji, a Argo CD w klastrze wychodzi do repo z tokenem tylko do odczytu.</desc>
+      <defs>
+        <marker id="ka" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="mk-bad" d="M0 0L10 5L0 10z"/></marker>
+        <marker id="kb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="mk-ok" d="M0 0L10 5L0 10z"/></marker>
+        <marker id="kc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="mk-acc" d="M0 0L10 5L0 10z"/></marker>
+      </defs>
+      <text class="h" x="16" y="24">PUSH</text>
+      <rect class="panel2" x="16" y="36" width="200" height="200" rx="12"/>
+      <text class="b" x="116" y="60" text-anchor="middle">CI</text>
+      <rect class="box" x="32" y="72" width="168" height="34" rx="6"/><text class="s" x="116" y="94" text-anchor="middle">runner 1 · runner 2 · …</text>
+      <rect class="box keybad" x="32" y="116" width="168" height="48" rx="6"/><text class="b bad-t" x="116" y="136" text-anchor="middle">sekrety CI</text><text class="s mono" x="116" y="154" text-anchor="middle">kubeconfig dev + prod</text>
+      <rect class="box" x="32" y="174" width="168" height="48" rx="6"/><text class="s" x="116" y="194" text-anchor="middle">każdy, kto zmieni</text><text class="s" x="116" y="210" text-anchor="middle">plik pipeline'u</text>
+      <rect class="panel2" x="300" y="36" width="170" height="90" rx="12"/><text class="b" x="385" y="66" text-anchor="middle">klaster dev</text><text class="s" x="385" y="88" text-anchor="middle">API dostępne</text><text class="s" x="385" y="104" text-anchor="middle">dla runnera</text>
+      <rect class="panel2" x="300" y="146" width="170" height="90" rx="12"/><text class="b" x="385" y="176" text-anchor="middle">klaster prod</text><text class="s" x="385" y="198" text-anchor="middle">API dostępne</text><text class="s" x="385" y="214" text-anchor="middle">dla runnera</text>
+      <path class="ln bad" d="M200 130 C250 130 250 81 294 81" marker-end="url(#ka)"/>
+      <path class="ln bad" d="M200 150 C250 150 250 191 294 191" marker-end="url(#ka)"/>
+      <text class="b bad-t" x="243" y="270" text-anchor="middle">CI → klaster: zapis do produkcji</text>
+
+      <line x1="500" y1="20" x2="500" y2="280" stroke="var(--border)" stroke-width="2"/>
+
+      <text class="h" x="530" y="24">PULL</text>
+      <rect class="panel2" x="530" y="36" width="170" height="90" rx="12"/>
+      <text class="b" x="615" y="62" text-anchor="middle">CI</text>
+      <text class="s" x="615" y="84" text-anchor="middle">push do ECR</text>
+      <text class="s" x="615" y="102" text-anchor="middle">+ commit do repo</text>
+      <rect class="box" x="770" y="40" width="210" height="80" rx="10"/>
+      <text class="b" x="875" y="68" text-anchor="middle">repo konfiguracji</text>
+      <text class="s" x="875" y="90" text-anchor="middle">branch protection,</text>
+      <text class="s" x="875" y="106" text-anchor="middle">review, historia</text>
+      <path class="ln acc" d="M700 80 H764" marker-end="url(#kc)"/>
+      <text class="lbl" x="706" y="72">zapis</text>
+      <rect class="panel2" x="530" y="150" width="450" height="110" rx="12"/>
+      <text class="b" x="550" y="176">klaster prod</text>
+      <text class="s" x="550" y="196">API nie musi być widoczne z zewnątrz</text>
+      <rect class="box keyok" x="770" y="196" width="190" height="48" rx="8"/>
+      <text class="b ok-t" x="865" y="216" text-anchor="middle">Argo CD</text>
+      <text class="s" x="865" y="234" text-anchor="middle">ServiceAccount w klastrze</text>
+      <path class="ln ok" d="M875 196 V126" marker-end="url(#kb)"/>
+      <text class="lbl" x="866" y="168" text-anchor="end">odczyt, token read-only</text>
+      <text class="b ok-t" x="755" y="288" text-anchor="middle">klucze do klastra nie wychodzą z klastra</text>
+    </svg>
+    </div>
+    <figcaption><span class="hint">Przewiń diagram w bok. </span>W pull połączenie idzie z klastra na zewnątrz (do GitHuba i ECR). Do klastra nikt z CI nie wchodzi.</figcaption>
+  </figure>
+
+  <p>Sprawdź, co dostaje ktoś, kto przejmie jeden element:</p>
+  <div class="seg" role="group" aria-label="Scenariusz włamania" id="k-seg">
+    <button type="button" data-x="runner">przejęty runner CI</button>
+    <button type="button" data-x="ci">wyciek sekretów CI</button>
+    <button type="button" data-x="repo">ktoś może pushować do repo konfiguracji</button>
+    <button type="button" data-x="argo">przejęty Argo CD</button>
+  </div>
+  <div class="atk">
+    <div class="msg stuck" id="k-push"></div>
+    <div class="msg" id="k-pull"></div>
+  </div>
+
+  <h3>Na EKS</h3>
+  <ul class="plain">
+    <li><strong>Push:</strong> pipeline potrzebuje roli IAM z dostępem do klastra (access entry z polityką, np. <code>AmazonEKSClusterAdminPolicy</code> albo zawężoną do namespace'ów). Lepiej przez OIDC z GitHub Actions (rola bez stałych kluczy) niż przez klucze w sekretach. Endpoint API klastra musi być osiągalny z runnera: publiczny albo runner we własnym VPC.</li>
+    <li><strong>Pull:</strong> Argo CD używa swojego ServiceAccountu w klastrze. CI ma tylko rolę do push w ECR i token do repo. Endpoint klastra może być prywatny.</li>
+    <li>Prawo zapisu do repo konfiguracji i tak jest „prawie” dostępem do klastra: kto zmerguje commit, ten wdraża. Dlatego branch protection i review są częścią bezpieczeństwa.</li>
+  </ul>
+</section>
+
+<!-- 5 ============================================================ -->
+<section id="plusy">
+  <h2><span class="n">5</span> Plusy i minusy</h2>
+  <p>Filtruj po obszarze albo po tym, który model wypada lepiej. Kolorowy pasek przy komórce = ten model wygrywa w danym punkcie.</p>
+
+  <div class="seg" role="group" aria-label="Obszar" id="pm-cat">
+    <span class="grp">obszar</span>
+    <button type="button" data-f="all" aria-pressed="true">wszystko</button>
+    <button type="button" data-f="sec">bezpieczeństwo</button>
+    <button type="button" data-f="day">codzienna praca</button>
+    <button type="button" data-f="ops">utrzymanie</button>
+  </div>
+  <div class="seg" role="group" aria-label="Kto wygrywa" id="pm-win">
+    <span class="grp">lepiej wypada</span>
+    <button type="button" data-w="all" aria-pressed="true">wszystko</button>
+    <button type="button" data-w="push">push</button>
+    <button type="button" data-w="git">GitOps</button>
+    <button type="button" data-w="tie">zależy</button>
+  </div>
+
+  <div class="tablewrap">
+    <table class="stack pm" id="pm">
+      <thead><tr><th>Kryterium</th><th>Pipeline push</th><th>GitOps (Argo CD)</th><th>Lepiej</th></tr></thead>
+      <tbody>
+        <tr data-c="sec" data-w="git"><td data-h="Kryterium">Audyt i historia</td><td data-h="Push">logi pipeline'ów (często wygasają po kilkudziesięciu dniach); ręczny <code>kubectl</code> nie zostawia śladu w repo</td><td data-h="GitOps" class="w-git">każda zmiana to commit z autorem i review; <code>git log</code> = historia wdrożeń</td><td data-h="Lepiej"><span class="tag git">GitOps</span></td></tr>
+        <tr data-c="day" data-w="git"><td data-h="Kryterium">Rollback</td><td data-h="Push">ponowne uruchomienie starego pipeline'u albo <code>helm rollback</code></td><td data-h="GitOps" class="w-git"><code>git revert</code> i Argo CD wdraża sam; <code>helm rollback</code> nie działa</td><td data-h="Lepiej"><span class="tag git">GitOps</span></td></tr>
+        <tr data-c="ops" data-w="git"><td data-h="Kryterium">Wykrywanie driftu</td><td data-h="Push">brak; drift żyje do następnego wdrożenia</td><td data-h="GitOps" class="w-git">OutOfSync + Diff od razu; <code>selfHeal</code> cofa w sekundach</td><td data-h="Lepiej"><span class="tag git">GitOps</span></td></tr>
+        <tr data-c="sec" data-w="git"><td data-h="Kryterium">Poświadczenia</td><td data-h="Push">CI ma klucze do klastrów, w tym do produkcji</td><td data-h="GitOps" class="w-git">klucze tylko w klastrze; CI potrzebuje zapisu do repo</td><td data-h="Lepiej"><span class="tag git">GitOps</span></td></tr>
+        <tr data-c="ops" data-w="git"><td data-h="Kryterium">Wiele klastrów</td><td data-h="Push">pipeline zna każdy klaster i ma do każdego dostęp; nowy klaster = nowe kroki i nowe sekrety</td><td data-h="GitOps" class="w-git">Argo CD w każdym klastrze albo jeden Argo CD z rejestrem klastrów; <code>ApplicationSet</code> generuje Application per klaster. Uwaga: centralny Argo CD sam ma klucze do wszystkich klastrów</td><td data-h="Lepiej"><span class="tag git">GitOps</span></td></tr>
+        <tr data-c="ops" data-w="git"><td data-h="Kryterium">Odtworzenie klastra</td><td data-h="Push">trzeba odpalić wszystkie pipeline'y, w dobrej kolejności</td><td data-h="GitOps" class="w-git">nowy klaster + Argo CD + Application (wzorzec „app of apps”) = cały stan z gita</td><td data-h="Lepiej"><span class="tag git">GitOps</span></td></tr>
+        <tr data-c="day" data-w="push"><td data-h="Kryterium">Informacja zwrotna</td><td data-h="Push" class="w-push">pipeline od razu wie, czy wdrożenie się udało (<code>helm --wait --atomic</code>); czerwony build widzi autor</td><td data-h="GitOps">commit ≠ wdrożenie; do ok. 3 min opóźnienia; CI jest zielone, zanim cokolwiek wdrożono; wynik trzeba sprawdzić w Argo CD albo w powiadomieniach (Argo CD Notifications)</td><td data-h="Lepiej"><span class="tag push">push</span></td></tr>
+        <tr data-c="day" data-w="push"><td data-h="Kryterium">Kroki imperatywne, migracje bazy</td><td data-h="Push" class="w-push">zwykły krok w pipeline przed albo po wdrożeniu</td><td data-h="GitOps">hooki <code>PreSync</code> / <code>PostSync</code> / <code>SyncFail</code> jako Job z adnotacją <code>argocd.argoproj.io/hook</code>, kolejność przez sync waves; działa, ale trzeba myśleć w zasobach</td><td data-h="Lepiej"><span class="tag push">push</span></td></tr>
+        <tr data-c="sec" data-w="tie"><td data-h="Kryterium">Sekrety</td><td data-h="Push">zmienne CI podstawiane przy wdrożeniu; CI staje się sejfem</td><td data-h="GitOps">nie do gita jawnym tekstem: External Secrets, Sealed Secrets, SOPS (<a href="../sekrety/README.md">ściąga o sekretach</a>); kolejny element, ale porządniejszy</td><td data-h="Lepiej"><span class="tag tie">zależy</span></td></tr>
+        <tr data-c="ops" data-w="push"><td data-h="Kryterium">Dodatkowy komponent</td><td data-h="Push" class="w-push">nic w klastrze</td><td data-h="GitOps">Argo CD to aplikacja: aktualizacje, RBAC i SSO do UI, monitoring, zasoby (repo-server przy dużych chartach), kopia konfiguracji</td><td data-h="Lepiej"><span class="tag push">push</span></td></tr>
+        <tr data-c="ops" data-w="tie"><td data-h="Kryterium">„Hotfix kubectl”</td><td data-h="Push">działa od ręki i zostaje cichym driftem</td><td data-h="GitOps"><code>selfHeal</code> cofa go w sekundach. Plus: każda zmiana idzie przez git. Minus: w czasie awarii trzeba szybko zrobić commit albo świadomie wyłączyć <code>selfHeal</code></td><td data-h="Lepiej"><span class="tag tie">zależy</span></td></tr>
+        <tr data-c="day" data-w="tie"><td data-h="Kryterium">HPA a <code>replicas</code></td><td data-h="Push">każdy <code>helm upgrade</code> nadpisuje liczbę replik ustawioną przez HPA</td><td data-h="GitOps"><code>selfHeal</code> walczy z HPA w kółko. W obu: nie renderuj <code>replicas</code> przy włączonym HPA albo w Argo CD <code>ignoreDifferences</code> na <code>/spec/replicas</code> (+ <code>RespectIgnoreDifferences=true</code>)</td><td data-h="Lepiej"><span class="tag tie">zależy</span></td></tr>
+        <tr data-c="day" data-w="push"><td data-h="Kryterium">Nowy tag obrazu</td><td data-h="Push" class="w-push">pipeline podaje tag od razu: <code>--set image.tag=$SHA</code></td><td data-h="GitOps">ktoś musi zmienić tag w gicie: commit z CI (<code>yq</code> + <code>git push</code>) albo Argo CD Image Updater / Flux image automation</td><td data-h="Lepiej"><span class="tag push">push</span></td></tr>
+        <tr data-c="day" data-w="push"><td data-h="Kryterium">Próg wejścia</td><td data-h="Push" class="w-push">każdy zna CI; jedno repo, jeden pipeline</td><td data-h="GitOps">nowe pojęcia (Application, sync, health, prune), zwykle drugie repo, nowe UI</td><td data-h="Lepiej"><span class="tag push">push</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="count" id="pm-count" aria-live="polite"></p>
+</section>
+
+<!-- 6 ============================================================ -->
+<section id="kiedy">
+  <h2><span class="n">6</span> Kiedy co</h2>
+  <div class="cards">
+    <div class="card mix">
+      <h3>Model mieszany (najczęściej)</h3>
+      <ul>
+        <li>CI: testy, build, push obrazu, commit z nowym tagiem do repo konfiguracji.</li>
+        <li>Argo CD: wdraża i pilnuje.</li>
+        <li>CI nie ma kluczy do klastra, a zespół dalej ma szybkie testy i build w znanym miejscu.</li>
+      </ul>
+    </div>
+    <div class="card no">
+      <h3>Push wystarczy</h3>
+      <ul>
+        <li>Jeden klaster, mały zespół.</li>
+        <li>Mało środowisk, rzadkie wdrożenia.</li>
+        <li>Nikt nie zmienia klastra ręcznie albo drift nie boli.</li>
+        <li>Nie ma kogo posadzić do utrzymania Argo CD.</li>
+      </ul>
+    </div>
+    <div class="card yes">
+      <h3>GitOps się opłaca</h3>
+      <ul>
+        <li>Wiele środowisk i klastrów.</li>
+        <li>Audyt, regulacje, „kto i kiedy zmienił produkcję”.</li>
+        <li>Drift jest realnym problemem.</li>
+        <li>Nie chcesz trzymać kluczy do produkcji w CI.</li>
+        <li>Chcesz odtwarzać klaster z gita.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 7 ============================================================ -->
+<section id="dalej">
+  <h2><span class="n">7</span> Na szkoleniu i dalej</h2>
+  <div class="grid2">
+    <div>
+      <p><strong>Na szkoleniu</strong> oglądasz demo prowadzącego: Argo CD na naszym klastrze EKS, UI pod <code>argocd.k8s.marniok.dev</code>. Kursanci nie mają tam konta: Argo CD instaluje się w całym klastrze, a Application działa z uprawnieniami Argo CD, nie Twoimi.</p>
+      <p>Pliki z demo: <a href="../../../przyklady/k8s/29-gitops-argocd/README.md"><code>przyklady/k8s/29-gitops-argocd/</code></a> (chart podinfo z <code>values-dev.yaml</code> i <code>values-prod.yaml</code>, <code>application.yaml</code>). Podgląd tego, co wyrenderuje Argo CD, bez klastra:</p>
+<pre>helm template podinfo-prod app -f app/values-prod.yaml</pre>
+      <p>Wersje: Argo CD 3.5, chart <code>argo/argo-cd</code> 10.10.5.</p>
+    </div>
+    <div>
+      <div class="tablewrap" style="margin-top:0">
+        <table>
+          <thead><tr><th>Zmierzone na naszym EKS</th><th>Czas</th></tr></thead>
+          <tbody>
+            <tr><td>sync nowej Application</td><td>ok. 5 s</td></tr>
+            <tr><td>drift (<code>scale</code>) cofnięty przez <code>selfHeal</code></td><td>&lt; 2 s</td></tr>
+            <tr><td>commit → nowa strona, z Refresh</td><td>ok. 8 s</td></tr>
+            <tr><td>commit → wdrożenie, bez Refresh i webhooka</td><td>3 min 4 s</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <ul class="plain">
+        <li>Dokumentacja: <a href="https://argo-cd.readthedocs.io/en/stable/">argo-cd.readthedocs.io</a> (Getting Started, Automated Sync Policy, Helm, Resource Hooks).</li>
+        <li>Pętla kontrolera, ta sama idea: <a href="../crd/crd.html">CRD, kontroler i operator</a>.</li>
+        <li>Sekrety w GitOps: <a href="../sekrety/README.md">sekrety z sejfu</a>.</li>
+        <li>Szablony chartu: <a href="../helm/skladnia.md">składnia Helm</a>.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<footer>Kubernetes w praktyce · Dzień 5 · stan na październik 2026 (Argo CD 3.5, chart argo-cd 10.10.5, EKS). Wersja tekstowa: <a href="README.md">README.md</a>.</footer>
+</main>
+
+<script>
+(function () {
+  document.documentElement.classList.add('js');
+  var $ = function (id) { return document.getElementById(id); };
+  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+  /* ---------- 1. krokowe diagramy ---------- */
+  function stepper(fig) {
+    var els = fig.querySelectorAll('svg .st');
+    var lis = fig.querySelectorAll('ol.steps li');
+    var tick = fig.querySelector('.tickno');
+    var max = lis.length, k = 0, timer = null;
+    function show() {
+      for (var i = 0; i < els.length; i++) {
+        var e = els[i], s = Number(e.getAttribute('data-s')), c = (e.getAttribute('data-c') || '').split(' ');
+        e.classList.toggle('todo', s > k);
+        e.classList.toggle('cur', k > 0 && (s === k || c.indexOf(String(k)) >= 0));
+      }
+      for (var j = 0; j < lis.length; j++) {
+        lis[j].classList.toggle('on', j + 1 === k);
+        lis[j].classList.toggle('past', j + 1 < k);
+      }
+      tick.textContent = 'krok ' + k + ' z ' + max;
+    }
+    function stop() { if (timer) { clearInterval(timer); timer = null; } fig.querySelector('[data-do="play"]').textContent = 'odtwórz'; }
+    fig.querySelector('[data-do="next"]').addEventListener('click', function () { stop(); k = k >= max ? 0 : k + 1; show(); });
+    fig.querySelector('[data-do="reset"]').addEventListener('click', function () { stop(); k = 0; show(); });
+    fig.querySelector('[data-do="play"]').addEventListener('click', function () {
+      if (timer) { stop(); return; }
+      this.textContent = 'pauza';
+      if (k >= max) k = 0;
+      k++; show();
+      timer = setInterval(function () { if (k >= max) { stop(); return; } k++; show(); }, 1700);
+    });
+    Array.prototype.forEach.call(lis, function (li, i) {
+      function go() { stop(); k = i + 1; show(); }
+      li.addEventListener('click', go);
+      li.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); go(); } });
+    });
+    show();
+  }
+  stepper($('f-push'));
+  stepper($('f-pull'));
+
+  /* ---------- 2. symulator driftu ---------- */
+  var BAD = '6.99.9';
+  var MSGS = ['prod v1', 'prod v2', 'prod v3', 'prod v4', 'prod v5', 'prod v6'];
+  var SHAS = ['3f9c2a1', 'b71e04d', '0c5d8e7', 'e42a9f3', '91b7c6d', '5ad0e18', 'c8f3b72', '27e6d4a'];
+  var MODE_INFO = {
+    push: 'Pipeline push: wdrożenie tylko przy commicie. W klastrze nie ma nikogo, kto porównuje.',
+    manual: 'Argo CD bez <code>automated</code>: widzi różnice i pokazuje Diff, ale nic nie wdraża sam. Sync klikasz Ty.',
+    auto: '<code>automated</code>: nowy commit wdraża się sam. Ręczna zmiana w klastrze zostaje (Argo CD synchronizuje jeden commit tylko raz).',
+    heal: '<code>automated</code> + <code>selfHeal</code>: ręczna zmiana w klastrze wraca do stanu z gita w kilka sekund.',
+    prune: '<code>automated</code> + <code>selfHeal</code> + <code>prune</code>: jak w przykładzie 29. Plik usunięty z gita znika też z klastra.'
+  };
+  var S, busy = false, timers = [];
+
+  function snap(o) { return { rep: o.rep, img: o.img, msg: o.msg, svc: o.svc, rev: o.rev }; }
+  function init(mode) {
+    var g = { rep: 2, img: '6.14.1', msg: 'prod v1', svc: true, rev: 0 };
+    S = { mode: mode || S && S.mode || 'heal', git: g, seen: snap(g), live: snap(g), synced: 0, msgN: 0,
+          clock: 0, prog: false, fresh: {}, gone: {}, log: [], msg: '', cls: '', ci: 'ostatni przebieg: ' + SHAS[0] + ' · zielony' };
+    S.msg = MODE_INFO[S.mode] + ' Kliknij akcję.';
+  }
+  function argo() { return S.mode !== 'push'; }
+  function isAuto() { return S.mode === 'auto' || S.mode === 'heal' || S.mode === 'prune'; }
+  function isHeal() { return S.mode === 'heal' || S.mode === 'prune'; }
+  function isPrune() { return S.mode === 'prune'; }
+  function tstr(sec) { var m = Math.floor(sec / 60), s = sec % 60; return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s; }
+  function adv(sec) { S.clock += sec; }
+  function log(who, text, cls) {
+    var line = '[' + tstr(S.clock) + '] ' + (who ? who + ': ' : '') + text;
+    S.log.push(cls ? '<span class="' + cls + '">' + esc(line) + '</span>' : esc(line));
+    if (S.log.length > 40) S.log.shift();
+  }
+  function diff() {
+    var a = S.seen, b = S.live, d = [];
+    if (a.rep !== b.rep) d.push({ t: 'Deployment replicas: git ' + a.rep + ', klaster ' + b.rep });
+    if (a.img !== b.img) d.push({ t: 'Deployment image: git :' + a.img + ', klaster :' + b.img });
+    if (a.msg !== b.msg) d.push({ t: 'ConfigMap message: git "' + a.msg + '", klaster "' + b.msg + '"' });
+    if (a.svc && !b.svc) d.push({ t: 'Service podinfo-prod: brak w klastrze' });
+    if (!a.svc && b.svc) d.push({ t: 'Service podinfo-prod: nie ma w gicie (requires pruning)', pr: true });
+    return d;
+  }
+  function health() {
+    if (S.seen.svc && !S.live.svc) return 'Missing';
+    if (S.prog) return 'Progressing';
+    if (S.live.img === BAD) return 'Degraded';
+    return 'Healthy';
+  }
+  // apply: co zmienia sync/helm upgrade; zwraca, czy coś się zmieniło
+  function apply(src, prune) {
+    var L = S.live, ch = false;
+    if (L.rep !== src.rep) { L.rep = src.rep; S.fresh.dep = 1; ch = true; S.prog = true; }
+    if (L.img !== src.img) { L.img = src.img; S.fresh.dep = 1; ch = true; S.prog = true; }
+    if (L.msg !== src.msg) { L.msg = src.msg; S.fresh.cm = 1; S.fresh.dep = 1; ch = true; S.prog = true; }
+    if (src.svc && !L.svc) { L.svc = true; S.fresh.svc = 1; ch = true; }
+    if (!src.svc && L.svc && prune) { L.svc = false; S.gone.svc = 1; ch = true; }
+    return ch;
+  }
+  function later(ms, fn) { busy = true; render(); timers.push(setTimeout(function () { fn(); }, ms)); }
+  function done() { busy = false; timers = []; render(); }
+  function settle() {
+    // koniec rolloutu: Progressing → Healthy / Degraded
+    if (!S.prog) { done(); return; }
+    later(900, function () {
+      S.prog = false; S.fresh = {};
+      if (S.live.img === BAD) { adv(600); log('kubelet', 'ImagePullBackOff: podinfo:' + BAD + ' not found', 'er'); }
+      done();
+    });
+  }
+
+  // co robi Argo CD po zmianie (w klastrze albo po odświeżeniu gita)
+  function argoReact(trigger) {
+    var d = diff();
+    if (!d.length) { S.cls = 'done'; settle(); return; }
+    var newRev = S.seen.rev !== S.synced;
+    if (isAuto() && (newRev || isHeal())) {
+      var delay = trigger === 'drift' ? 1 : 2;
+      later(1000, function () {
+        adv(delay); S.fresh = {}; S.gone = {};
+        var ch = apply(S.seen, isPrune());
+        S.synced = S.seen.rev;
+        log('argocd', (trigger === 'drift' ? 'self-heal: ' : 'auto-sync: ') + 'sync do ' + SHAS[S.seen.rev] + (ch ? '' : ' (bez zmian)'), 'okl');
+        if (!S.seen.svc && S.live.svc) {
+          log('argocd', 'Service podinfo-prod: OutOfSync, requires pruning (prune: false)', 'wa');
+          S.cls = 'stuck';
+          S.msg = 'Sync przeszedł, ale Service, którego nie ma już w gicie, <strong>został w klastrze</strong>. Bez <code>prune</code> Argo CD nie usuwa zasobów sam. Status zostaje OutOfSync. Włącz tryb <strong>+ prune</strong>.';
+        } else if (S.live.img === BAD) {
+          S.cls = 'stuck';
+        } else {
+          S.cls = 'done';
+          if (trigger === 'drift') S.msg = 'Self-heal: Argo CD zauważył ręczną zmianę (watch na zasobach) i w ułamku chwili wysłał stan z gita. Na naszym EKS <code>scale</code> wraca w mniej niż 2 s. Hotfix przez kubectl nie przetrwa: zmieniaj przez git.';
+          else S.msg = 'Auto-sync: nowa rewizja z gita jest w klastrze. Zwróć uwagę na czas w logu: wdrożenie zaczęło się dopiero, gdy Argo CD odczytał repo.';
+        }
+        settle();
+      });
+      return;
+    }
+    // brak automatycznej reakcji
+    S.cls = 'wait';
+    if (S.mode === 'manual') {
+      S.msg = 'Argo CD pokazuje <strong>OutOfSync</strong> i Diff, ale bez <code>automated</code> nic nie robi. Kliknij <strong>Sync</strong> w panelu Argo CD. Ręczny Sync usuwa zasoby tylko z zaznaczonym <em>Prune</em> (tu: bez).';
+    } else if (trigger === 'drift') {
+      S.msg = 'OutOfSync, ale <strong>bez <code>selfHeal</code> Argo CD nie cofa ręcznych zmian</strong>. Commit <code>' + SHAS[S.seen.rev] + '</code> był już zsynchronizowany, a <code>automated</code> robi jeden sync na commit. Drift zostaje do następnego commita albo ręcznego Sync.';
+    } else {
+      S.msg = 'OutOfSync. Ten commit już raz zsynchronizowano, więc <code>automated</code> nie powtarza. Kliknij Sync albo włącz <code>selfHeal</code>.';
+    }
+    settle();
+  }
+
+  function act(a) {
+    if (busy) return;
+    if (a === 'reset') { init(S.mode); render(); return; }
+    S.fresh = {}; S.gone = {}; S.cls = ''; S.prog = false;
+    adv(15 + Math.floor(Math.random() * 40));
+    var L = S.live, G = S.git;
+    if (a === 'scale') {
+      log('ty', 'kubectl scale deploy podinfo-prod -n gitops-demo --replicas=5', 'cmd');
+      L.rep = 5; S.fresh.dep = 1; S.prog = true;
+      afterDrift('Ręcznie 5 replik zamiast 2.');
+    } else if (a === 'delsvc') {
+      if (!L.svc) { log('ty', 'kubectl delete svc podinfo-prod -n gitops-demo', 'cmd'); log('', 'Error from server (NotFound): services "podinfo-prod" not found', 'er'); S.msg = 'Service już nie istnieje.'; S.cls = 'stuck'; render(); return; }
+      log('ty', 'kubectl delete svc podinfo-prod -n gitops-demo', 'cmd');
+      log('', 'service "podinfo-prod" deleted');
+      L.svc = false; S.gone.svc = 1;
+      afterDrift('Service usunięty ręcznie: aplikacja jest niedostępna.');
+    } else if (a === 'image') {
+      log('ty', 'kubectl set image deploy/podinfo-prod podinfo=ghcr.io/stefanprodan/podinfo:' + BAD + ' -n gitops-demo', 'cmd');
+      L.img = BAD; S.fresh.dep = 1; S.prog = true;
+      afterDrift('„Hotfix” z literówką w tagu.');
+    } else if (a === 'commit') {
+      S.msgN = (S.msgN + 1) % MSGS.length; if (S.msgN === 0) S.msgN = 1;
+      G.msg = MSGS[S.msgN]; G.rev++; S.fresh.gitv = 1;
+      log('ty', 'git commit -am "napis: ' + G.msg + '" && git push   → ' + SHAS[G.rev], 'cmd');
+      afterCommit();
+    } else if (a === 'rmfile') {
+      G.svc = !G.svc; G.rev++; S.fresh.gits = 1;
+      log('ty', (G.svc ? 'git revert (przywróć templates/service.yaml)' : 'git rm app/templates/service.yaml') + ' && git push   → ' + SHAS[G.rev], 'cmd');
+      afterCommit();
+    }
+    if (!busy) render();
+  }
+
+  function afterDrift(what) {
+    if (!argo()) {
+      if (S.live.img === BAD) { adv(600); log('kubelet', 'ImagePullBackOff: podinfo:' + BAD + ' not found', 'er'); }
+      S.prog = false;
+      S.cls = 'stuck';
+      S.msg = what + ' Pipeline o tym nie wie: skończył pracę przy ostatnim commicie. Drift żyje do następnego wdrożenia. Dopiero kolejny <code>helm upgrade</code> nadpisze pola, które ustawia chart. Zrób <strong>commit</strong> i zobacz.';
+      render();
+      return;
+    }
+    log('argocd', 'zmiana w klastrze (watch) → porównanie z ' + SHAS[S.seen.rev] + ': OutOfSync', 'wa');
+    S.msg = what;
+    render();
+    argoReact('drift');
+  }
+
+  function afterCommit() {
+    if (!argo()) {
+      var r = S.git.rev;
+      S.cls = '';
+      S.msg = 'Push budzi pipeline: testy, build, push do ECR, <code>helm upgrade</code>.';
+      later(700, function () {
+        adv(40); log('ci', 'testy ✓  build ✓  push ECR ✓');
+        adv(25); S.fresh = {}; S.gone = {};
+        S.prog = false;
+        apply(S.git, true);
+        S.seen = snap(S.git); S.synced = r;
+        log('ci', 'helm upgrade --install podinfo-prod ./app -f values-prod.yaml --wait --atomic', 'okl');
+        S.ci = 'ostatni przebieg: ' + SHAS[r] + ' · zielony';
+        S.cls = 'done';
+        S.msg = 'Pipeline wdrożył commit i <strong>przy okazji</strong> nadpisał ręczne zmiany w polach z chartu (Helm 3 robi three-way merge, brakujący Service tworzy na nowo). ' + (!S.git.svc ? 'Service usunięty z chartu <code>helm upgrade</code> usuwa z klastra. Czysty <code>kubectl apply</code> by go zostawił. ' : '') + 'Teraz pipeline znów śpi.';
+        settle();
+      });
+      return;
+    }
+    S.cls = 'wait';
+    S.msg = 'Commit jest w gicie, ale <strong>Argo CD jeszcze o nim nie wie</strong>: zna ' + SHAS[S.seen.rev] + '. Status dalej pokazuje stan względem starego commita. Kliknij <strong>Refresh</strong> albo <strong>czekaj do 3 min</strong> w panelu Argo CD.';
+    render();
+  }
+
+  function refresh(how) {
+    if (busy || !argo()) return;
+    S.fresh = {}; S.gone = {}; S.cls = '';
+    if (how === 'wait') { adv(184); log('argocd', 'okresowe odpytanie repo (120 s + jitter)', 'cm'); }
+    else { adv(1); log('ty', 'Refresh w UI (albo kubectl annotate ... argocd.argoproj.io/refresh=normal)', 'cmd'); }
+    if (S.seen.rev === S.git.rev) { log('argocd', 'git fetch: bez zmian, HEAD ' + SHAS[S.git.rev], 'cm'); }
+    else { S.seen = snap(S.git); log('argocd', 'git fetch: nowy commit ' + SHAS[S.git.rev] + ' → helm template → porównanie', 'wa'); }
+    var d = diff();
+    if (!d.length) { S.cls = 'done'; S.msg = 'Klaster zgadza się z gitem: Synced.'; render(); return; }
+    if (S.mode === 'manual') { S.cls = 'wait'; S.msg = 'Nowy commit widoczny: OutOfSync. Bez <code>automated</code> czeka na ręczny <strong>Sync</strong>.'; render(); return; }
+    render();
+    argoReact('git');
+  }
+
+  function manualSync() {
+    if (busy || !argo()) return;
+    S.fresh = {}; S.gone = {}; S.cls = '';
+    adv(3);
+    log('ty', 'Sync w UI (argocd app sync podinfo-prod)', 'cmd');
+    apply(S.seen, isPrune());
+    S.synced = S.seen.rev;
+    log('argocd', 'sync do ' + SHAS[S.seen.rev], 'okl');
+    if (!S.seen.svc && S.live.svc) {
+      S.cls = 'stuck';
+      S.msg = 'Sync bez Prune: Service usunięty z gita <strong>zostaje w klastrze</strong>. W UI przy Sync jest pole <em>Prune</em>; w <code>syncPolicy.automated</code> odpowiada mu <code>prune: true</code>.';
+    } else {
+      S.cls = 'done';
+      S.msg = 'Ręczny Sync: klaster znów zgadza się z gitem.' + (S.mode !== 'manual' ? ' Bez <code>selfHeal</code> następny drift znowu zostanie, aż ktoś kliknie.' : '');
+    }
+    render();
+    settle();
+  }
+
+  function obj(cls, name, lines, flags) {
+    var c = 'obj ' + cls + (flags && flags.fresh ? ' fresh' : '') + (flags && flags.gone ? ' gone' : '');
+    return '<div class="' + c + '"><b>' + name + '</b>' + lines.map(function (l) {
+      return '<span class="m' + (l[1] ? ' drift' : '') + '">' + l[0] + '</span>';
+    }).join('') + '</div>';
+  }
+  function badge(t) {
+    var map = { Synced: 'ok', OutOfSync: 'warn', Healthy: 'ok', Progressing: 'act', Degraded: 'bad', Missing: 'bad' };
+    return '<span class="badge ' + (map[t] || 'mut') + '">' + t + '</span>';
+  }
+
+  function render() {
+    if (!S) return;
+    var G = S.git, L = S.live, ref = argo() ? S.seen : G;
+    // git
+    var g = '<p class="ph">Git <small>· repo konfiguracji, main</small></p>';
+    g += obj('file', 'HEAD ' + SHAS[G.rev], [[G.rev ? 'commit #' + G.rev : 'stan startowy']], { fresh: S.fresh.gitv || S.fresh.gits });
+    g += obj('file', 'values-prod.yaml', [['replicaCount: ' + G.rep], ['image.tag: "' + G.img + '"'], ['ui.message: ' + G.msg]], { fresh: S.fresh.gitv });
+    g += obj('file', 'templates/deployment.yaml', [['Deployment']]);
+    g += obj('file', 'templates/configmap.yaml', [['ConfigMap']]);
+    g += obj('file', 'templates/service.yaml', [[G.svc ? 'Service' : 'usunięty z gita']], { gone: !G.svc, fresh: S.fresh.gits && G.svc });
+    $('d-git').innerHTML = g;
+
+    // argo / pipeline
+    var a = '', pane = $('d-argo');
+    if (!argo()) {
+      pane.className = 'pane off';
+      a += '<p class="ph">Pipeline CI <small>· model push</small></p>';
+      a += '<div class="badges"><span class="badge ok">' + esc(S.ci) + '</span></div>';
+      a += '<p class="small">Po wdrożeniu pipeline się kończy. Nikt nie porównuje klastra z gitem, nie ma statusu Synced/OutOfSync ani Diff.</p>';
+      a += '<p class="small">Następne wdrożenie: przy następnym commicie.</p>';
+    } else {
+      pane.className = 'pane';
+      var d = diff(), sync = d.length ? 'OutOfSync' : 'Synced';
+      a += '<p class="ph">Argo CD <small>· Application podinfo-prod</small></p>';
+      a += '<div class="badges">' + badge(sync) + badge(health()) + '</div>';
+      a += '<p class="small" style="margin-top:0">zna commit <code>' + SHAS[S.seen.rev] + '</code>' + (S.seen.rev !== G.rev ? ' · <strong style="color:var(--warn)">w gicie jest już ' + SHAS[G.rev] + '</strong>' : ' · aktualny') + '</p>';
+      a += '<p class="small">syncPolicy: ' + ({ manual: 'brak automated', auto: 'automated', heal: 'automated, selfHeal', prune: 'automated, selfHeal, prune' })[S.mode] + '</p>';
+      if (d.length) a += '<ul class="diffl">' + d.map(function (x) { return '<li' + (x.pr ? ' class="pr"' : '') + '>' + esc(x.t) + '</li>'; }).join('') + '</ul>';
+      else a += '<p class="small">Diff: brak różnic.</p>';
+      a += '<div class="minibtns"><button type="button" data-r="refresh"' + (busy ? ' disabled' : '') + '>Refresh</button>' +
+           '<button type="button" data-r="wait"' + (busy ? ' disabled' : '') + '>czekaj do 3 min</button>' +
+           '<button type="button" data-r="sync"' + (busy || !d.length ? ' disabled' : '') + '>Sync</button></div>';
+    }
+    pane.innerHTML = a;
+
+    // klaster
+    var k = '<p class="ph">Klaster <small>· namespace gitops-demo</small></p>';
+    var pods = '';
+    for (var i = 0; i < L.rep; i++) pods += '<i class="' + (L.img === BAD ? 'badp' : (S.prog ? 'newp' : '')) + '" title="pod"></i>';
+    k += '<div class="obj' + (S.fresh.dep ? ' fresh' : '') + '"><b>Deployment podinfo-prod</b>' +
+         '<span class="m' + (L.rep !== ref.rep ? ' drift' : '') + '">replicas: ' + L.rep + '</span>' +
+         '<span class="m' + (L.img !== ref.img ? ' drift' : '') + '">image: podinfo:' + L.img + '</span>' +
+         '<div class="pods" aria-label="' + L.rep + ' podów">' + pods + '</div></div>';
+    k += obj('', 'ConfigMap podinfo-prod-config', [['message: ' + L.msg, L.msg !== ref.msg]], { fresh: S.fresh.cm });
+    if (L.svc || S.gone.svc) k += obj('', 'Service podinfo-prod', [[L.svc ? (ref.svc ? 'ClusterIP :9898' : 'nie ma go w gicie') : 'usunięty', L.svc && !ref.svc]], { gone: !L.svc, fresh: S.fresh.svc });
+    else k += '<p class="small" style="color:var(--bad)">Service podinfo-prod: brak</p>';
+    $('d-k8s').innerHTML = k;
+
+    $('d-term').innerHTML = S.log.length ? S.log.join('\n') : '<span class="cm"># tu pojawią się komendy i reakcje</span>';
+    $('d-term').scrollTop = $('d-term').scrollHeight;
+    var m = $('d-msg'); m.innerHTML = S.msg; m.className = 'msg' + (S.cls ? ' ' + S.cls : '');
+    $('d-rm').innerHTML = G.svc ? 'usuń <code>service.yaml</code>' : 'przywróć <code>service.yaml</code>';
+    Array.prototype.forEach.call(document.querySelectorAll('#d-modes button'), function (b) {
+      b.setAttribute('aria-pressed', b.getAttribute('data-m') === S.mode ? 'true' : 'false');
+      b.disabled = busy;
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('#drift [data-a]'), function (b) { b.disabled = busy; });
+  }
+
+  function setMode(m) {
+    if (busy || m === S.mode) return;
+    var was = argo();
+    S.mode = m; S.fresh = {}; S.gone = {}; S.cls = '';
+    S.msg = MODE_INFO[m];
+    log('', 'tryb: ' + ({ push: 'pipeline push', manual: 'Argo CD bez automated', auto: 'automated', heal: 'automated + selfHeal', prune: 'automated + selfHeal + prune' })[m], 'cm');
+    if (argo() && !was) { S.seen = snap(S.git); }
+    if (argo() && diff().length && (isHeal() || (isAuto() && S.seen.rev !== S.synced) || (isPrune() && !S.seen.svc && S.live.svc))) {
+      render();
+      argoReact(isHeal() ? 'drift' : 'git');
+      return;
+    }
+    render();
+  }
+
+  if ($('d-git')) {
+    init('heal');
+    document.querySelector('#d-modes').addEventListener('click', function (ev) { var b = ev.target.closest('button'); if (b) setMode(b.getAttribute('data-m')); });
+    Array.prototype.forEach.call(document.querySelectorAll('#drift [data-a]'), function (b) {
+      b.addEventListener('click', function () { act(b.getAttribute('data-a')); });
+    });
+    $('d-argo').addEventListener('click', function (ev) {
+      var b = ev.target.closest('button'); if (!b || b.disabled) return;
+      var r = b.getAttribute('data-r');
+      if (r === 'sync') manualSync(); else refresh(r);
+    });
+    render();
+  }
+
+  /* ---------- 3. adnotowany YAML ---------- */
+  var Y = {
+    api: ['apiVersion', '<code>Application</code> to CRD Argo CD w grupie <code>argoproj.io</code>. Instaluje go chart <code>argo/argo-cd</code> razem z <code>AppProject</code> i <code>ApplicationSet</code>. Wersja <code>v1alpha1</code> od lat, mimo że API jest stabilne.'],
+    name: ['metadata.name', 'Nazwa Application. Dla chartu Helm to też domyślna nazwa release\'u, więc obiekty dostają nazwy <code>podinfo-prod</code>, <code>podinfo-prod-config</code>. Można to zmienić polem <code>helm.releaseName</code>.'],
+    ns: ['metadata.namespace: argocd', 'Application mieszka tam, gdzie Argo CD, nie tam, gdzie aplikacja. Kto może tworzyć Application w <code>argocd</code>, ten wdraża z uprawnieniami Argo CD. Dlatego kursanci nie dostają tu praw.'],
+    fin: ['finalizers', 'Z finalizerem usunięcie Application usuwa też wdrożone zasoby (Deployment, Service, ConfigMap). Bez niego Application znika, a zasoby zostają w klastrze. <code>/background</code>: Application znika od razu, sprzątanie idzie w tle.'],
+    project: ['project', '<code>AppProject</code> ogranicza, z jakich repo i do jakich klastrów oraz namespace\'ów wolno wdrażać, i jakie typy zasobów. <code>default</code> pozwala na wszystko. W firmie: projekt per zespół.'],
+    repo: ['source.repoURL', 'Repo, z którego Argo CD pobiera stan. Publiczne: bez poświadczeń. Prywatne: deploy key albo token tylko do odczytu w Secrecie Argo CD. Na szkoleniu: repo prowadzącego.'],
+    rev: ['source.targetRevision', 'Gałąź, tag albo konkretny commit. <code>main</code>: każdy merge do main to wdrożenie. Tag (<code>v1.4.2</code>) albo SHA: wdrożenie dopiero po zmianie tego pola. Dla chartu z repozytorium Helm tu wpisuje się wersję chartu.'],
+    path: ['source.path', 'Katalog w repo. Argo CD sam rozpoznaje, co tam leży: jest <code>Chart.yaml</code> = <code>helm template</code>, jest <code>kustomization.yaml</code> = Kustomize, inaczej czysty YAML. Renderuje repo-server, nie Ty.'],
+    values: ['helm.valueFiles', 'Pliki wartości, ścieżki względem <code>path</code>. <code>values.yaml</code> chart bierze zawsze, <code>values-prod.yaml</code> nadpisuje. Ten sam chart dla dev to druga Application z <code>values-dev.yaml</code>. Pojedyncze wartości: <code>helm.parameters</code> albo <code>helm.valuesObject</code>.'],
+    dest: ['destination', 'Gdzie wdrażać. <code>https://kubernetes.default.svc</code> = ten sam klaster, w którym działa Argo CD. Inny klaster trzeba najpierw zarejestrować (<code>argocd cluster add</code>, Secret z poświadczeniami) i podać jego adres albo <code>name</code>.'],
+    auto: ['syncPolicy.automated', 'Bez tego pola Argo CD tylko pokazuje OutOfSync i czeka na Sync. Z nim każdy nowy commit wdraża się sam. Jeden commit synchronizuje tylko raz, więc ręczna zmiana w klastrze zostaje, chyba że jest <code>selfHeal</code>.'],
+    prune: ['prune: true', 'Zasób, który zniknął z gita, znika też z klastra. Domyślnie <code>false</code> dla bezpieczeństwa: literówka w ścieżce nie skasuje wszystkiego. Pojedynczy zasób można chronić adnotacją <code>argocd.argoproj.io/sync-options: Prune=false</code>.'],
+    heal: ['selfHeal: true', 'Ręczna zmiana w klastrze (drift) wraca do stanu z gita. Controller dostaje zdarzenie z watcha i synchronizuje po kilku sekundach (u nas &lt; 2 s). Uwaga na HPA: nie renderuj <code>replicas</code> albo użyj <code>ignoreDifferences</code>.'],
+    cns: ['CreateNamespace=true', 'Argo CD utworzy namespace <code>gitops-demo</code>, jeśli go nie ma. Etykiety i adnotacje dla niego: <code>managedNamespaceMetadata</code>. Inne przydatne opcje: <code>ServerSideApply=true</code>, <code>PruneLast=true</code>, <code>RespectIgnoreDifferences=true</code>.']
+  };
+  var yi = $('y-info'), ysel = null;
+  function yshow(el) {
+    var k = el ? el.getAttribute('data-k') : null;
+    if (!k || !Y[k]) {
+      yi.innerHTML = '<h3>najedź na pole</h3><p>Podświetlone fragmenty po lewej mają opis. Najważniejsze: <code>path</code> (co renderować), <code>destination</code> (gdzie) i <code>syncPolicy</code> (jak bardzo automatycznie).</p><p>Application nie zawiera manifestów aplikacji. Tylko wskazuje, gdzie je znaleźć.</p>';
+      return;
+    }
+    yi.innerHTML = '<h3>' + Y[k][0] + '</h3><p>' + Y[k][1] + '</p>';
+  }
+  if (yi) {
+    var ks = document.querySelectorAll('#y-src .k');
+    Array.prototype.forEach.call(ks, function (el) {
+      el.setAttribute('role', 'button');
+      el.addEventListener('mouseenter', function () { yshow(el); });
+      el.addEventListener('mouseleave', function () { yshow(ysel); });
+      el.addEventListener('focus', function () { yshow(el); });
+      el.addEventListener('click', function () {
+        if (ysel) ysel.classList.remove('sel');
+        ysel = ysel === el ? null : el;
+        if (ysel) ysel.classList.add('sel');
+        yshow(ysel || el);
+      });
+      el.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); el.click(); } });
+    });
+    yshow(null);
+  }
+
+  /* ---------- 4. kto ma klucze ---------- */
+  var K = {
+    runner: ['Przejęty runner CI (np. złośliwa zależność w testach)',
+      'Runner w kroku wdrożenia ma kubeconfig albo rolę IAM. Atakujący wdraża, co chce, do każdego klastra, do którego pipeline ma dostęp. Także do produkcji.',
+      'Runner ma prawo push do ECR i zapisu do repo konfiguracji. Może podmienić obraz albo zrobić commit, ale commit widać w historii, a branch protection i review mogą go zatrzymać. Do klastra wejść nie może.'],
+    ci: ['Wyciek sekretów CI',
+      'W sekretach leży dostęp do klastrów. Wyciek = pełny dostęp z dowolnego miejsca w sieci, dopóki ktoś nie unieważni kluczy. Z OIDC (bez stałych kluczy) ryzyko mniejsze, ale rola dalej ma prawa do klastra.',
+      'W sekretach jest token do repo i dostęp do ECR. Bez dostępu do klastra. Endpoint API klastra może być w ogóle niedostępny z internetu.'],
+    repo: ['Ktoś może pushować do repo konfiguracji',
+      'Zmiana czeka na następny pipeline. Ręczne zmiany w klastrze i tak omijają repo.',
+      'To jest w praktyce dostęp do klastra: Argo CD wdroży każdy commit z <code>main</code>. Dlatego: branch protection, wymagany review, podpisane commity, <code>AppProject</code> zawężający, co wolno wdrożyć.'],
+    argo: ['Przejęty Argo CD',
+      'Nie dotyczy: w klastrze nie ma agenta. Za to podobną rolę pełni CI.',
+      'Argo CD ma szerokie prawa w klastrze (zwykle cluster-admin), a centralny Argo CD ma klucze do wszystkich klastrów. To nowy cel ataku: aktualizacje, SSO i RBAC do UI, brak publicznego dostępu do API Argo CD bez potrzeby.']
+  };
+  function kshow(x) {
+    $('k-push').innerHTML = '<b class="t">push</b>' + K[x][1];
+    $('k-pull').innerHTML = '<b class="t">pull (Argo CD)</b>' + K[x][2];
+    $('k-pull').className = 'msg ' + (x === 'repo' || x === 'argo' ? 'wait' : 'done');
+    $('k-push').className = 'msg ' + (x === 'argo' ? '' : (x === 'repo' ? 'wait' : 'stuck'));
+    Array.prototype.forEach.call(document.querySelectorAll('#k-seg button'), function (b) {
+      b.setAttribute('aria-pressed', b.getAttribute('data-x') === x ? 'true' : 'false');
+    });
+  }
+  if ($('k-seg')) {
+    $('k-seg').addEventListener('click', function (ev) { var b = ev.target.closest('button'); if (b) kshow(b.getAttribute('data-x')); });
+    kshow('runner');
+  }
+
+  /* ---------- 5. filtr plusów i minusów ---------- */
+  var fc = 'all', fw = 'all';
+  function pm() {
+    var rows = document.querySelectorAll('#pm tbody tr'), n = 0;
+    Array.prototype.forEach.call(rows, function (r) {
+      var ok = (fc === 'all' || r.getAttribute('data-c') === fc) && (fw === 'all' || r.getAttribute('data-w') === fw);
+      r.hidden = !ok; if (ok) n++;
+    });
+    $('pm-count').textContent = 'Pokazano ' + n + ' z ' + rows.length + ' kryteriów.' + (n === 0 ? ' Zmień filtr.' : '');
+    Array.prototype.forEach.call(document.querySelectorAll('#pm-cat button'), function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-f') === fc ? 'true' : 'false'); });
+    Array.prototype.forEach.call(document.querySelectorAll('#pm-win button'), function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-w') === fw ? 'true' : 'false'); });
+  }
+  if ($('pm')) {
+    $('pm-cat').addEventListener('click', function (ev) { var b = ev.target.closest('button'); if (b) { fc = b.getAttribute('data-f'); pm(); } });
+    $('pm-win').addEventListener('click', function (ev) { var b = ev.target.closest('button'); if (b) { fw = b.getAttribute('data-w'); pm(); } });
+    pm();
+  }
+})();
+</script>
+</body>
+</html>

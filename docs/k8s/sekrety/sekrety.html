@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sekrety w Kubernetesie</title>
-<meta name="description" content="Dzień 5 — ściąga: jak hasło trafia do kontenera. Animowana droga sekretu dla siedmiu podejść: zwykły Secret, Sealed Secrets, SOPS, External Secrets, Secrets Store CSI, Vault Agent Injector, SDK w aplikacji. Rotacja: plik kontra env.">
+<meta name="description" content="Dzień 5 — ściąga: jak hasło trafia do kontenera. Animowana droga sekretu dla ośmiu podejść: zwykły Secret, Sealed Secrets, SOPS, zmienne w CI/CD, External Secrets, Secrets Store CSI, Vault Agent Injector, SDK w aplikacji. Rotacja: plik kontra env.">
 <style>
 :root {
   --navy: #012438;
@@ -203,7 +203,7 @@ footer { margin-top: 52px; color: var(--muted); font-size: 14px; border-top: 1px
   <div class="wrap">
     <p class="kicker">Dzień 5 · ściąga · <a href="README.md">wersja tekstowa</a></p>
     <h1>Jak hasło trafia do kontenera</h1>
-    <p class="lead">Siedem dróg, dwa pytania: <strong>kto pobiera sekret</strong> i <strong>gdzie on ląduje</strong>. Wybierz podejście i patrz, jak płynie wartość.</p>
+    <p class="lead">Osiem dróg, dwa pytania: <strong>kto pobiera sekret</strong> i <strong>gdzie on ląduje</strong>. Wybierz podejście i patrz, jak płynie wartość.</p>
   </div>
 </header>
 
@@ -232,6 +232,8 @@ footer { margin-top: 52px; color: var(--muted); font-size: 14px; border-top: 1px
     <button type="button" data-ap="plain" aria-pressed="false">Zwykły Secret</button>
     <button type="button" data-ap="sealed" aria-pressed="false">Sealed Secrets</button>
     <button type="button" data-ap="sops" aria-pressed="false">SOPS</button>
+    <span class="grp">sekret w CI/CD</span>
+    <button type="button" data-ap="ci" aria-pressed="false">Zmienne w CI/CD</button>
     <span class="grp">sekret w sejfie</span>
     <button type="button" data-ap="eso" aria-pressed="true">External Secrets (ESO)</button>
     <button type="button" data-ap="csi" aria-pressed="false">Secrets Store CSI</button>
@@ -242,7 +244,7 @@ footer { margin-top: 52px; color: var(--muted); font-size: 14px; border-top: 1px
   <div class="stage">
     <div>
       <div class="svgwrap">
-        <svg id="map" viewBox="0 0 960 512" role="img" aria-labelledby="map-t">
+        <svg id="map" viewBox="-14 0 974 512" role="img" aria-labelledby="map-t">
           <title id="map-t">Droga sekretu od źródła do kontenera</title>
           <defs>
             <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker>
@@ -269,11 +271,14 @@ footer { margin-top: 52px; color: var(--muted); font-size: 14px; border-top: 1px
             <path class="e" id="e-vault_sidecar" d="M200 222H226V38H645V90"/>
             <path class="e" id="e-sidecar_file" d="M645 150V168H800V230"/>
             <path class="e" id="e-vault_mem" d="M200 262H230V488H732V450"/>
+            <path class="e" id="e-git_ci" d="M20 95H6V460H20"/>
+            <path class="e" id="e-ci_etcd" d="M200 460H244V258H280"/>
           </g>
 
           <g class="nd" id="n-git"><rect x="20" y="60" width="180" height="70" rx="10"/><text class="t" x="110" y="88" text-anchor="middle">Git</text><text class="s" x="110" y="110" text-anchor="middle" data-def="—"></text></g>
           <g class="nd" id="n-vault"><rect x="20" y="200" width="180" height="70" rx="10"/><text class="t" x="110" y="228" text-anchor="middle">Sejf</text><text class="s" x="110" y="250" text-anchor="middle" data-def="nie używany"></text></g>
           <g class="nd" id="n-kms"><rect x="20" y="340" width="180" height="70" rx="10"/><text class="t" x="110" y="368" text-anchor="middle">KMS</text><text class="s" x="110" y="390" text-anchor="middle" data-def="nie używany"></text></g>
+          <g class="nd" id="n-ci"><rect x="20" y="430" width="180" height="62" rx="10"/><text class="t" x="110" y="456" text-anchor="middle">CI/CD</text><text class="s" x="110" y="476" text-anchor="middle" data-def="nie używane"></text></g>
 
           <g class="nd" id="n-ctrl"><rect x="280" y="60" width="190" height="70" rx="10"/><text class="t" x="375" y="88" text-anchor="middle">Kontroler</text><text class="s" x="375" y="110" text-anchor="middle" data-def="nie używany"></text></g>
           <g class="nd" id="n-etcd"><rect x="280" y="200" width="190" height="70" rx="10"/><text class="t" x="375" y="228" text-anchor="middle">Secret w etcd</text><text class="s" x="375" y="250" text-anchor="middle" data-def="nie używany"></text></g>
@@ -366,6 +371,7 @@ footer { margin-top: 52px; color: var(--muted); font-size: 14px; border-top: 1px
     <button type="button" data-go="injector"><span class="q">Vault i hasła do bazy generowane per pod</span><span class="a">Vault Agent Injector</span></button>
     <button type="button" data-go="sealed"><span class="q">Mały zespół, GitOps, brak sejfu</span><span class="a">Sealed Secrets albo SOPS</span></button>
     <button type="button" data-go="sdk"><span class="q">Aplikacja i tak jest związana z jedną chmurą</span><span class="a">SDK w aplikacji</span></button>
+    <button type="button" data-go="ci"><span class="q">Brak sejfu, wdrażacie z pipeline'u (bez GitOps)</span><span class="a">Zmienne w CI/CD</span></button>
     <button type="button" data-go="plain"><span class="q">Lab, demo, nic poza klastrem</span><span class="a">Zwykły Secret</span></button>
   </div>
   <p class="note" style="margin-top:14px">Gdy powstaje <code>Secret</code>, zasady z dnia 4 dalej działają: kto ma <code>get secrets</code> albo <code>create pods</code> w namespace, ten widzi wartość.</p>
@@ -409,7 +415,7 @@ footer { margin-top: 52px; color: var(--muted); font-size: 14px; border-top: 1px
 
   /* ============ droga sekretu ============ */
   // stan węzła: plain | val | enc | act | off
-  var NODES = ['git', 'vault', 'kms', 'ctrl', 'etcd', 'node', 'sidecar', 'env', 'file', 'mem'];
+  var NODES = ['git', 'vault', 'kms', 'ci', 'ctrl', 'etcd', 'node', 'sidecar', 'env', 'file', 'mem'];
   function withPod(o) { o.env = ['val', 'zmienna']; o.file = ['val', 'wolumen tmpfs']; return o; }
 
   var AP = {
@@ -442,6 +448,16 @@ footer { margin-top: 52px; color: var(--muted); font-size: 14px; border-top: 1px
       ],
       facts: [['Kopia w etcd', 'tak', 'yes'], ['Zmiana hasła', 'sops edit + commit'], ['KMS nie działa', 'brak nowych wdrożeń'], ['Klucz', 'w KMS, dostęp przez IAM']],
       note: 'W KMS leży tylko klucz, hasło leży w Gicie. Odszyfruje każdy, komu IAM da kms:Decrypt.'
+    },
+    ci: {
+      nodes: withPod({ git: ['enc', 'tylko ${DB_PASSWORD}'], ci: ['act', 'zmienne protected'], etcd: ['val', 'kopia wartości'] }),
+      steps: [
+        { e: ['git_ci'], t: 'Pipeline bierze z Gita manifest z placeholderem <code>${DB_PASSWORD}</code>' },
+        { e: ['ci_etcd'], t: 'Podstawia wartość ze zmiennej protected (<code>envsubst</code>, <code>helm --set</code>) i robi <code>apply</code>' },
+        { e: ['etcd_env', 'etcd_file'], t: 'Pod czyta zwykły Secret' }
+      ],
+      facts: [['Kopia w etcd', 'tak', 'yes'], ['Zmiana hasła', 'zmienna + nowy pipeline'], ['Kto zna hasło', 'każdy, kto zmieni pipeline'], ['Model', 'push: CI pisze do klastra']],
+      note: 'To, co pewnie robicie dziś. Proste, ale CI staje się sejfem bez audytu odczytów, a wartość przechodzi przez runnera.'
     },
     eso: {
       nodes: withPod({ git: ['enc', 'ExternalSecret: odnośnik'], vault: ['val', 'AWS Secrets Manager'], ctrl: ['act', 'External Secrets (ESO)'], etcd: ['val', 'kopia, odświeżana'] }),

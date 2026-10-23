@@ -20,5 +20,6 @@ Katalogi dochodzą razem z labami danego dnia (`git pull`).
 | [`k8s/bezpieczenstwo/`](k8s/bezpieczenstwo/) | 4 | [bezpieczeństwo i sieć](k8s/bezpieczenstwo/README.md) |
 | [`k8s/crd/`](k8s/crd/) | 4 | [CRD: własny typ w API, kontroler i operator](k8s/crd/README.md) (z [wersjami API: alpha, beta, v1](k8s/crd/README.md#wersje-api-alpha-beta-v1)), [jak działa CRD: diagramy i symulator](k8s/crd/crd.html) (HTML) |
 | [`k8s/helm/`](k8s/helm/) | 5 | [składnia szablonów Helm](k8s/helm/skladnia.md) |
+| [`k8s/gitops/`](k8s/gitops/) | 5 | [GitOps z Argo CD a zwykły pipeline: push i pull, drift, plusy i minusy](k8s/gitops/README.md), [model push i pull krok po kroku, symulator driftu, obiekt Application](k8s/gitops/gitops.html) (HTML) |
 | [`k8s/sekrety/`](k8s/sekrety/) | 5 | [sekrety z sejfu: External Secrets, Secrets Store CSI, Sealed Secrets, Key Vault i Secrets Manager](k8s/sekrety/README.md) |
 | [`k8s/observability/`](k8s/observability/) | 5 | [metryki, logi, trace'y i instrumentacja OpenTelemetry](k8s/observability/README.md), [architektura stosu, droga żądania ToDos, instalacja i ściąga zapytań](k8s/observability/observability.html) (HTML), [aplikacja Kantyna](k8s/observability/stos-i-kantyna.html) (HTML) |
